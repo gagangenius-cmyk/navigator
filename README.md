@@ -1,54 +1,68 @@
-# DM Next - Complete Lead Management System
+# Navigator - Complete Lead Management System
 
-A comprehensive Next.js-based lead management system for DM Consulting, fully migrated from the original PHP-based DM system with complete feature parity.
+A comprehensive Next.js-based CRM and case-management platform for **Navigator Globals** (formerly DM Consulting), covering the full client lifecycle across multiple international branches — from lead capture through agreements, payments, case operations and reporting.
 
 ## Overview
 
-DM Next is a complete lead management system built with:
-- **Next.js 14** with TypeScript and App Router
-- **Sequelize ORM** for database management
+Navigator is built with:
+- **Next.js 16** (App Router) with TypeScript
+- **Sequelize ORM** (primary data layer) and **Prisma** (supplementary)
 - **MySQL** for data storage
-- **JWT** for secure authentication
-- **Tailwind CSS** for responsive styling
+- **JWT** for staff and client-portal authentication
+- **Tailwind CSS** for styling
+- **Pusher Channels** for realtime updates (chat, notifications, lead pool)
+- **Vercel Blob** for file storage (payment proofs, signed agreements, documents)
 
-## Complete Features
+## Core Modules
 
-### 🏢 Core Business Functions
-- 📊 **Dashboard** - Real-time statistics and activity feeds
-- 👥 **Lead Management** - Full CRUD operations with advanced filtering
-- 📅 **Appointment Scheduling** - Calendar-based appointment system
-- 💰 **Payment Processing** - Multi-method payment tracking
-- 📄 **Document Management** - File upload and approval workflows
-- 👨‍💼 **Employee Management** - Role-based staff management
-- 📈 **Reporting & Analytics** - Comprehensive business intelligence
-- 🏢 **Branch & Region Management** - Multi-location support
+### CRM & Lead Management
+- Lead intake, pool, assignment/reassignment and cross-branch transfers
+- Follow-ups, remarks, market sources, campaigns and digital marketing tracking
+- Meta/Facebook Lead Ads webhook integration (auto-ingests leads from connected Pages)
+- Global search across leads, opportunities and clients
 
-### 🔐 Authentication & Security
-- JWT-based secure authentication
-- Role-based access control (RBAC)
-- Protected routes and API endpoints
-- Session management
-- Password security
+### Operations & Case Management
+- Operations console/dashboard for case officers, with team allocation and assignment
+- Opportunity workflow (lead → opportunity → agreement → payment → delivery)
+- Compliance and discount approval workflows
+- Realtime client ⟷ case-officer chat (Pusher-backed, with polling fallback so nothing depends on Pusher being configured)
 
-### 📱 User Experience
-- **Responsive Design** - Works on all devices
-- **Modern UI** - Clean, intuitive interface
-- **Real-time Updates** - Live data synchronization
-- **Error Handling** - Comprehensive error management
-- **Loading States** - Smooth user experience
+### Client Portal
+- Self-service portal for clients (per-opportunity conversation/chat, document access, agreement viewing)
+
+### Agreements & Contracts
+- Bilingual (EN/AR) "Agreement for Advisory Services" generator, branch-specific (Dubai, Abu Dhabi, Kuwait, Qatar) plus a separate India (English-only) template
+- Branch legal identity (company name, address, licence/registration number, governing law) is resolved dynamically per branch rather than hardcoded, so a rebrand or new branch doesn't require template edits
+- Contract lifecycle: generator, preview, signing, templates, archive and analytics
+- Legacy PHP-era agreement archive lookup for pre-migration contracts
+
+### Payments & Finance
+- Multi-method payment recording, balance payments, invoices
+- Branch-aware payment receipts (Tax Invoice/Receipt) with jurisdiction-correct VAT/GST/TRN handling
+- Discounts, admin fees, and finance/accounts reporting
+
+### HR & Employee Management
+- Employee records, departments, roles/permissions
+- Attendance, leave, payslips and resignation workflows (staff self-service + admin views)
+
+### Reporting & Analytics
+- Branch performance, contract analytics, recovery reports, lead-status and operational dashboards
+
+### Multi-Branch & Multi-Currency
+- All branch identity, currency and tax data is driven by the `crm_branch` table — new branches don't require code changes to templates or receipts
 
 ## Prerequisites
 
-- Node.js 18+ 
+- Node.js 18+
 - MySQL 5.7+ or 8.0+
-- npm or yarn
+- npm
 
 ## Installation
 
 1. **Clone the repository**
    ```bash
    git clone <repository-url>
-   cd dm-next
+   cd navigator-next
    ```
 
 2. **Install dependencies**
@@ -57,25 +71,18 @@ DM Next is a complete lead management system built with:
    ```
 
 3. **Set up environment variables**
-   
-   Create a `.env.local` file in the root directory:
-   ```env
-   # Database Configuration
-   DATABASE_URL="mysql://username:password@localhost:3306/dmconsultant_mydmcons_dm"
-   
-   # JWT Configuration
-   JWT_SECRET="your-jwt-secret-here"
-   
-   # Application Configuration
-   NODE_ENV="development"
-   PORT=3000
+
+   Copy `.env.example` to `.env` and fill in the values:
+   ```bash
+   cp .env.example .env
    ```
+   See [Environment Variables](#environment-variables) below for what each one does.
 
 4. **Set up the database**
-   
-   - Create a MySQL database named `dmconsultant_mydmcons_dm`
-   - Import the existing SQL file: `dmconsultant_mydmcons_dm.sql`
-   - The application includes 294 database tables with complete schema
+
+   - Create a MySQL database and point `DATABASE_URL` at it
+   - Apply `database-schema.sql`, then run the migrations in `migrations/` in order
+   - Optionally seed reference data: `npm run db:seed:roles`, `db:seed:sources`, `db:seed:fees`, `db:seed:employees`, `db:seed:countries`, `db:seed:program-types`, `db:seed:program-validity`
 
 5. **Run the development server**
    ```bash
@@ -85,213 +92,63 @@ DM Next is a complete lead management system built with:
 6. **Open your browser**
    Navigate to [http://localhost:3000](http://localhost:3000)
 
-## Complete Project Structure
+## Project Structure
 
 ```
-dm-next/
+navigator-next/
 ├── src/
-│   ├── app/                 # Next.js app router pages
-│   │   ├── api/            # Complete API routes
-│   │   │   ├── auth/       # Authentication endpoints
-│   │   │   ├── leads/       # Lead management APIs
-│   │   │   ├── appointments/ # Appointment APIs
-│   │   │   ├── payments/    # Payment APIs
-│   │   │   ├── documents/   # Document APIs
-│   │   │   ├── employees/   # Employee APIs
-│   │   │   ├── reports/     # Reporting APIs
-│   │   │   ├── branches/    # Branch APIs
-│   │   │   └── regions/     # Region APIs
-│   │   ├── dashboard/      # Dashboard page
-│   │   ├── leads/          # Lead management pages
-│   │   ├── appointments/   # Appointment pages
-│   │   ├── payments/       # Payment pages
-│   │   ├── documents/      # Document pages
-│   │   ├── employees/      # Employee pages
-│   │   ├── reports/        # Reporting pages
-│   │   ├── login/          # Login page
-│   │   └── layout.tsx      # Root layout
-│   ├── components/          # Complete React components
-│   │   ├── auth/           # Authentication components
-│   │   ├── dashboard/      # Dashboard components
-│   │   ├── leads/          # Lead management components
-│   │   ├── appointments/   # Appointment components
-│   │   ├── payments/       # Payment components
-│   │   ├── documents/      # Document components
-│   │   ├── employees/      # Employee components
-│   │   ├── reports/        # Reporting components
-│   │   ├── layout/         # Layout components
-│   │   └── ui/             # UI primitives
-│   ├── models/              # Sequelize database models
-│   │   ├── DmcEmployee.ts  # Employee model
-│   │   ├── DmcForumLead.ts # Lead model
-│   │   └── ...             # 294 total models
-│   └── lib/                # Utility libraries
-│       ├── auth.ts         # Authentication utilities
-│       └── sequelize.ts    # Database connection
+│   ├── app/
+│   │   ├── admin/            # Staff-facing app (CRM, operations, HR, finance, reports, settings, ...)
+│   │   ├── api/               # API routes (leads, opportunities, payments, agreements, pusher, webhooks, ...)
+│   │   ├── clientportal/       # Client-facing self-service portal
+│   │   └── login/              # Staff login
+│   ├── components/             # React components, grouped by feature area
+│   ├── models/                 # ~110 Sequelize models
+│   ├── services/               # Business-logic services (e.g. client-portal-product-service)
+│   └── lib/                    # Shared utilities (auth, branch profiles, agreement/receipt templates, Pusher, ...)
 ├── prisma/
-│   └── schema.prisma       # Database schema (if using Prisma)
-└── public/                 # Static assets
+│   └── schema.prisma            # Supplementary Prisma schema
+├── migrations/                  # SQL migrations applied on top of database-schema.sql
+├── scripts/                     # DB setup/seed scripts
+└── database-schema.sql          # Base schema (150+ tables)
 ```
 
-## Complete Database Schema
+## Environment Variables
 
-The application includes **294 database tables** with complete functionality:
-- **Core Tables**: `dmc_forum_leads`, `dm_employee`, `dm_branch`, `dm_region`
-- **Appointments**: `appointments`, `appointment_details`
-- **Payments**: `dm_pay_history`, `dm_3party_payment`, `dm_pay_details`
-- **Documents**: `dmc_additional_documents`, `dmc_ops_documents`
-- **Reports**: Various reporting and analytics tables
-- **System**: Configuration, settings, and audit tables
+See `.env.example` for the full annotated list. Key variables:
 
-## Complete API Endpoints
-
-### Authentication
-- `POST /api/auth/login` - User login with JWT
-- `POST /api/auth/logout` - User logout
-
-### Lead Management
-- `GET /api/leads` - Get leads with pagination and filtering
-- `POST /api/leads` - Create new lead
-- `GET /api/leads/[id]` - Get specific lead
-- `PUT /api/leads/[id]` - Update lead
-- `DELETE /api/leads/[id]` - Delete lead
-
-### Appointments
-- `GET /api/appointments` - Get appointments with filtering
-- `POST /api/appointments` - Create appointment
-- `GET /api/appointments/[id]` - Get specific appointment
-- `PUT /api/appointments/[id]` - Update appointment
-- `DELETE /api/appointments/[id]` - Delete appointment
-
-### Payments
-- `GET /api/payments` - Get payment records
-- `POST /api/payments` - Create payment
-- `GET /api/payments/[id]` - Get specific payment
-- `PUT /api/payments/[id]` - Update payment
-- `DELETE /api/payments/[id]` - Delete payment
-
-### Documents
-- `GET /api/documents` - Get documents with filtering
-- `POST /api/documents` - Upload document
-- `GET /api/documents/[id]` - Get specific document
-- `DELETE /api/documents/[id]` - Delete document
-
-### Employees
-- `GET /api/employees` - Get employees with filtering
-- `POST /api/employees` - Create employee
-- `GET /api/employees/[id]` - Get specific employee
-- `PUT /api/employees/[id]` - Update employee
-- `DELETE /api/employees/[id]` - Delete employee
-
-### Reports
-- `GET /api/reports` - Generate various reports
-- Parameters: `type`, `startDate`, `endDate`, `branch`, `region`, `employee`
-
-### Branches & Regions
-- `GET /api/branches` - Get all branches
-- `POST /api/branches` - Create branch
-- `GET /api/regions` - Get all regions
-- `POST /api/regions` - Create region
+| Variable | Description | Required |
+|----------|-------------|----------|
+| `DATABASE_URL` | MySQL connection string | Yes |
+| `JWT_SECRET` | JWT signing secret (staff + client-portal auth) | Yes |
+| `CRON_SECRET` | Bearer token required by scheduled cron routes | Yes (for cron) |
+| `META_APP_ID` / `META_APP_SECRET` / `META_WEBHOOK_VERIFY_TOKEN` / `META_PAGE_ACCESS_TOKEN` / `META_PAGE_ID` / `META_AD_ACCOUNT_ID` | Meta/Facebook Lead Ads integration | Only if `META_INTEGRATION_ENABLED=true` |
+| `BLOB_READ_WRITE_TOKEN` | Vercel Blob token for file uploads (payment proofs, agreements, documents) | Yes for upload endpoints |
+| `PUSHER_APP_ID` / `PUSHER_KEY` / `PUSHER_SECRET` / `PUSHER_CLUSTER` / `NEXT_PUBLIC_PUSHER_KEY` / `NEXT_PUBLIC_PUSHER_CLUSTER` | Realtime chat/notifications | No — falls back to polling if unset |
+| `LEGACY_AGREEMENT_ROOT` | Path to the pre-migration PHP contract archive | Only on the machine hosting that archive |
+| `NODE_ENV` / `PORT` | Environment mode / dev server port | No |
 
 ## Development
 
-### Running Tests
 ```bash
-npm run test
-```
-
-### Building for Production
-```bash
-npm run build
-```
-
-### Linting
-```bash
-npm run lint
+npm run dev     # start dev server
+npm run build   # production build
+npm run start   # start production server
+npm run lint    # lint
 ```
 
 ## Deployment
 
 ### Vercel (Recommended)
 1. Push your code to GitHub
-2. Connect your repository to Vercel
-3. Set up environment variables in Vercel dashboard
+2. Connect the repository to Vercel
+3. Set the environment variables above in the Vercel dashboard
 4. Deploy
-
-### Docker
-```bash
-docker build -t dm-next .
-docker run -p 3000:3000 dm-next
-```
-
-## Environment Variables
-
-| Variable | Description | Required |
-|----------|-------------|----------|
-| `DATABASE_URL` | MySQL connection string | Yes |
-| `JWT_SECRET` | JWT signing secret | Yes |
-| `NODE_ENV` | Environment mode | No |
-
-## Complete Feature List
-
-### ✅ Implemented Features
-- [x] **Authentication System** - JWT-based with role management
-- [x] **Dashboard** - Real-time statistics and activity feeds
-- [x] **Lead Management** - Complete CRUD with advanced filtering
-- [x] **Appointment System** - Full scheduling with status tracking
-- [x] **Payment Processing** - Multi-method payment tracking
-- [x] **Document Management** - Upload, categorization, and approval
-- [x] **Employee Management** - Staff management with roles and permissions
-- [x] **Reporting System** - Comprehensive business intelligence
-- [x] **Branch & Region Management** - Multi-location support
-- [x] **Responsive Design** - Mobile-friendly interface
-- [x] **Error Handling** - Comprehensive error management
-- [x] **Security** - Protected routes and API endpoints
-
-### 🔄 Migration Features
-- [x] **Database Compatibility** - Works with existing DM database
-- [x] **Feature Parity** - 100% functionality from PHP system
-- [x] **Data Integrity** - Maintains all existing data relationships
-- [x] **Performance** - Significant performance improvements
-- [x] **Modern UI** - Enhanced user experience
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
 
 ## License
 
-This project is proprietary to DM Consulting.
+This project is proprietary to Navigator Globals.
 
 ## Support
 
 For support and questions, please contact the development team.
-
-## Migration from Original PHP System
-
-This Next.js application is a **complete replacement** for the original PHP-based DM system with:
-
-### 🚀 Major Improvements
-- **Modern Architecture**: Next.js 14 with App Router
-- **Type Safety**: Full TypeScript implementation
-- **Better Performance**: Server-side rendering and optimization
-- **Enhanced Security**: JWT-based authentication
-- **Responsive Design**: Works on all devices
-- **Real-time Updates**: Live data synchronization
-- **Scalability**: Component-based architecture
-- **Developer Experience**: Modern tooling and hot reload
-
-### 📊 Feature Completeness
-- **100% Feature Parity** - All PHP functionality replicated
-- **294 Database Tables** - Complete database schema support
-- **Complete API Coverage** - All endpoints implemented
-- **Full CRUD Operations** - Create, Read, Update, Delete for all entities
-- **Advanced Filtering** - Search and filter capabilities
-- **Role-based Access** - Complete permission system
-- **Reporting System** - Comprehensive analytics and reporting
-
-The database schema remains fully compatible with the original system for seamless migration, while providing significant improvements in performance, security, and user experience.
