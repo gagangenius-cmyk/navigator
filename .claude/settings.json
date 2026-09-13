@@ -124,7 +124,10 @@
       "Bash(node _tmp_run_hr_pro_migration.js)",
       "Bash(grep \"DmCallRequest$\" /d/tmp/model_usage_sorted.txt)",
       "Bash(node _tmp_cleanup_models.js /d/tmp/truly_unused_180.txt)",
-      "Bash(grep -v \"^index.ts$\")"
+      "Bash(grep -v \"^index.ts$\")",
+      "Bash(gh auth *)",
+      "Bash(gh repo *)",
+      "Bash(git ls-remote *)"
     ],
     "additionalDirectories": [
       "d:\\xampp\\htdocs\\dm-next\\src\\app\\api\\admin\\roles\\[id]",

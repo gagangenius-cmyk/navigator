@@ -31,7 +31,7 @@ Navigator is built with:
 - Self-service portal for clients (per-opportunity conversation/chat, document access, agreement viewing)
 
 ### Agreements & Contracts
-- Bilingual (EN/AR) "Agreement for Advisory Services" generator, branch-specific (Dubai, Abu Dhabi, Kuwait, Qatar) plus a separate India (English-only) template
+- Bilingual (EN/AR) "Agreement for Advisory Services" generator for the Dubai branch (currently the only active branch; the underlying template code supports Abu Dhabi/Kuwait/Qatar/India as well, ready for when those branches go live again)
 - Branch legal identity (company name, address, licence/registration number, governing law) is resolved dynamically per branch rather than hardcoded, so a rebrand or new branch doesn't require template edits
 - Contract lifecycle: generator, preview, signing, templates, archive and analytics
 - Legacy PHP-era agreement archive lookup for pre-migration contracts
@@ -47,9 +47,6 @@ Navigator is built with:
 
 ### Reporting & Analytics
 - Branch performance, contract analytics, recovery reports, lead-status and operational dashboards
-
-### Multi-Branch & Multi-Currency
-- All branch identity, currency and tax data is driven by the `crm_branch` table — new branches don't require code changes to templates or receipts
 
 ## Prerequisites
 
