@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext';
 import { BANK_PAYMENT_OPTIONS, CARD_PAYMENT_OPTIONS } from '@/lib/paymentOptions';
+import { getBranchAgreementProfile } from '@/lib/branchAgreementProfiles';
 
 interface PaymentWizardProps {
   leadId: number;
@@ -217,62 +218,72 @@ export default function PaymentWizard({ leadId, onPaymentProcessed }: PaymentWiz
     return y + lines.length * lineHeight;
   };
 
-  const getBranchReceiptConfig = (branchName: string = '', currency: string = 'AED', region?: unknown) => {
-    const bn = branchName.toLowerCase();
-    const isKuwait = currency === 'KWD' || String(region || '') === '9' || bn.includes('kuwait') || bn.includes('disha');
-    const isCMG = bn.includes('commonwealth') || bn.includes('cmg');
-    const isAbuDhabi = bn.includes('abu dhabi') || bn.includes('didactic');
+  // Company identity (name/address/email/TRN) always comes from the lead's
+  // own crm_branch record (lead.dmBranch) — never hardcoded — since branch
+  // legal names collide in ways a name-only lookup can't safely disambiguate
+  // (see branchAgreementProfiles.ts). Only the geography — read from the
+  // branch's name+address text — decides which visual theme/tax wording
+  // applies, mirroring receiptTemplate.ts's getBranchReceiptConfig.
+  const getBranchReceiptConfig = (dmBranch: Record<string, any> | null | undefined, currency: string = 'AED') => {
+    const branchName = String(dmBranch?.name || '');
+    const branchAddress = String(dmBranch?.address || '');
+    const geo = `${branchName} ${branchAddress}`.toLowerCase();
+    const isKuwait = currency === 'KWD' || /kuwait/.test(geo);
+    const isQatar = /qatar|doha/.test(geo);
+    const isAbuDhabi = /abu\s*dhabi/.test(geo);
+
+    const companyName = (dmBranch?.abbrv && getBranchAgreementProfile(dmBranch.abbrv).legalNameEn)
+      || branchName || 'Global Navigator LLC FZ';
+    const trn: string | null = dmBranch?.licenseNumber || null;
+    const email = String(dmBranch?.email || '');
+    const vatRate = dmBranch?.vatGstPercent !== null && dmBranch?.vatGstPercent !== undefined && dmBranch?.vatGstPercent !== ''
+      ? Number(dmBranch.vatGstPercent)
+      : (isKuwait || isQatar) ? 0 : 5;
+    const hasVat = vatRate > 0;
+
     if (isKuwait) return {
       branchCode: 'KWT',
-      companyName: 'Disha Management Consulting Company',
-      address: 'Office 19/20, 6th Floor, Orient Complex,',
-      address2: 'Salmiya, Kuwait City, State of Kuwait',
-      trn: null as string | null,
-      email: 'accounts@disha-kwt.com',
+      companyName, address: branchAddress, address2: '', trn, email,
       headerR: 253, headerG: 246, headerB: 238,
       accentR: 124, accentG: 61, accentB: 12,
-      receiptTitle: 'PAYMENT RECEIPT', hasVat: false, vatRate: 0,
-      totalLabel: 'TOTAL RECEIVED', statusLabel: 'RECEIVED IN FULL',
-      footerNote: 'No VAT or indirect tax applicable in the State of Kuwait',
-      refLabel: 'POS Reference',
-    };
-    if (isCMG) return {
-      branchCode: 'CMG',
-      companyName: 'Commonwealth Migration Group',
-      address: 'Dubai, United Arab Emirates', address2: '',
-      trn: '[CMG-TRN-NUMBER]' as string | null,
-      email: 'finance@cwmigrationgroup.ae',
-      headerR: 238, headerG: 242, headerB: 248,
-      accentR: 30, accentG: 58, accentB: 95,
-      receiptTitle: 'TAX INVOICE / PAYMENT RECEIPT', hasVat: true, vatRate: 5,
-      totalLabel: 'TOTAL PAID (INCL. VAT)', statusLabel: 'PAID IN FULL',
-      footerNote: 'Tax Invoice per UAE Federal Tax Authority',
+      receiptTitle: hasVat ? 'TAX INVOICE / PAYMENT RECEIPT' : 'PAYMENT RECEIPT', hasVat, vatRate,
+      totalLabel: hasVat ? 'TOTAL PAID (INCL. VAT)' : 'TOTAL RECEIVED',
+      statusLabel: hasVat ? 'PAID IN FULL' : 'RECEIVED IN FULL',
+      footerNote: hasVat ? 'Tax Invoice per applicable law' : 'No VAT or indirect tax applicable in the State of Kuwait',
       refLabel: 'POS Reference',
     };
     if (isAbuDhabi) return {
       branchCode: 'AUH',
-      companyName: 'Didactic Management Consultants',
-      address: '1802 Salam Street,', address2: 'Abu Dhabi, United Arab Emirates',
-      trn: '1004344250500003' as string | null,
-      email: 'finance@didactic-auh.com',
+      companyName, address: branchAddress, address2: '', trn, email,
       headerR: 238, headerG: 244, headerB: 237,
       accentR: 45, accentG: 90, accentB: 39,
-      receiptTitle: 'TAX INVOICE / PAYMENT RECEIPT', hasVat: true, vatRate: 5,
-      totalLabel: 'TOTAL PAID (INCL. VAT)', statusLabel: 'PAID IN FULL',
-      footerNote: 'Tax Invoice per UAE Federal Tax Authority',
+      receiptTitle: hasVat ? 'TAX INVOICE / PAYMENT RECEIPT' : 'PAYMENT RECEIPT', hasVat, vatRate,
+      totalLabel: hasVat ? 'TOTAL PAID (INCL. VAT)' : 'TOTAL RECEIVED',
+      statusLabel: hasVat ? 'PAID IN FULL' : 'RECEIVED IN FULL',
+      footerNote: hasVat ? 'Tax Invoice per UAE Federal Tax Authority' : 'No VAT or indirect tax applicable',
       refLabel: 'POS Reference',
     };
-    return {
-      branchCode: 'DXB',
-      companyName: 'DM Immigration Consultants DMCC',
-      address: '3703, Latifa Tower, Sheikh Zayed Road,', address2: 'Dubai, United Arab Emirates',
-      trn: '1004344250500003' as string | null,
-      email: 'finance@dmc-immigration.com',
+    if (isQatar) return {
+      branchCode: 'DOH',
+      companyName, address: branchAddress, address2: '', trn, email,
       headerR: 238, headerG: 242, headerB: 248,
       accentR: 44, accentG: 74, accentB: 122,
-      receiptTitle: 'TAX INVOICE / PAYMENT RECEIPT', hasVat: true, vatRate: 5,
-      totalLabel: 'TOTAL PAID (INCL. VAT)', statusLabel: 'PAID IN FULL',
-      footerNote: 'Tax Invoice per UAE Federal Tax Authority',
+      receiptTitle: hasVat ? 'TAX INVOICE / PAYMENT RECEIPT' : 'PAYMENT RECEIPT', hasVat, vatRate,
+      totalLabel: hasVat ? 'TOTAL PAID (INCL. VAT)' : 'TOTAL RECEIVED',
+      statusLabel: hasVat ? 'PAID IN FULL' : 'RECEIVED IN FULL',
+      footerNote: hasVat ? 'Tax Invoice per applicable law' : 'No VAT or indirect tax applicable in the State of Qatar',
+      refLabel: 'POS Reference',
+    };
+    // Dubai (and any other/future branch) default to the UAE Gulf template.
+    return {
+      branchCode: 'DXB',
+      companyName, address: branchAddress, address2: '', trn, email,
+      headerR: 238, headerG: 242, headerB: 248,
+      accentR: 44, accentG: 74, accentB: 122,
+      receiptTitle: hasVat ? 'TAX INVOICE / PAYMENT RECEIPT' : 'PAYMENT RECEIPT', hasVat, vatRate,
+      totalLabel: hasVat ? 'TOTAL PAID (INCL. VAT)' : 'TOTAL RECEIVED',
+      statusLabel: hasVat ? 'PAID IN FULL' : 'RECEIVED IN FULL',
+      footerNote: hasVat ? 'Tax Invoice per UAE Federal Tax Authority' : 'No VAT or indirect tax applicable',
       refLabel: 'POS Reference',
     };
   };
@@ -292,8 +303,7 @@ export default function PaymentWizard({ leadId, onPaymentProcessed }: PaymentWiz
     const paidAmount = paymentData.totalAmount;
     const payDate = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
 
-    const branchName = lead?.dmBranch?.name || lead?.branch_name || '';
-    const cfg = getBranchReceiptConfig(branchName, currency, lead?.region);
+    const cfg = getBranchReceiptConfig(lead?.dmBranch, currency);
     const receiptNumber = getReceiptNumber(cfg.branchCode);
     const netAmount = cfg.hasVat ? paidAmount / (1 + cfg.vatRate / 100) : paidAmount;
     const vatAmount = cfg.hasVat ? paidAmount - netAmount : 0;

@@ -50,16 +50,29 @@ export interface DubaiAgreementValues {
   expressExclusions?: string;
   specialTerms?: string;
   currencyCode?: string;
+  // Branch identity — resolved by the caller (see renderAgreementForBranch.ts)
+  // from branchAgreementProfiles.ts / crm_branch, so a rebrand or licence
+  // change doesn't require editing this template. Falls back to DEFAULTS
+  // below (the last-known Dubai identity) if omitted.
+  branchNameEn?: string;
+  branchNameAr?: string;
+  branchAddressEn?: string;
+  branchAddressAr?: string;
+  regulatoryLineEn?: string;
+  regulatoryLineAr?: string;
+  idLabelEn?: string;
+  idLabelAr?: string;
 }
 
-// Fixed branch identity — taken verbatim from the signed PDF header/footer.
-const COMPANY = {
-  nameEn: 'DM Immigration Consultants DMCC - Dubai Branch',
-  nameAr: 'دي إم إميغريشن كونسلتنتس م.د.م.س - فرع دبي',
-  addressEn: 'Office 3703B, Latifa Tower, Sheikh Zayed Road, Trade Centre First, P.O. Box 29514, Dubai, UAE',
-  addressAr: 'مكتب B3703، برج لطيفة، شارع الشيخ زايد، المركز التجاري الأول، ص.ب. 29514، دبي، الإمارات العربية المتحدة',
-  regulatoryEn: 'Professional Licence No. 766222 - Dubai Department of Economy and Tourism (DET); branch of DM Immigration Consultants DMCC, Licence No. DMCC-788993',
-  regulatoryAr: 'الرخصة المهنية رقم 766222 - دائرة الاقتصاد والسياحة في دبي؛ فرع شركة دي إم إميغريشن كونسلتنتس م.د.م.س، الرخصة رقم DMCC-788993',
+// Fallback branch identity, used only if a caller omits the dynamic fields
+// above — kept in sync with branchAgreementProfiles.ts's DUBAI_PROFILE.
+const DEFAULTS = {
+  nameEn: 'Global Navigator LLC FZ',
+  nameAr: 'جلوبال نافيغيتور ذ.م.م',
+  addressEn: '606, Latifa Towers, Trade Center 1, Sheikh Zayed Road, Dubai, UAE',
+  addressAr: '606، أبراج لطيفة، المركز التجاري 1، شارع الشيخ زايد، دبي، الإمارات العربية المتحدة',
+  regulatoryEn: 'Professional Licence No. 766222 - Dubai Department of Economy and Tourism (DET)',
+  regulatoryAr: 'الرخصة المهنية رقم 766222 - دائرة الاقتصاد والسياحة في دبي',
   idLabelEn: 'Emirates ID No.',
   idLabelAr: 'رقم الهوية الإماراتية',
   currencyCode: 'AED',
@@ -141,6 +154,20 @@ const textOrBlank = (value: unknown, fallback = '________________') => {
   return result || fallback;
 };
 
+const resolveCompany = (v: DubaiAgreementValues) => ({
+  nameEn: v.branchNameEn || DEFAULTS.nameEn,
+  nameAr: v.branchNameAr || DEFAULTS.nameAr,
+  addressEn: v.branchAddressEn || DEFAULTS.addressEn,
+  addressAr: v.branchAddressAr || DEFAULTS.addressAr,
+  regulatoryEn: v.regulatoryLineEn || DEFAULTS.regulatoryEn,
+  regulatoryAr: v.regulatoryLineAr || DEFAULTS.regulatoryAr,
+  idLabelEn: v.idLabelEn || DEFAULTS.idLabelEn,
+  idLabelAr: v.idLabelAr || DEFAULTS.idLabelAr,
+  currencyCode: v.currencyCode || DEFAULTS.currencyCode,
+  renewalFeeUsd: DEFAULTS.renewalFeeUsd,
+  renewalFeeUsdAr: DEFAULTS.renewalFeeUsdAr,
+});
+
 const box = (
   englishTitle: string,
   english: string,
@@ -163,7 +190,7 @@ const feeTitle = () => `<section class="agreement-box fee-title" aria-label="Fee
   <div class="language arabic" dir="rtl" lang="ar"><h2>ملخص الرسوم</h2></div>
 </section>`;
 
-const bilingualHeader = () => `<header class="agreement-header">
+const bilingualHeader = (COMPANY: ReturnType<typeof resolveCompany>) => `<header class="agreement-header">
   <div class="header-column header-english">
     <div class="company-name">${esc(COMPANY.nameEn.toUpperCase())}</div>
     <div>${esc(COMPANY.regulatoryEn)}</div>
@@ -202,7 +229,7 @@ const getAgreementDetails = (v: DubaiAgreementValues) => {
     includedDeliverables: textOrBlank(v.includedDeliverables),
     expressExclusions: textOrBlank(v.expressExclusions),
     specialTerms: textOrBlank(v.specialTerms),
-    currencyCode: v.currencyCode || COMPANY.currencyCode,
+    currencyCode: v.currencyCode || DEFAULTS.currencyCode,
     paymentMilestonesEn,
     paymentMilestonesAr,
   };
@@ -210,6 +237,7 @@ const getAgreementDetails = (v: DubaiAgreementValues) => {
 
 export function renderDubaiAgreement(v: DubaiAgreementValues): string {
   const d = getAgreementDetails(v);
+  const COMPANY = resolveCompany(v);
 
   const clauseHtml = clauses.map(([englishTitle, english, arabicTitle, arabic]) =>
     box(englishTitle, english, arabicTitle, arabic, 'clause')).join('');
@@ -497,7 +525,7 @@ export function renderDubaiAgreement(v: DubaiAgreementValues): string {
 </head>
 <body>
   <main class="document">
-    ${bilingualHeader()}
+    ${bilingualHeader(COMPANY)}
 
     ${box(
       'AGREEMENT DETAILS',

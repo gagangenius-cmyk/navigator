@@ -50,10 +50,22 @@ export interface AbuDhabiAgreementValues {
   expressExclusions?: string;
   specialTerms?: string;
   currencyCode?: string;
+  // Branch identity — resolved by the caller (see renderAgreementForBranch.ts)
+  // from branchAgreementProfiles.ts / crm_branch. Falls back to DEFAULTS
+  // below if omitted.
+  branchNameEn?: string;
+  branchNameAr?: string;
+  branchAddressEn?: string;
+  branchAddressAr?: string;
+  regulatoryLineEn?: string;
+  regulatoryLineAr?: string;
+  idLabelEn?: string;
+  idLabelAr?: string;
 }
 
-// Fixed branch identity — taken verbatim from the signed PDF header/footer.
-const COMPANY = {
+// Fallback branch identity, used only if a caller omits the dynamic fields
+// above — kept in sync with branchAgreementProfiles.ts's ABU_DHABI_PROFILE.
+const DEFAULTS = {
   nameEn: 'Didactic Management Consultants - L.L.C - S.P.C',
   nameAr: 'ديدكتيك للاستشارات الإدارية ذ.م.م - ش.ش.و',
   addressEn: '1802, Salam HQ Building, Al Salam Street, Abu Dhabi, UAE',
@@ -66,6 +78,20 @@ const COMPANY = {
   renewalFeeUsd: RENEWAL_FEE_USD_LABEL,
   renewalFeeUsdAr: RENEWAL_FEE_USD_LABEL_AR,
 };
+
+const resolveCompany = (v: AbuDhabiAgreementValues) => ({
+  nameEn: v.branchNameEn || DEFAULTS.nameEn,
+  nameAr: v.branchNameAr || DEFAULTS.nameAr,
+  addressEn: v.branchAddressEn || DEFAULTS.addressEn,
+  addressAr: v.branchAddressAr || DEFAULTS.addressAr,
+  regulatoryEn: v.regulatoryLineEn || DEFAULTS.regulatoryEn,
+  regulatoryAr: v.regulatoryLineAr || DEFAULTS.regulatoryAr,
+  idLabelEn: v.idLabelEn || DEFAULTS.idLabelEn,
+  idLabelAr: v.idLabelAr || DEFAULTS.idLabelAr,
+  currencyCode: v.currencyCode || DEFAULTS.currencyCode,
+  renewalFeeUsd: DEFAULTS.renewalFeeUsd,
+  renewalFeeUsdAr: DEFAULTS.renewalFeeUsdAr,
+});
 
 // The 15 clauses, verbatim from the signed PDF, in its own order/numbering.
 const clauses: Array<[string, string, string, string]> = [
@@ -162,7 +188,7 @@ const feeTitle = () => `<section class="agreement-box fee-title" aria-label="Fee
   <div class="language arabic" dir="rtl" lang="ar"><h2>ملخص الرسوم</h2></div>
 </section>`;
 
-const bilingualHeader = () => `<header class="agreement-header">
+const bilingualHeader = (COMPANY: ReturnType<typeof resolveCompany>) => `<header class="agreement-header">
   <div class="header-column header-english">
     <div class="company-name">${esc(COMPANY.nameEn.toUpperCase())}</div>
     <div>${esc(COMPANY.regulatoryEn)}</div>
@@ -201,7 +227,7 @@ const getAgreementDetails = (v: AbuDhabiAgreementValues) => {
     includedDeliverables: textOrBlank(v.includedDeliverables),
     expressExclusions: textOrBlank(v.expressExclusions),
     specialTerms: textOrBlank(v.specialTerms),
-    currencyCode: v.currencyCode || COMPANY.currencyCode,
+    currencyCode: v.currencyCode || DEFAULTS.currencyCode,
     paymentMilestonesEn,
     paymentMilestonesAr,
   };
@@ -209,6 +235,7 @@ const getAgreementDetails = (v: AbuDhabiAgreementValues) => {
 
 export function renderAbuDhabiAgreement(v: AbuDhabiAgreementValues): string {
   const d = getAgreementDetails(v);
+  const COMPANY = resolveCompany(v);
 
   const clauseHtml = clauses.map(([englishTitle, english, arabicTitle, arabic]) =>
     box(englishTitle, english, arabicTitle, arabic, 'clause')).join('');
@@ -496,7 +523,7 @@ export function renderAbuDhabiAgreement(v: AbuDhabiAgreementValues): string {
 </head>
 <body>
   <main class="document">
-    ${bilingualHeader()}
+    ${bilingualHeader(COMPANY)}
 
     ${box(
       'AGREEMENT DETAILS',

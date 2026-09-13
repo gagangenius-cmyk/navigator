@@ -89,35 +89,53 @@ export function renderAgreementForBranch(branchAbbrv: string | null | undefined,
     specialTerms: data.specialTerms,
     agreementRenewalFee: data.agreementRenewalFee,
     currencyCode: profile.currencyCode,
-  };
-
-  if (key === 'auh') {
-    return renderAbuDhabiAgreement(gulfData);
-  }
-
-  if (key === 'dxb szr') {
-    return renderDubaiAgreement(gulfData);
-  }
-
-  if (key === 'kwd') {
-    return renderKuwaitAgreement(gulfData);
-  }
-
-  if (key === 'doh old airport rd') {
-    return renderQatarAgreement(gulfData);
-  }
-
-  return renderGulfAgreement({
-    ...gulfData,
     branchNameEn: profile.legalNameEn,
     branchNameAr: profile.legalNameAr,
-    branchAddressEn: profile.addressEn,
-    branchAddressAr: profile.addressAr,
     regulatoryLineEn: profile.regulatoryLineEn,
     regulatoryLineAr: profile.regulatoryLineAr,
     idLabelEn: profile.idLabelEn,
     idLabelAr: profile.idLabelAr,
-    currencyCode: profile.currencyCode,
+  };
+
+  if (key === 'auh') {
+    return renderAbuDhabiAgreement({
+      ...gulfData,
+      branchAddressEn: profile.addressEn,
+      branchAddressAr: profile.addressAr,
+    });
+  }
+
+  if (key === 'dxb szr') {
+    return renderDubaiAgreement({
+      ...gulfData,
+      branchAddressEn: profile.addressEn,
+      branchAddressAr: profile.addressAr,
+    });
+  }
+
+  if (key === 'kwd') {
+    return renderKuwaitAgreement({
+      ...gulfData,
+      branchAddressEn: profile.addressEn,
+      branchAddressAr: profile.addressAr,
+    });
+  }
+
+  if (key === 'doh old airport rd') {
+    // Qatar's header has a single address slot (no separate contact-line
+    // slot like the generic renderGulfAgreement) — concatenate the phone/
+    // email contact line onto the address, matching the signed PDF layout.
+    return renderQatarAgreement({
+      ...gulfData,
+      branchAddressEn: profile.contactLineEn ? `${profile.addressEn}. ${profile.contactLineEn}` : profile.addressEn,
+      branchAddressAr: profile.contactLineAr ? `${profile.addressAr}. ${profile.contactLineAr}` : profile.addressAr,
+    });
+  }
+
+  return renderGulfAgreement({
+    ...gulfData,
+    branchAddressEn: profile.addressEn,
+    branchAddressAr: profile.addressAr,
     taxLineEn: profile.taxLineEn,
     taxLineAr: profile.taxLineAr,
     governingLawEn: profile.governingLawEn,
