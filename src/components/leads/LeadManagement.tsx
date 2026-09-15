@@ -387,6 +387,48 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
     return { label: 'New Lead', color: 'bg-gray-100 text-gray-800 border-gray-200', stepIndex: 0 };
   };
 
+  const getLeadFlowChecks = (lead: any) => {
+    const hasOpportunity = Boolean(lead.resolved_opportunity_id || lead.opportunity_id);
+    const discountStatus = String(lead.discount_status || '').toLowerCase();
+    const financeStatus = String(lead.finance_status || '').toLowerCase();
+    const complianceStatus = String(lead.compliance_status || '').toLowerCase();
+    const agreementGenerated = Boolean(lead.agreementGenerated || lead.agreementNumber || lead.agreementSigned);
+    const receiptGenerated = Boolean(lead.receiptNumber || lead.paymentReceived || lead.paymentStatus);
+
+    const statusClass = (done: boolean, rejected = false) => {
+      if (rejected) return 'border-rose-200 bg-rose-50 text-rose-700';
+      if (done) return 'border-emerald-200 bg-emerald-50 text-emerald-700';
+      return 'border-gray-200 bg-gray-50 text-gray-500';
+    };
+
+    return [
+      { key: 'opportunity', label: 'Opportunity Flow', done: hasOpportunity, detail: hasOpportunity ? `Opp #${lead.resolved_opportunity_id || lead.opportunity_id}` : 'Not started' },
+      {
+        key: 'discount',
+        label: 'Discount Approval',
+        done: discountStatus === 'approved' || discountStatus === 'not_required' || discountStatus === '',
+        rejected: discountStatus === 'rejected',
+        detail: discountStatus ? discountStatus.replace('_', ' ') : 'Not required',
+      },
+      {
+        key: 'finance',
+        label: 'Finance Approval',
+        done: financeStatus === 'approved',
+        rejected: financeStatus === 'rejected',
+        detail: financeStatus ? financeStatus.replace('_', ' ') : 'Pending',
+      },
+      {
+        key: 'compliance',
+        label: 'Compliance Approval',
+        done: complianceStatus === 'approved',
+        rejected: complianceStatus === 'rejected',
+        detail: complianceStatus ? complianceStatus.replace('_', ' ') : 'Pending',
+      },
+      { key: 'agreement', label: 'Agreement Generated', done: agreementGenerated, detail: lead.agreementNumber || (agreementGenerated ? 'Generated' : 'Pending') },
+      { key: 'receipt', label: 'Receipt Generated', done: receiptGenerated, detail: lead.receiptNumber || (receiptGenerated ? 'Generated' : 'Pending') },
+    ].map((item) => ({ ...item, className: statusClass(item.done, Boolean(item.rejected)) }));
+  };
+
   const { sorted: sortedLeadRows, sortKey: leadSortKey, sortDirection: leadSortDirection, toggleSort: toggleLeadSort } = useSortableData(
     leads,
     {
@@ -2014,6 +2056,7 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
                   const waLink = getWhatsAppLink(waNumber);
                   const name = [lead.fname, lead.mname, lead.lname].filter(Boolean).join(' ') || `Lead #${lead.id}`;
                   const initials = `${lead.fname?.[0] || ''}${lead.lname?.[0] || ''}`.toUpperCase() || 'LD';
+                  const flowChecks = getLeadFlowChecks(lead);
 
                   return (
                     <motion.article
@@ -2136,6 +2179,24 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
                               <div className="h-2 overflow-hidden rounded-full bg-[var(--cmg-blue-soft)]">
                                 <div className="h-full rounded-full bg-gradient-to-r from-[var(--cmg-blue)] to-[var(--dmc-gold)] transition-[width] duration-300" style={{ width: `${progressPct}%` }} />
                               </div>
+                            </div>
+
+                            <div className="mt-3 grid grid-cols-1 gap-1.5 sm:grid-cols-2 xl:grid-cols-3">
+                              {flowChecks.map((item) => (
+                                <div key={item.key} className={`min-w-0 rounded-md border px-2 py-1.5 ${item.className}`} title={`${item.label}: ${item.detail}`}>
+                                  <div className="flex min-w-0 items-center gap-1.5">
+                                    {item.rejected ? (
+                                      <XCircle className="h-3.5 w-3.5 shrink-0" />
+                                    ) : item.done ? (
+                                      <CheckCircle className="h-3.5 w-3.5 shrink-0" />
+                                    ) : (
+                                      <Clock className="h-3.5 w-3.5 shrink-0" />
+                                    )}
+                                    <span className="truncate text-[11px] font-bold uppercase">{item.label}</span>
+                                  </div>
+                                  <div className="mt-0.5 truncate text-xs font-semibold">{item.detail}</div>
+                                </div>
+                              ))}
                             </div>
 
                             {activeTab === 'rejected' && (() => {

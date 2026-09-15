@@ -445,8 +445,10 @@ export async function GET(request: NextRequest) {
         b.mobile as branch_mobile, b.license_number as branch_license_number,
         b.vat_gst_percent as branch_vat_gst_percent, b.abbrv as branch_abbrv,
         o.status AS opp_status, o.stage AS opp_stage,
-        o.paymentReceived, o.agreementSigned, o.retentionStatus,
-        (SELECT agr.agreementNumber FROM crm_opportunity_agreements agr WHERE agr.opportunityId = o.id ORDER BY agr.id DESC LIMIT 1) as agreementNumber${withWorkflow ? `,
+        o.paymentReceived, o.agreementGenerated, o.agreementSigned, o.retentionStatus,
+        (SELECT agr.agreementNumber FROM crm_opportunity_agreements agr WHERE agr.opportunityId = o.id ORDER BY agr.id DESC LIMIT 1) as agreementNumber,
+        (SELECT COALESCE(p.receiptNumber, p.paymentNumber) FROM crm_opportunity_payments p WHERE p.opportunityId = o.id ORDER BY p.id DESC LIMIT 1) as receiptNumber,
+        (SELECT p.status FROM crm_opportunity_payments p WHERE p.opportunityId = o.id ORDER BY p.id DESC LIMIT 1) as paymentStatus${withWorkflow ? `,
         wr.workflow_status, wr.finance_status, wr.compliance_status, wr.formal_client_id,
         wr.finance_reason, wr.compliance_reason,
         (SELECT status FROM crm_discount_approvals da WHERE da.leadId = l.id ORDER BY da.id DESC LIMIT 1) as discount_status` : ''}
