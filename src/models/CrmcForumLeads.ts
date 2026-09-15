@@ -112,6 +112,7 @@ interface CrmcForumLeadsAttributes {
   old_assgined: number;
   nal_count: number;
   campaign_id: number;
+  meta_leadgen_id: string | null;
   old_branch: number;
   sf: number;
   // Opportunity conversion fields
@@ -243,6 +244,7 @@ class CrmcForumLeads extends Model<CrmcForumLeadsAttributes, CrmcForumLeadsCreat
   declare old_assgined: number;
   declare nal_count: number;
   declare campaign_id: number;
+  declare meta_leadgen_id: string | null;
   declare old_branch: number;
   declare sf: number;
   // Opportunity conversion fields
@@ -756,6 +758,10 @@ CrmcForumLeads.init(
     campaign_id: {
       type: DataTypes.INTEGER,
       allowNull: false
+    },
+    meta_leadgen_id: {
+      type: DataTypes.STRING(64),
+      allowNull: true
     },
     old_branch: {
       type: DataTypes.INTEGER,

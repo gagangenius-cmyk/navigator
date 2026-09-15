@@ -8,7 +8,7 @@ import { isCeo, isFoeOrBranchManagerOrCeo, isBranchManagerOrCeo, isCounsellor } 
 import { checkForDuplicate, findExistingLead, recordDuplicateLeadAttempt, normalizePhone, checkForFuzzyDuplicate } from '@/lib/duplicateLeadCheck'
 import { resolveLeadReferenceId, resolveLeadReferences } from '@/lib/leadReferenceResolver'
 import { resolveBranchReference } from '@/lib/branchResolver'
-import { recordLeadAssignment } from '@/lib/leadRemarks'
+import { recordLeadAssignment, logLeadRemark } from '@/lib/leadRemarks'
 import { ensureClientActualNameColumn } from '@/lib/ensureClientActualNameColumn'
 import { buildDefaultLeadData, insertLeadRecord } from '@/lib/leadDefaults'
 import { captureError } from '@/lib/errorTracking'
@@ -553,15 +553,18 @@ export async function POST(request: NextRequest) {
           try {
             const typedRow = row as Record<string, any>
 
-            // "Name" is the single-column fallback from the sample template
-            // (src/app/api/leads/sample-template/route.ts); split on first
-            // whitespace when the richer First/Last Name columns aren't present.
+            // Import template (src/app/api/leads/sample-template/route.ts) is
+            // exactly: Name, Contact Number, Email Address, Destination
+            // Country, Remarks. A few legacy header names are still accepted
+            // as fallbacks so older downloaded templates don't hard-break.
             const nameParts = String(typedRow['Name'] || '').trim().split(/\s+/).filter(Boolean)
             const nameFallbackFirst = nameParts[0] || ''
             const nameFallbackLast = nameParts.slice(1).join(' ')
 
-            const rowPhone = typedRow['Phone'] || typedRow['phone'] || ''
-            const rowEmail = typedRow['Email'] || typedRow['email'] || ''
+            const rowPhone = typedRow['Contact Number'] || typedRow['Phone'] || typedRow['phone'] || ''
+            const rowEmail = typedRow['Email Address'] || typedRow['Email'] || typedRow['email'] || ''
+            const rowCountry = typedRow['Destination Country'] || typedRow['Country'] || typedRow['country'] || ''
+            const rowRemarks = String(typedRow['Remarks'] || typedRow['Remark'] || typedRow['Lead Remark'] || '').trim()
 
             // Reject rather than flag: a lead whose phone or email already
             // exists (in the DB, or earlier in this same file) doesn't get
@@ -585,26 +588,27 @@ export async function POST(request: NextRequest) {
               lname: typedRow['Last Name'] || typedRow['lname'] || nameFallbackLast,
               email: rowEmail,
               phone: rowPhone,
-              mobile: typedRow['Mobile'] || typedRow['mobile'] || '',
-              nationality: typedRow['Nationality'] || typedRow['nationality'] || '',
-              address: typedRow['Address'] || typedRow['address'] || '',
-              dob: typedRow['Date of Birth'] || typedRow['dob'] ? new Date(typedRow['Date of Birth'] || typedRow['dob']) : null,
-              gender: typedRow['Gender'] || typedRow['gender'] || 'Male',
-              id_number: typedRow['ID Number'] || typedRow['id_number'] || '',
-              id_expiry: typedRow['ID Expiry'] || typedRow['id_expiry'] ? new Date(typedRow['ID Expiry'] || typedRow['id_expiry']) : new Date(),
+              mobile: rowPhone,
+              nationality: '',
+              address: '',
+              dob: null,
+              gender: 'Male',
+              id_number: '',
+              id_expiry: new Date(),
               id_issue_date: new Date(),
-              country_interest: typedRow['Country Interest'] || typedRow['country_interest'] || typedRow['Country'] || typedRow['country'] || '',
+              country_interest: rowCountry,
               sub_country_interest: 0,
-              service_interest: typedRow['Service Interest'] || typedRow['service_interest'] || '',
-              market_source: typedRow['Market Source'] || typedRow['market_source'] || typedRow['Source'] || typedRow['source'] || '',
+              service_interest: '',
+              market_source: '',
               sub_market_source: 0,
-              priority: typedRow['Priority'] || typedRow['priority'] || 'Medium',
-              // Imported leads always enter unassigned (assignTo: null below) —
-              // 'untouched' so they're findable separately from a 'New' lead
-              // someone already owns.
-              status: typedRow['Status'] || typedRow['status'] || 'untouched',
-              lead_quality: typedRow['Lead Quality'] || typedRow['lead_quality'] || 'Warm',
-              enquiry: typedRow['Enquiry'] || typedRow['enquiry'] || 'General Inquiry',
+              priority: 'Medium',
+              // Starts 'untouched' — recordLeadAssignment (called right after
+              // insert below, since these leads are assigned to the importer
+              // immediately) flips it to 'New' on the unassigned→assigned
+              // transition, same as every other assignment path.
+              status: 'untouched',
+              lead_quality: 'Warm',
+              enquiry: 'General Inquiry',
               convet: 'New',
               regdate: new Date(),
               regtime: new Date(),
@@ -613,10 +617,11 @@ export async function POST(request: NextRequest) {
               followup: new Date(),
               folowuptime: new Date().toTimeString().split(' ')[0],
               stepComplete: 1,
-              // Imported leads enter unassigned; a FOE/Branch Manager/CEO assigns them afterward.
-              assignTo: null,
-              case_officer: null,
-              Counsilor: null,
+              // Every imported lead is assigned straight to whichever
+              // employee is performing the import — not left unassigned.
+              assignTo: currentUser.id,
+              case_officer: currentUser.id,
+              Counsilor: currentUser.id,
               branch: uploaderBranchId,
               region: data.region || 1,
               payTotal: parseFloat(typedRow['Total Payment'] || typedRow['payTotal']) || 0,
@@ -642,7 +647,7 @@ export async function POST(request: NextRequest) {
               campaign_group: '',
               pa_fname: '',
               pa_lname: '',
-              lead_remark: typedRow['Lead Remark'] || typedRow['lead_remark'] || 'Imported from Excel',
+              lead_remark: rowRemarks || 'Imported from Excel',
               created: new Date(),
               created_by: data.created_by || 1,
               alert: 0,
@@ -712,6 +717,30 @@ export async function POST(request: NextRequest) {
 
             const leadId = getInsertId(insertResult)
             if (!leadId) throw new Error('Lead was created but the new lead ID could not be resolved')
+
+            // Assigns the lead to the importer (stamps transfer_date/time,
+            // flips 'untouched' -> 'New', logs a lead_assigned entry into
+            // crm_remarks) — same call every other assignment path uses.
+            // No "lead assigned to you" notification fires here since the
+            // actor and the new owner are the same person.
+            await recordLeadAssignment({
+              leadId,
+              oldAssignTo: null,
+              newAssignTo: currentUser.id,
+              actorId: currentUser.id,
+              actorRole: currentUser.roleName || currentUser.type,
+            })
+
+            if (rowRemarks) {
+              await logLeadRemark({
+                leadId,
+                action: 'lead_created',
+                remark: rowRemarks,
+                actorId: currentUser.id,
+                actorRole: currentUser.roleName || currentUser.type,
+              })
+            }
+
             createdLeads.push({ id: leadId, ...resolvedLeadData })
           } catch (error) {
             const dbMessage = (error as any)?.original?.sqlMessage || (error as any)?.parent?.sqlMessage

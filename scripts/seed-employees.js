@@ -41,6 +41,7 @@ const newEmployees = [
   { branch: 'DXB', dept: 'Sales', doj: null, name: 'Aaron Paul', username: 'Aaron', role: 'Senior Immigration Advisor', manager: 'Mehak' },
   { branch: 'DXB', dept: 'Sales', doj: null, name: 'Rubeca Francis', username: 'Rubeca', role: 'Senior Immigration Advisor', manager: 'Mehak' },
   { branch: 'DXB', dept: 'Sales', doj: null, name: 'Harpreet Kaur', username: 'Harpreet', role: 'Immigration Advisor', manager: 'Ashutosh' },
+  { branch: 'DXB', dept: 'Sales', doj: null, name: 'Sonu', username: 'Sonu', role: 'Immigration Advisor', manager: 'Ashutosh' },
   { branch: 'DXB', dept: 'HR', doj: null, name: 'HR', username: 'HR', role: 'HR' },
   { branch: 'DXB', dept: 'Accounts', doj: null, name: 'Accounts', username: 'Accounts', role: 'Accounts' },
   { branch: 'DXB', dept: 'Operations', doj: null, name: 'Operations', username: 'Operations', role: 'Operations' },

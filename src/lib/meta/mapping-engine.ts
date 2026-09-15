@@ -85,6 +85,9 @@ export function buildCrmPayload(
     UTMSource: 'Facebook Lead Ads',
     LeadSource: 'Facebook Lead Ads',
     roundrobin: 'true',
+    // Always carried through regardless of field mappings — this is what
+    // lets the CRM later report lead quality back to Meta for this lead.
+    MetaLeadId: lead.metaLeadId,
   };
 
   for (const mapping of effective) {

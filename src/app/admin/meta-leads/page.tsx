@@ -147,6 +147,7 @@ export default function MetaLeadsDashboard() {
           { href: '/admin/meta-leads/leads', label: 'All Leads', icon: Users },
           { href: '/admin/meta-leads/campaigns', label: 'Campaigns', icon: BarChart3 },
           { href: '/admin/meta-leads/mappings', label: 'Field Mappings', icon: ArrowRight },
+          { href: '/admin/meta-leads/quality-mappings', label: 'Lead Quality Feedback', icon: TrendingUp },
           { href: '/admin/meta-leads/settings', label: 'Settings', icon: Settings },
           { href: '/admin/meta-leads/logs', label: 'Delivery Logs', icon: Activity },
         ].map(link => (

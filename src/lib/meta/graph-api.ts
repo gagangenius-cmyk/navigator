@@ -1,13 +1,8 @@
 import type { MetaRawLead, MetaCampaign } from './types';
+import { getMetaPageAccessToken } from './token-store';
 
 function apiVersion(): string {
   return process.env.META_GRAPH_API_VERSION || 'v21.0';
-}
-
-function pageToken(): string {
-  const t = process.env.META_PAGE_ACCESS_TOKEN;
-  if (!t) throw new Error('META_PAGE_ACCESS_TOKEN is not configured');
-  return t;
 }
 
 const BASE = 'https://graph.facebook.com';
@@ -18,7 +13,7 @@ export async function fetchLeadFromMeta(leadgenId: string): Promise<MetaRawLead>
     'id', 'created_time', 'page_id', 'ad_id', 'adset_id', 'campaign_id', 'form_id', 'field_data',
   ].join(',');
 
-  const url = `${BASE}/${apiVersion()}/${leadgenId}?fields=${fields}&access_token=${pageToken()}`;
+  const url = `${BASE}/${apiVersion()}/${leadgenId}?fields=${fields}&access_token=${await getMetaPageAccessToken()}`;
 
   const res = await fetch(url, {
     method: 'GET',
@@ -37,7 +32,7 @@ export async function fetchLeadFromMeta(leadgenId: string): Promise<MetaRawLead>
 /** Fetches lead form details (name) from Meta Graph API */
 export async function fetchFormName(formId: string): Promise<string | null> {
   try {
-    const url = `${BASE}/${apiVersion()}/${formId}?fields=name&access_token=${pageToken()}`;
+    const url = `${BASE}/${apiVersion()}/${formId}?fields=name&access_token=${await getMetaPageAccessToken()}`;
     const res = await fetch(url, { signal: AbortSignal.timeout(10_000) });
     if (!res.ok) return null;
     const data = await res.json() as { name?: string };
@@ -51,8 +46,9 @@ export async function fetchFormName(formId: string): Promise<string | null> {
 export async function fetchCampaigns(adAccountId: string): Promise<MetaCampaign[]> {
   const fields = 'id,name,status,objective,daily_budget,lifetime_budget,insights{spend,impressions,clicks}';
   const results: MetaCampaign[] = [];
+  const token = await getMetaPageAccessToken();
   let nextUrl: string | null =
-    `${BASE}/${apiVersion()}/act_${adAccountId}/campaigns?fields=${fields}&limit=100&access_token=${pageToken()}`;
+    `${BASE}/${apiVersion()}/act_${adAccountId}/campaigns?fields=${fields}&limit=100&access_token=${token}`;
 
   // Handle pagination
   while (nextUrl) {
@@ -72,7 +68,7 @@ export async function fetchCampaigns(adAccountId: string): Promise<MetaCampaign[
 /** Verifies the configured access token is valid */
 export async function testMetaConnection(): Promise<{ ok: boolean; message: string }> {
   try {
-    const token = pageToken();
+    const token = await getMetaPageAccessToken();
     const url = `${BASE}/${apiVersion()}/me?fields=id,name&access_token=${token}`;
     const res = await fetch(url, { signal: AbortSignal.timeout(10_000) });
     if (!res.ok) {

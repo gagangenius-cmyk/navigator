@@ -66,6 +66,9 @@ export interface CrmPayload {
   DestinationCountry?: string;
   LeadSource: string;
   roundrobin: string;
+  /** Facebook leadgen_id — lets web-to-leads link the created lead back to
+   *  crm_meta_leads so lead-quality feedback can be sent back to Meta later. */
+  MetaLeadId?: string;
   [key: string]: string | undefined;
 }
 

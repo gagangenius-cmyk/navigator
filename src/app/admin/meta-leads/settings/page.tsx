@@ -23,13 +23,21 @@ interface EnvStatus {
   appSecret: string;
   webhookVerifyToken: string;
   pageAccessToken: string;
+  conversionsAccessToken: string;
   graphApiVersion: string;
   crmEndpoint: string;
+}
+
+interface TokenStatus {
+  pageTokenSource: 'database' | 'env' | 'missing';
+  conversionsTokenSource: 'database' | 'env' | 'missing';
+  tokenUpdatedAt: string | null;
 }
 
 export default function MetaSettingsPage() {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [env, setEnv]           = useState<EnvStatus | null>(null);
+  const [tokenStatus, setTokenStatus] = useState<TokenStatus | null>(null);
   const [loading, setLoading]   = useState(true);
   const [saving, setSaving]     = useState(false);
   const [testingCrm, setTestingCrm]   = useState(false);
@@ -45,13 +53,18 @@ export default function MetaSettingsPage() {
     default_lead_source: 'Facebook Lead Ads',
     default_utm_source: 'Facebook Lead Ads',
   });
+  // Kept separate from `form` — these never get pre-filled with the real
+  // token (the API never returns it), so an empty field always means "leave
+  // the stored token as-is", not "clear it".
+  const [tokenForm, setTokenForm] = useState({ page_access_token: '', conversions_access_token: '' });
 
-  useEffect(() => {
+  const loadSettings = () => (
     fetch('/api/admin/meta-leads/settings')
       .then(r => r.json())
       .then(data => {
         setSettings(data.settings);
         setEnv(data.envStatus);
+        setTokenStatus(data.tokenStatus);
         if (data.settings) {
           setForm({
             is_enabled: data.settings.is_enabled,
@@ -65,16 +78,19 @@ export default function MetaSettingsPage() {
           });
         }
       })
-      .finally(() => setLoading(false));
-  }, []);
+  );
+
+  useEffect(() => { loadSettings().finally(() => setLoading(false)); }, []);
 
   const save = async () => {
     setSaving(true); setMsg('');
     const res = await fetch('/api/admin/meta-leads/settings', {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(form),
+      body: JSON.stringify({ ...form, ...tokenForm }),
     });
     setMsg(res.ok ? 'Settings saved.' : 'Failed to save settings.');
+    setTokenForm({ page_access_token: '', conversions_access_token: '' });
+    if (res.ok) await loadSettings();
     setSaving(false);
   };
 
@@ -145,6 +161,59 @@ export default function MetaSettingsPage() {
         )}
         {settings?.last_campaign_sync_at && (
           <p className="text-xs text-gray-500">Last campaign sync: {new Date(settings.last_campaign_sync_at).toLocaleString()}</p>
+        )}
+      </div>
+
+      {/* Access Tokens (dynamic, DB-stored) */}
+      <div className="rounded-xl border border-gray-200 bg-white p-5 space-y-4">
+        <div>
+          <h2 className="font-medium text-gray-900">Access Tokens</h2>
+          <p className="text-xs text-gray-500">
+            Stored encrypted in the database so a token rotation doesn&apos;t need a redeploy.
+            Leave a field blank to keep the current token.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div>
+            <label className="mb-1 flex items-center gap-2 text-xs font-medium text-gray-600">
+              Page Access Token
+              {tokenStatus && (
+                <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${tokenStatus.pageTokenSource === 'missing' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
+                  {tokenStatus.pageTokenSource === 'missing' ? 'not set' : `active — ${tokenStatus.pageTokenSource}`}
+                </span>
+              )}
+            </label>
+            <input
+              type="password"
+              autoComplete="off"
+              value={tokenForm.page_access_token}
+              onChange={e => setTokenForm(p => ({ ...p, page_access_token: e.target.value }))}
+              placeholder="•••••••• (leave blank to keep current)"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div>
+            <label className="mb-1 flex items-center gap-2 text-xs font-medium text-gray-600">
+              Conversions API Access Token (optional)
+              {tokenStatus && (
+                <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${tokenStatus.conversionsTokenSource === 'missing' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
+                  {tokenStatus.conversionsTokenSource === 'missing' ? 'not set' : `active — ${tokenStatus.conversionsTokenSource}`}
+                </span>
+              )}
+            </label>
+            <input
+              type="password"
+              autoComplete="off"
+              value={tokenForm.conversions_access_token}
+              onChange={e => setTokenForm(p => ({ ...p, conversions_access_token: e.target.value }))}
+              placeholder="Falls back to Page Access Token when blank"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+        </div>
+        {tokenStatus?.tokenUpdatedAt && (
+          <p className="text-xs text-gray-400">Last token update: {new Date(tokenStatus.tokenUpdatedAt).toLocaleString()}</p>
         )}
       </div>
 

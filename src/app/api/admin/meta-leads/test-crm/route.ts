@@ -21,6 +21,6 @@ export async function POST(request: NextRequest) {
     // Mask response body for security — only show first 500 chars
     body: result.body?.slice(0, 500) ?? null,
     error: result.error,
-    endpoint: process.env.META_LEADS_CRM_ENDPOINT || 'https://cmgone.org/api/web-to-leads',
+    endpoint: 'direct-db-insert (this CRM\'s own database, no HTTP call)',
   });
 }

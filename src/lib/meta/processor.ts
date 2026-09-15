@@ -20,8 +20,10 @@ import { parseFieldData, buildCrmPayload } from './mapping-engine';
 import { deliverToCrm, nextRetryAt } from './crm-delivery';
 import type { MetaLeadMapping, MetaLeadParsed } from './types';
 
-const CRM_ENDPOINT =
-  process.env.META_LEADS_CRM_ENDPOINT || 'https://cmgone.org/api/web-to-leads';
+// Leads are inserted directly into this CRM's own database (see
+// src/lib/meta/crm-delivery.ts) rather than delivered over HTTP — this label
+// is kept only for the crm_meta_lead_deliveries audit column.
+const CRM_ENDPOINT = 'direct-db-insert';
 
 async function getActiveSettings() {
   const [row] = await sequelize.query<{

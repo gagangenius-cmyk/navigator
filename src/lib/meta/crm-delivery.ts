@@ -1,7 +1,5 @@
 import type { CrmPayload, DeliveryResult } from './types';
-
-const CRM_ENDPOINT =
-  process.env.META_LEADS_CRM_ENDPOINT || 'https://cmgone.org/api/web-to-leads';
+import { ingestWebToLead } from '@/lib/webToLeadsIngest';
 
 /** Exponential backoff delay in seconds for each retry attempt (0-indexed) */
 const RETRY_DELAYS_SECONDS = [
@@ -22,24 +20,25 @@ export function nextRetryAt(retryCount: number): string | null {
 }
 
 /**
- * Sends a normalized CRM payload to the configured endpoint.
- * Returns DeliveryResult; never throws — errors are captured.
+ * Creates the lead directly in this CRM's own database — this app *is* the
+ * CRM the leads are destined for (confirmed: cmgone.org/api/web-to-leads is
+ * this same codebase), so there's no reason to round-trip the payload out
+ * over HTTP to its own public URL. That hop only added a network failure
+ * mode (DNS/TLS/outbound firewall) with no benefit.
+ *
+ * Still returns the same DeliveryResult shape processor.ts already expects
+ * (success/status/body/error), so the delivery-tracking, retry-scheduling,
+ * and admin logs/stats built around crm_meta_lead_deliveries need no changes.
+ * Never throws — errors are captured.
  */
 export async function deliverToCrm(payload: CrmPayload): Promise<DeliveryResult> {
   try {
-    const res = await fetch(CRM_ENDPOINT, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(30_000),
-    });
-
-    const body = await res.text().catch(() => '');
+    const result = await ingestWebToLead(payload as unknown as Record<string, unknown>);
     return {
-      success: res.ok,
-      status: res.status,
-      body: body.slice(0, 2000), // cap stored response
-      error: res.ok ? null : `HTTP ${res.status}`,
+      success: result.success,
+      status: result.status,
+      body: JSON.stringify(result).slice(0, 2000),
+      error: result.success ? null : (result.error || `Ingest failed with status ${result.status}`),
     };
   } catch (err) {
     return {

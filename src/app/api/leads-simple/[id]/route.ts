@@ -3,6 +3,7 @@ import { sequelize } from '@/lib/sequelize';
 import { QueryTypes } from 'sequelize';
 import { verifyToken } from '@/lib/auth';
 import { isCeo } from '@/lib/roleChecks';
+import { notifyMetaLeadQuality } from '@/lib/meta/lead-quality-feedback';
 
 const ALLOWED_FIELDS = new Set([
   'status', 'priority', 'lead_quality', 'assignTo', 'branch', 'region',
@@ -101,6 +102,15 @@ export async function PUT(
       'SELECT id, fname, lname, status, priority, lead_quality, payTotal, discount, paidYet, payBalance FROM crm_forum_leads WHERE id = ? LIMIT 1',
       { replacements: [id], type: QueryTypes.SELECT }
     );
+
+    // Fire-and-forget: reports the lead's Meta quality back to Meta's
+    // Conversions API. No-op for leads not sourced from Meta Lead Ads.
+    const metaLeadQuality = typeof body.metaLeadQuality === 'string' ? body.metaLeadQuality.trim() : '';
+    if (metaLeadQuality) {
+      notifyMetaLeadQuality(id, metaLeadQuality).catch((err) =>
+        console.error(`[Meta Quality Feedback] Unhandled error for lead ${id}:`, err)
+      );
+    }
 
     return NextResponse.json({ success: true, lead: updated });
   } catch (error) {

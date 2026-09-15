@@ -10,6 +10,7 @@ import { CrmcFollowUpReminders } from '@/models/CrmcFollowUpReminders';
 import { ensureClientActualNameColumn } from '@/lib/ensureClientActualNameColumn';
 import { isFinanceAndComplianceApproved, APPROVAL_REQUIRED_ERROR, CLIENT_STATUS_VALUES } from '@/lib/opportunityApprovalGate';
 import { CACHE_TAGS, invalidateReportCaches } from '@/lib/reportCache';
+import { notifyMetaLeadQuality } from '@/lib/meta/lead-quality-feedback';
 
 let dbInitialized = false;
 
@@ -584,6 +585,18 @@ export async function PUT(
         actorId: auth.id,
         actorRole: auth.roleName || auth.type,
       });
+    }
+
+    // Reports the CRM's assessment of this lead back to Meta via the
+    // Conversions API (see src/lib/meta/lead-quality-feedback.ts) so its
+    // delivery algorithm can learn which leads turned out to be good — a
+    // no-op for leads that didn't come from Meta Lead Ads. Sent
+    // fire-and-forget: a Meta outage must never fail this lead update.
+    const metaLeadQuality = typeof data.metaLeadQuality === 'string' ? data.metaLeadQuality.trim() : '';
+    if (metaLeadQuality) {
+      notifyMetaLeadQuality(Number(id), metaLeadQuality).catch((err) =>
+        console.error(`[Meta Quality Feedback] Unhandled error for lead ${id}:`, err)
+      );
     }
 
     // Edits here (status/priority/payTotal/assignTo/...) all feed dashboard

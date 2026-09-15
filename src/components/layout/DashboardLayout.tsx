@@ -49,7 +49,8 @@ import {
   Upload,
   Send,
   ListChecks,
-  Route
+  Route,
+  Tag
 } from 'lucide-react';
 
 interface DashboardLayoutProps {
@@ -311,6 +312,7 @@ const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
         { name: 'Countries', href: '/admin/countries', icon: Globe, permission: 'countries.manage' },
         { name: 'Roles', href: '/admin/roles', icon: UserCheck, permission: 'roles.manage' },
         { name: 'Role Permissions', href: '/admin/roles/permissions', icon: Shield, permission: 'admin.access' },
+        { name: 'Lead Statuses', href: '/admin/lead-statuses', icon: Tag, permission: 'admin.access' },
         { name: 'Market Sources', href: '/admin/market-sources', icon: BarChart3, permission: 'marketing.manage' },
         { name: 'Campaigns', href: '/admin/campaigns', icon: MessageSquare, permission: 'campaigns.manage' },
         { name: 'Email Templates', href: '/admin/email-templates', icon: Mail, permission: 'templates.manage' },

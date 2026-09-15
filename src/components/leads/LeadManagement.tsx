@@ -21,6 +21,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { isBranchManagerOrCeo, isCeo, isFoe, isFoeOrBranchManagerOrCeo, isCounsellor } from '@/lib/roleChecks';
 import { BANK_PAYMENT_OPTIONS, CARD_PAYMENT_OPTIONS } from '@/lib/paymentOptions';
 import { getLeadBranchDetails, printReceipt as printReceiptDocument } from '@/lib/receiptTemplate';
+import { useLeadStatuses } from '@/hooks/useLeadStatuses';
 
 interface LeadManagementProps {
   onLeadSelect?: (lead: Lead) => void;
@@ -49,7 +50,6 @@ interface LeadFilterOptions {
   countries: FilterOption[];
   services: FilterOption[];
   sources: FilterOption[];
-  leadQualities: FilterOption[];
 }
 
 type LeadActionType = 'appointment' | 'followup' | 'remark' | 'status';
@@ -78,6 +78,7 @@ interface LeadActionForm {
   status: string;
   programId: string;
   countryId: string;
+  metaLeadQuality: string;
 }
 
 interface LeadActivity {
@@ -174,7 +175,6 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
     countryInterest: '',
     serviceInterest: '',
     marketSource: '',
-    leadQuality: '',
     dateFrom: '',
     dateTo: '',
     assignTo: ''
@@ -186,8 +186,7 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
     regions: [],
     countries: [],
     services: [],
-    sources: [],
-    leadQualities: []
+    sources: []
   });
   const [pagination, setPagination] = useState<PaginationData>({
     page: 1,
@@ -216,9 +215,11 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
     priority: 'medium',
     status: '',
     programId: '',
-    countryId: ''
+    countryId: '',
+    metaLeadQuality: ''
   });
   const [leadActionSaving, setLeadActionSaving] = useState(false);
+  const [metaQualityOptions, setMetaQualityOptions] = useState<string[]>([]);
   // Status popup: the Program dropdown is scoped to whichever Country is
   // selected (crm_fee is the only table that actually links a program to a
   // destination country) - null means "no country picked, show every
@@ -258,6 +259,7 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
   const [bulkTransferSearch, setBulkTransferSearch] = useState('');
 
   const { user } = useAuth();
+  const { statuses: leadStatuses, usesPriorityScale, badgeClassFor } = useLeadStatuses();
   const isDSorBM = useMemo(() => {
     const t = String(user?.type || '').toLowerCase().replace(/[\s-]+/g, '_');
     return ['director_of_sales', 'director', 'dos', 'branch_manager', 'bm', 'admin', 'administrator', 'super_admin'].includes(t) || user?.role === 1;
@@ -327,7 +329,6 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
     countryInterest: '',
     serviceInterest: '',
     marketSource: '',
-    leadQuality: '',
     dateFrom: '',
     dateTo: '',
     assignTo: ''
@@ -557,8 +558,7 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
           regions: data.regions || [],
           countries: data.countries || [],
           services: data.services || [],
-          sources: data.sources || [],
-          leadQualities: data.leadQualities || []
+          sources: data.sources || []
         });
       } catch (error) {
         console.error('Error fetching lead filter options:', error);
@@ -807,10 +807,14 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
           : '',
       notes: '',
       meetingType: actionType === 'appointment' ? 'consultation' : 'follow_up',
-      priority: String(lead.priority || 'medium').toLowerCase(),
+      // P1-P4 priority values (used when the lead's status has the P-priority
+      // scale, e.g. Hot) must keep their case to match the SearchableSelect's
+      // option values — only the low/medium/high scale gets lowercased.
+      priority: /^P[1-4]$/i.test(String(lead.priority || '')) ? String(lead.priority).toUpperCase() : String(lead.priority || 'medium').toLowerCase(),
       status: String(lead.status || ''),
       programId: String((lead as any).service_interest || ''),
-      countryId: String((lead as any).country_interest || '')
+      countryId: String((lead as any).country_interest || ''),
+      metaLeadQuality: ''
     });
     setCrossBranchEnabled(false);
     setCrossBranchTargetBranch('');
@@ -828,6 +832,22 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
       setReturnToViewModalOnClose(false);
     }
   };
+
+  // Loads the "Meta Lead Quality" dropdown options once the status popup
+  // opens — a no-op call for leads that didn't come from Meta Lead Ads, but
+  // the option list itself is shared/admin-configured so it's fetched fresh
+  // rather than hardcoded here.
+  useEffect(() => {
+    if (!showLeadActionModal || leadActionType !== 'status') return;
+    let cancelled = false;
+    fetch('/api/meta-leads/quality-options', {
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => { if (!cancelled) setMetaQualityOptions(data?.data || []); })
+      .catch(() => { if (!cancelled) setMetaQualityOptions([]); });
+    return () => { cancelled = true; };
+  }, [showLeadActionModal, leadActionType, token]);
 
   // Scopes the status popup's Program dropdown to the selected Country -
   // clears back to "every program" when no country is picked, matching
@@ -1008,6 +1028,8 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
             notes: leadActionForm.notes,
             ...(leadActionForm.programId ? { service_interest: leadActionForm.programId } : {}),
             ...(leadActionForm.countryId ? { country_interest: leadActionForm.countryId } : {}),
+            ...(leadActionForm.metaLeadQuality ? { metaLeadQuality: leadActionForm.metaLeadQuality } : {}),
+            ...(usesPriorityScale(leadActionForm.status) ? { priority: leadActionForm.priority } : {}),
           })
         });
 
@@ -1263,7 +1285,7 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
   const isClientLead = (lead: Lead) => {
     const status = String(lead.status || '').toLowerCase();
     const opportunityStatus = String((lead as any).opportunity_status || '').toLowerCase();
-    return ['retained', 'converted', 'client'].includes(status) || opportunityStatus === 'won';
+    return ['retained', 'converted', 'client', 'enrolled'].includes(status) || opportunityStatus === 'won';
   };
 
   const handleOpenOperations = async (lead: Lead) => {
@@ -1529,18 +1551,12 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
     }
   };
 
+  // 'untouched' is a system lifecycle sentinel, not part of the
+  // admin-configurable crm_lead_status list — kept as a literal case here
+  // since it's never something an admin would rename/reconfigure.
   const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'untouched': return 'bg-amber-100 text-amber-800';
-      case 'Prospect': return 'bg-blue-100 text-blue-800';
-      case 'Not Interested': return 'bg-red-100 text-red-800';
-      case 'DNQ': return 'bg-gray-100 text-gray-800';
-      case 'Not_answered': return 'bg-yellow-100 text-yellow-800';
-      case 'Could Not Connect': return 'bg-orange-100 text-orange-800';
-      case 'Call Back': return 'bg-purple-100 text-purple-800';
-      case 'Abroad Lead': return 'bg-green-100 text-green-800';
-      default: return 'bg-gray-100 text-gray-800';
-    }
+    if (status === 'untouched') return 'bg-amber-100 text-amber-800';
+    return badgeClassFor(status);
   };
 
   const getPriorityColor = (priority: string) => {
@@ -1548,15 +1564,10 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
       case 'High': return 'bg-red-100 text-red-800';
       case 'Medium': return 'bg-yellow-100 text-yellow-800';
       case 'Low': return 'bg-green-100 text-green-800';
-      default: return 'bg-gray-100 text-gray-800';
-    }
-  };
-
-  const getQualityColor = (quality: string) => {
-    switch (quality) {
-      case 'Hot': return 'bg-red-100 text-red-800';
-      case 'Warm': return 'bg-orange-100 text-orange-800';
-      case 'Cold': return 'bg-blue-100 text-blue-800';
+      case 'P1': return 'bg-red-100 text-red-800';
+      case 'P2': return 'bg-orange-100 text-orange-800';
+      case 'P3': return 'bg-yellow-100 text-yellow-800';
+      case 'P4': return 'bg-gray-100 text-gray-800';
       default: return 'bg-gray-100 text-gray-800';
     }
   };
@@ -1884,10 +1895,6 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
               <option value="">Source: All</option>
               {filterOptions.sources.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
             </SearchableSelect>
-            <SearchableSelect value={filters.leadQuality} onChange={(e) => setFilters({...filters, leadQuality: e.target.value})} className="h-9 rounded-md border border-gray-200 bg-gray-50 px-3 text-sm font-medium focus:bg-white focus:ring-2 focus:ring-blue-500">
-              <option value="">Quality: All</option>
-              {filterOptions.leadQualities.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-            </SearchableSelect>
             <div className="relative">
               <Calendar className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
               <input type="date" value={filters.dateFrom} onChange={(e) => setFilters({...filters, dateFrom: e.target.value})} className="h-9 w-full rounded-md border border-gray-200 bg-gray-50 pl-9 pr-3 text-sm font-medium focus:bg-white focus:ring-2 focus:ring-blue-500" />
@@ -2050,9 +2057,6 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
                                 </button>
                               )}
                               <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-600">#{lead.id}</span>
-                              <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${getQualityColor(lead.lead_quality || 'Unknown')}`}>
-                                {lead.lead_quality || 'No Quality'}
-                              </span>
                             </div>
 
                             <div className="mt-2 grid grid-cols-1 gap-2 text-sm text-gray-600 sm:grid-cols-2 xl:grid-cols-3">
@@ -2360,11 +2364,6 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
                           ]
                             .filter(Boolean)
                             .join(' • ') || '—'}
-                        </div>
-                        <div className="flex items-center mt-1">
-                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getQualityColor(lead.lead_quality || 'Unknown')}`}>
-                            {lead.lead_quality || 'No Quality'}
-                          </span>
                         </div>
                         {(activeTab === 'opportunities' || activeTab === 'clients') && (
                           <div className="text-xs text-green-700 mt-1">
@@ -2837,7 +2836,6 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
                 <p><span className="font-medium">Country:</span> {currentLead.country_interest_label || currentLead.country_interest || 'N/A'}</p>
                 <p><span className="font-medium">Service:</span> {currentLead.service_interest_label || currentLead.service_interest || 'N/A'}</p>
                 <p><span className="font-medium">Source:</span> {resolveSourceName(currentLead) || 'N/A'}</p>
-                <p><span className="font-medium">Quality:</span> {currentLead.lead_quality || 'N/A'}</p>
               </div>
 
               <div className="rounded-lg border border-gray-200 p-4">
@@ -3065,20 +3063,58 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
                   <label className="block text-sm font-medium text-gray-700 mb-1">New Status</label>
                   <SearchableSelect
                     value={leadActionForm.status}
-                    onChange={(e) => setLeadActionForm({ ...leadActionForm, status: e.target.value })}
+                    onChange={(e) => {
+                      const nextStatus = e.target.value;
+                      const wasPScale = usesPriorityScale(leadActionForm.status);
+                      const isPScale = usesPriorityScale(nextStatus);
+                      setLeadActionForm({
+                        ...leadActionForm,
+                        status: nextStatus,
+                        priority: isPScale && !wasPScale ? 'P1' : !isPScale && wasPScale ? 'Medium' : leadActionForm.priority,
+                      });
+                    }}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                   >
                     <option value="">Select status</option>
-                    <option value="Prospect">Prospect/Interested</option>
-                    <option value="Not Interested">Not Interested</option>
-                    <option value="DNQ">DNQ</option>
-                    <option value="Not_answered">Not Answered</option>
-                    <option value="Could Not Connect">Could Not Connect/Wrong Number</option>
-                    <option value="Call Back">Call Back</option>
-                    <option value="Abroad Lead">Abroad Lead</option>
-                    <option value="Junk">Junk</option>
-                    <option value="Duplicate">Duplicate</option>
+                    {leadStatuses.map(s => (
+                      <option key={s.id} value={s.name}>{s.name}</option>
+                    ))}
                   </SearchableSelect>
+                </div>
+              )}
+
+              {leadActionType === 'status' && usesPriorityScale(leadActionForm.status) && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Priority</label>
+                  <SearchableSelect
+                    value={leadActionForm.priority}
+                    onChange={(e) => setLeadActionForm({ ...leadActionForm, priority: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="P1">P1</option>
+                    <option value="P2">P2</option>
+                    <option value="P3">P3</option>
+                    <option value="P4">P4</option>
+                  </SearchableSelect>
+                </div>
+              )}
+
+              {leadActionType === 'status' && metaQualityOptions.length > 0 && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Meta Lead Quality (optional)</label>
+                  <SearchableSelect
+                    value={leadActionForm.metaLeadQuality}
+                    onChange={(e) => setLeadActionForm({ ...leadActionForm, metaLeadQuality: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">Don&apos;t report to Meta</option>
+                    {metaQualityOptions.map(opt => (
+                      <option key={opt} value={opt}>{opt}</option>
+                    ))}
+                  </SearchableSelect>
+                  <p className="text-xs text-gray-400 mt-1">
+                    Only applies to leads that came from Meta/Facebook Lead Ads — reports this outcome back so Meta can find similar high-quality leads.
+                  </p>
                 </div>
               )}
 
@@ -3364,16 +3400,6 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
                 <option value="High">High</option>
                 <option value="Medium">Medium</option>
                 <option value="Low">Low</option>
-              </SearchableSelect>
-              <SearchableSelect
-                value={formData.lead_quality || ''}
-                onChange={(e) => setFormData({...formData, lead_quality: e.target.value})}
-                className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">Select Quality</option>
-                <option value="Hot">Hot</option>
-                <option value="Warm">Warm</option>
-                <option value="Cold">Cold</option>
               </SearchableSelect>
             </div>
             <div className="mt-6 flex justify-end space-x-3">

@@ -3,7 +3,13 @@ import * as XLSX from 'xlsx';
 
 export async function GET() {
   const ws = XLSX.utils.json_to_sheet([
-    { Name: 'John Doe', Phone: '971500000000', Email: 'john.doe@example.com', Source: 'Referral', Country: 'Canada' },
+    {
+      Name: 'John Doe',
+      'Contact Number': '971500000000',
+      'Email Address': 'john.doe@example.com',
+      'Destination Country': 'Canada',
+      Remarks: 'Interested in Express Entry, prefers evening calls',
+    },
   ]);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Leads');
