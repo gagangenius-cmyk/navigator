@@ -93,7 +93,7 @@ export const canAccessAdminPath = (user: AccessUser | null | undefined, pathname
     { test: (value) => value === '/admin/clients' || value.startsWith('/admin/clients/'), permissions: ['clients.view'] },
 
     // Calendar & Appointments
-    { test: (value) => value === '/admin/calendar' || value === '/admin/appointments' || value.startsWith('/admin/appointments/') || value === '/admin/cross-branch-appointments' || value.startsWith('/admin/cross-branch-appointments/'), permissions: ['appointments.view', 'appointments.manage'] },
+    { test: (value) => value === '/admin/calendar' || value === '/admin/appointments' || value.startsWith('/admin/appointments/'), permissions: ['appointments.view', 'appointments.manage'] },
 
     // Documents
     { test: (value) => value === '/admin/documents' || value.startsWith('/admin/documents/'), permissions: ['documents.view'] },
