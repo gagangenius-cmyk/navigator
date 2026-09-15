@@ -24,13 +24,6 @@ const ensureDBConnection = async () => {
   }
 };
 
-// 'untouched'/'New' (exact casing) match the literal lifecycle-sentinel
-// values every lead-creation path writes for an unassigned/just-assigned
-// lead (see src/lib/leadRemarks.ts's recordLeadAssignment and the various
-// lead-creation routes) — the rest come from crm_lead_status (see
-// src/hooks/useLeadStatuses.ts), kept here too only as a same-shape fallback
-// for an empty/fresh database.
-const baseStatuses = ['untouched', 'New', 'Hot', 'Warm', 'DNP', 'Cold', 'Junk', 'Dead', 'Enrolled'];
 const basePriorities = ['P1', 'P2', 'P3', 'P4', 'High', 'Medium', 'Low'];
 
 const addOption = (map: Map<string, FilterOption>, value: unknown, label?: unknown, region?: unknown) => {
@@ -115,8 +108,8 @@ export async function GET(request: NextRequest) {
       sources,
       sourceValues
     ] = await Promise.all([
-      sequelize.query<RawOption>(
-        "SELECT DISTINCT status as value FROM crm_forum_leads WHERE status IS NOT NULL AND status <> ''",
+      sequelize.query<{ name: string }>(
+        'SELECT name FROM crm_lead_status WHERE is_enabled = 1 ORDER BY sort_order ASC, id ASC',
         { type: QueryTypes.SELECT }
       ),
       sequelize.query<RawOption>(
@@ -182,8 +175,20 @@ export async function GET(request: NextRequest) {
     sources.forEach((row) => addOption(sourceMap, row.value, row.label));
     sourceValues.forEach((row) => addOption(sourceMap, row.value));
 
+    // Matches the Kanban board's columns exactly (see LeadKanbanSimple.tsx):
+    // 'New' (lifecycle sentinel) + the admin-configured disposition list +
+    // 'Other' (anything else — mostly free-text legacy statuses that predate
+    // this dropdown, e.g. "he is not interested" typed straight into the
+    // column). Sort_order preserved rather than alphabetized, so it reads
+    // the same left-to-right order as the Kanban columns.
+    const statusOptions: FilterOption[] = [
+      { value: 'New', label: 'New' },
+      ...statuses.map((s) => ({ value: s.name, label: s.name })),
+      { value: 'Other', label: 'Other / Unclassified' },
+    ];
+
     return NextResponse.json({
-      statuses: toOptions(statuses, baseStatuses),
+      statuses: statusOptions,
       priorities: toOptions(priorities, basePriorities),
       branches: toOptions(branches),
       regions: toOptions(regions),

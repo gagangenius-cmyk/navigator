@@ -134,7 +134,12 @@ export async function GET(request: NextRequest) {
       replacements.push(searchTerm, searchTerm, searchTerm, searchTerm, searchTerm, searchTerm, searchTerm)
     }
 
-    if (status) {
+    if (status === 'Other') {
+      // Matches the Kanban board's "Other / Unclassified" bucket: anything
+      // that isn't 'New' or one of the admin-configured disposition values
+      // — mostly free-text legacy statuses that predate that dropdown.
+      whereConditions.push(`l.status NOT IN (SELECT name FROM crm_lead_status WHERE is_enabled = 1) AND l.status <> 'New'`)
+    } else if (status) {
       whereConditions.push('l.status = ?')
       replacements.push(status)
     }
