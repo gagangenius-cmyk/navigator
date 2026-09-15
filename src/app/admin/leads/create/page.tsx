@@ -12,6 +12,7 @@ import {
   FormSection, Field, TextField, TextAreaField, SelectField, CheckboxField,
   FormPageHeader, FormActionBar, PrimaryButton, SecondaryButton, inputClass,
 } from '@/components/leads/LeadFormFields';
+import { useLeadStatuses } from '@/hooks/useLeadStatuses';
 
 interface LeadFormData {
   // Lead Information
@@ -151,6 +152,7 @@ export default function AdminCreateLeadPage() {
 
   // Get logged-in user
   const { user } = useAuth();
+  const { statuses: leadStatuses, usesPriorityScale } = useLeadStatuses();
   const isCeoUser = String((user as any)?.roleName || '').trim().toLowerCase() === 'ceo';
   // FOE and Branch Manager only ever add leads for their own branch's staff;
   // CEO can pick any branch via the selector below.
@@ -337,14 +339,15 @@ export default function AdminCreateLeadPage() {
       if (name === 'dateOfBirth') {
         next.age = calculateAgeFromDob(value);
       }
-      // Prospect leads are prioritized P1-P4 instead of the Hot/Warm/Cold
-      // scale, so switching status in/out of Prospect must re-pick a
-      // priority that's actually valid for the now-active option list.
+      // Statuses flagged uses_p_priority_scale (crm_lead_status, e.g. Hot)
+      // are prioritized P1-P4 instead of High/Medium/Low, so switching
+      // status in/out of one must re-pick a priority valid for the
+      // now-active option list.
       if (name === 'status') {
-        const wasProspect = prev.status === 'Prospect';
-        const isProspect = value === 'Prospect';
-        if (isProspect && !wasProspect) next.priority = 'P1';
-        else if (!isProspect && wasProspect) next.priority = 'Medium';
+        const wasPScale = usesPriorityScale(prev.status);
+        const isPScale = usesPriorityScale(value);
+        if (isPScale && !wasPScale) next.priority = 'P1';
+        else if (!isPScale && wasPScale) next.priority = 'Medium';
       }
       return next;
     });
@@ -465,8 +468,11 @@ export default function AdminCreateLeadPage() {
   const salutations = ['--None--', 'Mr.', 'Ms.', 'Mrs.', 'Dr.', 'Prof.'];
   const genderOptions = ['--None--', 'Male', 'Female', 'Other', 'Prefer not to say'];
   const staticCountries = ALL_COUNTRIES;
-  const priorities = formData.status === 'Prospect' ? ['P1', 'P2', 'P3', 'P4'] : ['Hot', 'Warm', 'Cold'];
-  const statuses = ['New', 'Contacted', 'Qualified', 'Prospect', 'Converted', 'Closed'];
+  const priorities = usesPriorityScale(formData.status) ? ['P1', 'P2', 'P3', 'P4'] : ['High', 'Medium', 'Low'];
+  // 'New' is a lifecycle sentinel, not part of the admin-configurable
+  // crm_lead_status list — kept as a fixed leading option since a freshly
+  // created lead defaults to it.
+  const statuses = ['New', ...leadStatuses.map(s => s.name)];
 
   return (
     <div className="mx-auto max-w-6xl p-6">

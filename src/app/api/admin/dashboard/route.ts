@@ -105,7 +105,7 @@ async function computeDashboardData(
       SUM(CASE WHEN DATE(COALESCE(l.created, l.regdate)) = :today THEN 1 ELSE 0 END) AS todayLeads,
       SUM(CASE WHEN DATE(COALESCE(l.created, l.regdate)) >= :weekAgo THEN 1 ELSE 0 END) AS weekLeads,
       SUM(CASE WHEN DATE(COALESCE(l.created, l.regdate)) >= :monthAgo THEN 1 ELSE 0 END) AS monthLeads,
-      SUM(CASE WHEN LOWER(COALESCE(l.status, '')) IN ('converted', 'retained', 'client')
+      SUM(CASE WHEN LOWER(COALESCE(l.status, '')) IN ('converted', 'retained', 'client', 'enrolled')
              OR LOWER(COALESCE(l.opportunity_status, '')) = 'won' THEN 1 ELSE 0 END) AS convertedLeads,
       SUM(CASE WHEN l.followupstat = 0 AND l.followup IS NOT NULL AND DATE(l.followup) <= :today THEN 1 ELSE 0 END) AS pendingFollowups,
       COALESCE(SUM(l.payTotal), 0) AS totalRevenue,
@@ -155,11 +155,11 @@ async function computeDashboardData(
     SELECT
       SUM(CASE WHEN DATE(COALESCE(l.created, l.regdate)) >= :thisMonthStart THEN 1 ELSE 0 END) AS thisMonthLeads,
       SUM(CASE WHEN DATE(COALESCE(l.created, l.regdate)) >= :thisMonthStart
-             AND (LOWER(COALESCE(l.status, '')) IN ('converted','retained','client') OR LOWER(COALESCE(l.opportunity_status, '')) = 'won')
+             AND (LOWER(COALESCE(l.status, '')) IN ('converted','retained','client','enrolled') OR LOWER(COALESCE(l.opportunity_status, '')) = 'won')
            THEN 1 ELSE 0 END) AS thisMonthConverted,
       SUM(CASE WHEN DATE(COALESCE(l.created, l.regdate)) BETWEEN :lastMonthStart AND :lastMonthEnd THEN 1 ELSE 0 END) AS lastMonthLeads,
       SUM(CASE WHEN DATE(COALESCE(l.created, l.regdate)) BETWEEN :lastMonthStart AND :lastMonthEnd
-             AND (LOWER(COALESCE(l.status, '')) IN ('converted','retained','client') OR LOWER(COALESCE(l.opportunity_status, '')) = 'won')
+             AND (LOWER(COALESCE(l.status, '')) IN ('converted','retained','client','enrolled') OR LOWER(COALESCE(l.opportunity_status, '')) = 'won')
            THEN 1 ELSE 0 END) AS lastMonthConverted
     FROM crm_forum_leads l
     ${roleOnlyWhere}
@@ -299,15 +299,16 @@ async function computeDashboardData(
     ORDER BY count DESC
   `, { replacements: leadReplacements, type: QueryTypes.SELECT });
 
-  // ── Priority Breakdown (Prospect leads only) ──────────────────────────────
-  // Scoped to status = 'Prospect' — previously missing, so this widget
-  // silently included DNQ/Junk/Closed/etc. leads despite its "Prospect
-  // Leads by Priority" title. Priority values also come from two
+  // ── Priority Breakdown (Hot leads only) ───────────────────────────────────
+  // Scoped to status = 'Hot' (the status crm_lead_status flags
+  // uses_p_priority_scale — formerly 'Prospect') — previously missing, so
+  // this widget silently included DNQ/Junk/Closed/etc. leads despite its
+  // "Prospect Leads by Priority" title. Priority values also come from two
   // generations of the priority field (P1-P4 vs legacy free text like
   // Medium/Low/Hot/Cold) — bucket anything outside P1-P4 into "Other" so
   // the tiles' total always accounts for every matching lead instead of
   // silently dropping ~25% of them.
-  const priorityWhere = leadWhere ? `${leadWhere} AND l.status = 'Prospect'` : `WHERE l.status = 'Prospect'`;
+  const priorityWhere = leadWhere ? `${leadWhere} AND l.status = 'Hot'` : `WHERE l.status = 'Hot'`;
   const priorityBreakdown = await sequelize.query<any>(`
     SELECT
       CASE WHEN l.priority IN ('P1','P2','P3','P4') THEN l.priority ELSE 'Other' END AS name,
@@ -336,7 +337,7 @@ async function computeDashboardData(
     SELECT
       COALESCE(b.branch, 'Unassigned') AS branch,
       COUNT(l.id) AS leads,
-      SUM(CASE WHEN LOWER(COALESCE(l.status, '')) IN ('converted','retained','client')
+      SUM(CASE WHEN LOWER(COALESCE(l.status, '')) IN ('converted','retained','client','enrolled')
             OR LOWER(COALESCE(l.opportunity_status, '')) = 'won' THEN 1 ELSE 0 END) AS converted
     FROM crm_forum_leads l
     LEFT JOIN crm_branch b ON l.branch = b.id
@@ -351,7 +352,7 @@ async function computeDashboardData(
     SELECT
       COALESCE(e.name, 'Unassigned') AS name,
       COUNT(l.id) AS leads,
-      SUM(CASE WHEN LOWER(COALESCE(l.status, '')) IN ('converted','retained','client')
+      SUM(CASE WHEN LOWER(COALESCE(l.status, '')) IN ('converted','retained','client','enrolled')
             OR LOWER(COALESCE(l.opportunity_status, '')) = 'won' THEN 1 ELSE 0 END) AS converted
     FROM crm_forum_leads l
     LEFT JOIN crm_employee e ON l.assignTo = e.id

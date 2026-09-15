@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import { DragDropContext, Draggable, Droppable, type DropResult } from '@hello-pangea/dnd';
 import { Edit3, Eye, Search, Target, Trash2 } from 'lucide-react';
 import { Lead } from '@/types/lead';
+import { useLeadStatuses } from '@/hooks/useLeadStatuses';
 
 interface LeadKanbanSimpleProps {
   leads: Lead[];
@@ -14,18 +15,11 @@ interface LeadKanbanSimpleProps {
   onStatusChange?: (leadId: number, newStatus: string) => void;
 }
 
-const kanbanColumns = [
-  { id: 'New', title: 'New', accent: 'bg-sky-500', tint: 'border-sky-100 bg-sky-50/60' },
-  { id: 'Prospect', title: 'Prospect', accent: 'bg-indigo-500', tint: 'border-indigo-100 bg-indigo-50/60' },
-  { id: 'Not Interested', title: 'Not Interested', accent: 'bg-slate-400', tint: 'border-slate-200 bg-slate-50/70' },
-  { id: 'DNQ', title: 'DNQ', accent: 'bg-rose-500', tint: 'border-rose-100 bg-rose-50/60' },
-  { id: 'Not_answered', title: 'Not Answered', accent: 'bg-amber-500', tint: 'border-amber-100 bg-amber-50/60' },
-  { id: 'Could Not Connect', title: 'Could Not Connect', accent: 'bg-orange-500', tint: 'border-orange-100 bg-orange-50/60' },
-  { id: 'Call Back', title: 'Call Back', accent: 'bg-violet-500', tint: 'border-violet-100 bg-violet-50/60' },
-  { id: 'Abroad Lead', title: 'Abroad Lead', accent: 'bg-emerald-500', tint: 'border-emerald-100 bg-emerald-50/60' },
-  { id: 'Junk', title: 'Junk', accent: 'bg-stone-500', tint: 'border-stone-200 bg-stone-50/70' },
-  { id: 'Duplicate', title: 'Duplicate', accent: 'bg-fuchsia-500', tint: 'border-fuchsia-100 bg-fuchsia-50/60' },
-] as const;
+// 'New' is a hardcoded leading column for the lifecycle sentinel status (a
+// freshly-assigned lead with no disposition yet) — it's intentionally not
+// part of the admin-configurable crm_lead_status list (see useLeadStatuses),
+// so it's the one column not sourced from that table.
+const NEW_COLUMN = { id: 'New', title: 'New', accent: 'bg-sky-500', tint: 'border-sky-100 bg-sky-50/60' };
 
 export default function LeadKanbanSimple({
   leads,
@@ -37,6 +31,17 @@ export default function LeadKanbanSimple({
 }: LeadKanbanSimpleProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const normalizedSearch = searchTerm.trim().toLowerCase();
+  const { statuses } = useLeadStatuses();
+
+  const kanbanColumns = useMemo(() => [
+    NEW_COLUMN,
+    ...statuses.map((s) => ({
+      id: s.name,
+      title: s.name,
+      accent: s.kanban_accent_class,
+      tint: s.kanban_tint_class,
+    })),
+  ], [statuses]);
 
   const leadsByStatus = useMemo(() => {
     return kanbanColumns.reduce<Record<string, Lead[]>>((groups, column) => {
@@ -49,7 +54,7 @@ export default function LeadKanbanSimple({
       });
       return groups;
     }, {});
-  }, [leads, normalizedSearch]);
+  }, [leads, normalizedSearch, kanbanColumns]);
 
   const handleDragEnd = ({ draggableId, destination, source }: DropResult) => {
     if (!destination || destination.droppableId === source.droppableId) return;

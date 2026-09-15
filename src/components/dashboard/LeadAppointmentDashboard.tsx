@@ -643,14 +643,15 @@ export default function AdminDashboard() {
           <StatCard title="Outstanding Balance (Recovery)" value={`${currencyCode} ${(stats.totalBalance || 0).toLocaleString()}`} icon="⏳" />
         </div>
 
-        {/* Prospect priority breakdown (P1-P4) */}
+        {/* Hot lead priority breakdown (P1-P4) — Hot is the status flagged
+            uses_p_priority_scale in crm_lead_status (formerly 'Prospect') */}
         <motion.section
           initial={{ opacity: 0, y: 14 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.35 }}
           className="mb-8 rounded-xl bg-white p-6 shadow-lg"
         >
-          <h3 className="mb-4 text-lg font-semibold text-gray-900">Prospect Leads by Priority</h3>
+          <h3 className="mb-4 text-lg font-semibold text-gray-900">Hot Leads by Priority</h3>
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
             {(['P1', 'P2', 'P3', 'P4', 'Other'] as const).map((tier) => {
               const count = (stats.priorityBreakdown || []).find((p) => p.name === tier)?.value || 0;

@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Lead } from '@/types/lead';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLeadStatuses } from '@/hooks/useLeadStatuses';
 import { isCeo, isBranchManagerOrCeo } from '@/lib/roleChecks';
 import { BANK_PAYMENT_OPTIONS, CARD_PAYMENT_OPTIONS } from '@/lib/paymentOptions';
 import { renderAgreementForBranch } from '@/lib/renderAgreementForBranch';
@@ -1907,6 +1908,7 @@ function validateStage(
 // Stage Components
 function ProspectStage({ lead, data, setData, onLeadUpdated, onSaveProspect, onNext, feeData, feeLoading, paymentType, setPaymentType, getFeePackageTotals }: any) {
   const { user } = useAuth();
+  const { statuses: leadStatuses } = useLeadStatuses();
   // Same rule as the Edit Lead page and the PUT /api/leads/[id] server-side
   // check: once a lead is in the CRM, only Branch Manager/CEO may change its
   // contact details. This workspace previously let anyone edit email/mobile/
@@ -2218,15 +2220,9 @@ function ProspectStage({ lead, data, setData, onLeadUpdated, onSaveProspect, onN
               className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
             >
               <option value="">Select status</option>
-              <option value="Prospect">Prospect</option>
-              <option value="Not Interested">Not Interested</option>
-              <option value="DNQ">DNQ</option>
-              <option value="Not_answered">Not Answered</option>
-              <option value="Could Not Connect">Could Not Connect</option>
-              <option value="Call Back">Call Back</option>
-              <option value="Abroad Lead">Abroad Lead</option>
-              <option value="Junk">Junk</option>
-              <option value="Duplicate">Duplicate</option>
+              {leadStatuses.map((s: { id: number; name: string }) => (
+                <option key={s.id} value={s.name}>{s.name}</option>
+              ))}
             </SearchableSelect>
           </div>
           <div>
@@ -2465,7 +2461,7 @@ function ProspectStage({ lead, data, setData, onLeadUpdated, onSaveProspect, onN
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
         <div className="flex items-center">
           <AlertCircle className="mr-2 text-blue-600" size={20} />
-          <span className="text-sm text-blue-800">Lead Status must be set to "Prospect" and Lead Priority to "P1" before continuing to Quotation.</span>
+          <span className="text-sm text-blue-800">Lead Status must be set to "Hot" and Lead Priority to "P1" before continuing to Quotation.</span>
         </div>
       </div>
 
@@ -2480,7 +2476,7 @@ function ProspectStage({ lead, data, setData, onLeadUpdated, onSaveProspect, onN
         </button>
         <button
           onClick={handleContinueToQuotation}
-          disabled={!data.opportunityName || !data.estimatedValue || !data.serviceRequired || leadDraft.status !== 'Prospect' || leadDraft.priority !== 'P1'}
+          disabled={!data.opportunityName || !data.estimatedValue || !data.serviceRequired || leadDraft.status !== 'Hot' || leadDraft.priority !== 'P1'}
           className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center font-medium"
         >
           Continue to Quotation

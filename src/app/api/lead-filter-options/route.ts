@@ -24,13 +24,14 @@ const ensureDBConnection = async () => {
   }
 };
 
-// 'untouched' (lowercase) matches the literal value every lead-creation path
-// writes for an unassigned lead (see src/lib/leadRemarks.ts's recordLeadAssignment
-// and the various lead-creation routes) — keep the casing identical here so
-// this fallback option's value lines up with what's actually stored.
-const baseStatuses = ['untouched', 'New', 'Contacted', 'Qualified', 'Converted', 'Closed'];
-const basePriorities = ['Hot', 'Warm', 'Cold', 'High', 'Medium', 'Low'];
-const baseLeadQualities = ['Hot', 'Warm', 'Cold'];
+// 'untouched'/'New' (exact casing) match the literal lifecycle-sentinel
+// values every lead-creation path writes for an unassigned/just-assigned
+// lead (see src/lib/leadRemarks.ts's recordLeadAssignment and the various
+// lead-creation routes) — the rest come from crm_lead_status (see
+// src/hooks/useLeadStatuses.ts), kept here too only as a same-shape fallback
+// for an empty/fresh database.
+const baseStatuses = ['untouched', 'New', 'Hot', 'Warm', 'DNP', 'Cold', 'Junk', 'Dead', 'Enrolled'];
+const basePriorities = ['P1', 'P2', 'P3', 'P4', 'High', 'Medium', 'Low'];
 
 const addOption = (map: Map<string, FilterOption>, value: unknown, label?: unknown, region?: unknown) => {
   if (value === null || value === undefined || String(value).trim() === '') return;
@@ -104,7 +105,6 @@ export async function GET(request: NextRequest) {
     const [
       statuses,
       priorities,
-      leadQualities,
       branches,
       regions,
       countries,
@@ -121,10 +121,6 @@ export async function GET(request: NextRequest) {
       ),
       sequelize.query<RawOption>(
         "SELECT DISTINCT priority as value FROM crm_forum_leads WHERE priority IS NOT NULL AND priority <> ''",
-        { type: QueryTypes.SELECT }
-      ),
-      sequelize.query<RawOption>(
-        "SELECT DISTINCT lead_quality as value FROM crm_forum_leads WHERE lead_quality IS NOT NULL AND lead_quality <> ''",
         { type: QueryTypes.SELECT }
       ),
       sequelize.query<RawOption>(
@@ -193,8 +189,7 @@ export async function GET(request: NextRequest) {
       regions: toOptions(regions),
       countries: Array.from(countryMap.values()).sort((a, b) => a.label.localeCompare(b.label)),
       services: serviceOptions,
-      sources: Array.from(sourceMap.values()).sort((a, b) => a.label.localeCompare(b.label)),
-      leadQualities: toOptions(leadQualities, baseLeadQualities)
+      sources: Array.from(sourceMap.values()).sort((a, b) => a.label.localeCompare(b.label))
     });
   } catch (error) {
     console.error('Error fetching lead filter options:', error);
