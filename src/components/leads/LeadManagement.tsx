@@ -3076,6 +3076,18 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                   >
                     <option value="">Select status</option>
+                    {/* A lot of real leads predate this dropdown — their status is
+                        free-text ("he is not interested", "no answer messaged on
+                        whatsapp", etc.) typed directly into the column rather than
+                        one of the values below. Surface it here instead of letting
+                        the select silently fall back to some other option, which
+                        would misrepresent what the lead's status actually is. */}
+                    {leadActionForm.status
+                      && !['New', 'untouched'].includes(leadActionForm.status)
+                      && !leadStatuses.some(s => s.name === leadActionForm.status)
+                      && (
+                        <option value={leadActionForm.status}>Current (legacy): {leadActionForm.status}</option>
+                      )}
                     {leadStatuses.map(s => (
                       <option key={s.id} value={s.name}>{s.name}</option>
                     ))}

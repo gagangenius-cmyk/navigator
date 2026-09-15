@@ -21,6 +21,18 @@ interface LeadKanbanSimpleProps {
 // so it's the one column not sourced from that table.
 const NEW_COLUMN = { id: 'New', title: 'New', accent: 'bg-sky-500', tint: 'border-sky-100 bg-sky-50/60' };
 
+// Catch-all trailing column: a lot of real lead data predates the current
+// status dropdown entirely — free-text call-outcome notes typed straight
+// into crm_forum_leads.status ("he is not interested", "no answer messaged
+// on whatsapp", etc.) rather than one of the clean values below. Without
+// this bucket, any such lead matches no column's exact-value filter and
+// simply vanishes from the board with no indication it exists. It's a
+// read-only landing spot — not a real settable status — so it isn't a valid
+// drag target, but dragging a card OUT of it to a real status works
+// normally and is the natural way to finally classify a legacy lead.
+const OTHER_COLUMN_ID = '__other__';
+const OTHER_COLUMN = { id: OTHER_COLUMN_ID, title: 'Other / Unclassified', accent: 'bg-purple-400', tint: 'border-purple-100 bg-purple-50/60' };
+
 export default function LeadKanbanSimple({
   leads,
   onLeadSelect,
@@ -41,16 +53,25 @@ export default function LeadKanbanSimple({
       accent: s.kanban_accent_class,
       tint: s.kanban_tint_class,
     })),
+    OTHER_COLUMN,
   ], [statuses]);
 
   const leadsByStatus = useMemo(() => {
+    const knownIds = new Set(kanbanColumns.map((c) => c.id).filter((id) => id !== OTHER_COLUMN_ID));
+    const matchesSearch = (lead: Lead) => {
+      if (!normalizedSearch) return true;
+      const searchable = [lead.fname, lead.mname, lead.lname, lead.email, lead.phone]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+      return searchable.includes(normalizedSearch);
+    };
     return kanbanColumns.reduce<Record<string, Lead[]>>((groups, column) => {
       groups[column.id] = leads.filter((lead) => {
-        const searchable = [lead.fname, lead.mname, lead.lname, lead.email, lead.phone]
-          .filter(Boolean)
-          .join(' ')
-          .toLowerCase();
-        return lead.status === column.id && (!normalizedSearch || searchable.includes(normalizedSearch));
+        if (!matchesSearch(lead)) return false;
+        return column.id === OTHER_COLUMN_ID
+          ? !knownIds.has(lead.status || '')
+          : lead.status === column.id;
       });
       return groups;
     }, {});
@@ -97,7 +118,7 @@ export default function LeadKanbanSimple({
                   </span>
                 </header>
 
-                <Droppable droppableId={column.id}>
+                <Droppable droppableId={column.id} isDropDisabled={column.id === OTHER_COLUMN_ID}>
                   {(provided, snapshot) => (
                     <div
                       ref={provided.innerRef}

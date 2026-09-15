@@ -450,7 +450,15 @@ export default function AdminEditLeadPage() {
   // 'untouched'/'New' are lifecycle sentinels, not part of the
   // admin-configurable crm_lead_status list — kept as fixed leading options
   // so a lead still sitting at either value shows a valid selection here.
-  const statuses = ['untouched', 'New', ...leadStatuses.map(s => s.name)];
+  const knownStatuses = ['untouched', 'New', ...leadStatuses.map(s => s.name)];
+  // A lot of real leads predate this dropdown — their status is free-text
+  // ("he is not interested", "no answer messaged on whatsapp", etc.) typed
+  // directly into the column. Surface it as an extra option instead of
+  // letting the select silently fall back to whichever option happens to be
+  // first, which would misrepresent the lead's actual status.
+  const statuses = formData.status && !knownStatuses.includes(formData.status)
+    ? [...knownStatuses, formData.status]
+    : knownStatuses;
 
   if (pageLoading) {
     return (
