@@ -30,6 +30,7 @@ interface PaymentRecord {
   branchPhone: string | null;
   branchLicenseNumber: string | null;
   branchVatGstPercent: number | string | null;
+  branchAbbrv?: string | null;
   accountantStatus: string | null;
   remark: string | null;
   adminFeeIncluded?: boolean;
@@ -87,6 +88,7 @@ export default function ReceiptPage() {
         mobile: selected.branchPhone,
         licenseNumber: selected.branchLicenseNumber,
         vatGstPercent: selected.branchVatGstPercent,
+        abbrv: selected.branchAbbrv,
       },
     });
     return buildReceiptHtml({
@@ -105,6 +107,7 @@ export default function ReceiptPage() {
       branchAddress: branchDetails.branchAddress,
       branchEmail: branchDetails.branchEmail,
       branchPhone: branchDetails.branchPhone,
+      branchAbbrv: branchDetails.branchAbbrv,
       licenseNumber: branchDetails.licenseNumber,
       vatGstPercent: branchDetails.vatGstPercent,
       paymentMethod: selected.paymentMethod,

@@ -36,6 +36,7 @@ interface Payment {
   dmBranchName: string | null; dmBranchAddress: string | null; dmBranchEmail: string | null;
   dmBranchPhone?: string | null;
   dmBranchLicenseNumber: string | null; dmBranchVatGstPercent: number | string | null;
+  dmBranchAbbrv?: string | null;
   remark?: string | null;
 }
 
@@ -223,6 +224,7 @@ export default function InvoicesPaymentsPage() {
       branchAddress: p.dmBranchAddress,
       branchEmail: p.dmBranchEmail,
       branchPhone: p.dmBranchPhone,
+      branchAbbrv: p.dmBranchAbbrv,
       licenseNumber: p.dmBranchLicenseNumber,
       vatGstPercent: p.dmBranchVatGstPercent,
       paymentMethod: p.paymentMethod,

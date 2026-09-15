@@ -45,6 +45,7 @@ type ClientListRow = {
   branchMobile: string | null;
   branchLicenseNumber: string | null;
   branchVatGstPercent: number | null;
+  branchAbbrv: string | null;
   currencyCode: string | null;
 };
 
@@ -106,6 +107,7 @@ export async function GET(request: NextRequest) {
            l.fname, l.lname, l.email, l.phone, l.mobile, l.dob, l.address, l.area, l.nationality, l.assignTo,
            b.name AS branchName, b.address AS branchAddress, b.email AS branchEmail,
            b.mobile AS branchMobile, b.license_number AS branchLicenseNumber, b.vat_gst_percent AS branchVatGstPercent,
+           b.abbrv AS branchAbbrv,
            (
              SELECT c.currency_code FROM crm_currency c
              WHERE c.status = 1
@@ -166,6 +168,7 @@ export async function GET(request: NextRequest) {
       branchMobile: r.branchMobile || '',
       branchLicenseNumber: r.branchLicenseNumber || null,
       branchVatGstPercent: r.branchVatGstPercent ?? null,
+      branchAbbrv: r.branchAbbrv || null,
       currencyCode: r.currencyCode || 'AED',
     }));
 

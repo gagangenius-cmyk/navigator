@@ -140,7 +140,7 @@ export async function GET(request: NextRequest) {
     const plainPayments = payments.map((p) => p.get({ plain: true }) as any);
     const opportunityIds = Array.from(new Set(plainPayments.map((p) => p.opportunityId).filter(Boolean)));
     let agreementByOpportunity: Record<number, string> = {};
-    let branchByOpportunity: Record<number, { branchName: string | null; branchAddress: string | null; branchEmail: string | null; branchPhone: string | null; branchLicenseNumber: string | null; branchVatGstPercent: number | string | null }> = {};
+    let branchByOpportunity: Record<number, { branchName: string | null; branchAddress: string | null; branchEmail: string | null; branchPhone: string | null; branchLicenseNumber: string | null; branchVatGstPercent: number | string | null; branchAbbrv: string | null }> = {};
     if (opportunityIds.length) {
       const [agreementRows, branchRows] = await Promise.all([
         sequelize.query<{ opportunityId: number; agreementNumber: string }>(
@@ -155,14 +155,15 @@ export async function GET(request: NextRequest) {
         `,
         { replacements: { opportunityIds }, type: QueryTypes.SELECT },
         ),
-        sequelize.query<{ opportunityId: number; branchName: string | null; branchAddress: string | null; branchEmail: string | null; branchPhone: string | null; branchLicenseNumber: string | null; branchVatGstPercent: number | string | null }>(
+        sequelize.query<{ opportunityId: number; branchName: string | null; branchAddress: string | null; branchEmail: string | null; branchPhone: string | null; branchLicenseNumber: string | null; branchVatGstPercent: number | string | null; branchAbbrv: string | null }>(
           `SELECT o.id AS opportunityId,
                   b.name AS branchName,
                   b.address AS branchAddress,
                   b.email AS branchEmail,
                   b.mobile AS branchPhone,
                   b.license_number AS branchLicenseNumber,
-                  b.vat_gst_percent AS branchVatGstPercent
+                  b.vat_gst_percent AS branchVatGstPercent,
+                  b.abbrv AS branchAbbrv
            FROM crm_opportunities o
            LEFT JOIN crm_forum_leads l ON l.id = o.leadId
            LEFT JOIN crm_branch b ON b.id = COALESCE(l.branch, o.branchId)
@@ -181,6 +182,7 @@ export async function GET(request: NextRequest) {
           branchPhone: row.branchPhone,
           branchLicenseNumber: row.branchLicenseNumber,
           branchVatGstPercent: row.branchVatGstPercent,
+          branchAbbrv: row.branchAbbrv,
         }]),
       );
     }
@@ -221,6 +223,7 @@ export async function GET(request: NextRequest) {
       branchPhone: p.branchPhone || branchByOpportunity[p.opportunityId]?.branchPhone || null,
       branchLicenseNumber: p.branchLicenseNumber || branchByOpportunity[p.opportunityId]?.branchLicenseNumber || null,
       branchVatGstPercent: p.branchVatGstPercent ?? branchByOpportunity[p.opportunityId]?.branchVatGstPercent ?? null,
+      branchAbbrv: branchByOpportunity[p.opportunityId]?.branchAbbrv || null,
       remark: remarkByReceiptNumber[p.receiptNumber || p.paymentNumber] || null,
       adminFeeIncluded: adminFeeByReceiptNumber[p.receiptNumber || p.paymentNumber]?.adminFeeIncluded || false,
       adminFeeAmount: adminFeeByReceiptNumber[p.receiptNumber || p.paymentNumber]?.adminFeeAmount || 0,

@@ -12,6 +12,7 @@ import { renderDubaiAgreement } from './DubaiBilingualAgreementTemplate';
 import { renderIndiaAgreement } from './indiaAgreementTemplate';
 import { renderKuwaitAgreement } from './KuwaitBilingualAgreementTemplate';
 import { renderQatarAgreement } from './QatarBilingualAgreementTemplate';
+import { renderWorkPermitAgreement, type WorkPermitFeeStages } from './WorkPermitAgreementTemplate';
 
 export interface AgreementLeadData {
   agreementNumber: string;
@@ -40,11 +41,42 @@ export interface AgreementLeadData {
   expressExclusions?: string;
   specialTerms?: string;
   agreementRenewalFee?: string;
+  // Set to render the Work Permit / overseas-employment placement agreement
+  // (WorkPermitAgreementTemplate.ts) instead of the branch's bilingual Gulf/
+  // India template — this is a program-type choice, independent of branch,
+  // so it's checked before any branch-based dispatch below. workPermitFees
+  // and the extra client fields are only used by that template.
+  useWorkPermitTemplate?: boolean;
+  workPermitFees?: WorkPermitFeeStages;
+  fileNumber?: string;
+  parentName?: string;
+  employerRegionLabel?: string;
+  signerName?: string;
+  signaturePlace?: string;
 }
 
 export function renderAgreementForBranch(branchAbbrv: string | null | undefined, data: AgreementLeadData): string {
   const profile = getBranchAgreementProfile(branchAbbrv);
   const key = String(branchAbbrv || '').trim().toLowerCase();
+
+  if (data.useWorkPermitTemplate) {
+    return renderWorkPermitAgreement({
+      fileNumber: data.fileNumber || data.agreementNumber,
+      agreementDate: data.agreementDate,
+      clientName: data.clientName,
+      parentName: data.parentName,
+      clientMobile: data.clientPhone,
+      clientEmail: data.clientEmail,
+      clientAddress: data.clientAddress,
+      programInterested: data.serviceProgram,
+      countryInterested: data.destinationCountry,
+      employerRegionLabel: data.employerRegionLabel,
+      fees: data.workPermitFees || { planType: 'upfront', totalFee: data.totalAmount, registrationFee: data.initialPayment },
+      signerName: data.signerName || data.clientName,
+      signaturePlace: data.signaturePlace,
+      branchAbbrv,
+    });
+  }
 
   if (profile.templateVariant === 'india') {
     return renderIndiaAgreement({

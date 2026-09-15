@@ -10,6 +10,15 @@
 
 export type AgreementTemplateVariant = 'gulf' | 'india';
 
+export interface BranchBankDetails {
+  bankName: string;
+  accountHolderName: string;
+  accountNumber: string;
+  iban: string;
+  bic: string;
+  bankAddress?: string;
+}
+
 export interface BranchAgreementProfile {
   legalNameEn: string;
   legalNameAr: string;
@@ -34,6 +43,11 @@ export interface BranchAgreementProfile {
   contactLineEn?: string;
   contactLineAr?: string;
   templateVariant: AgreementTemplateVariant;
+  // Only populated where we have the branch's actual bank details on file
+  // (currently Dubai only, from the signed WIO Bank receipt/agreement) —
+  // omitted elsewhere rather than guessed, so a receipt/agreement simply
+  // leaves the bank details block out until the real details are supplied.
+  bankDetails?: BranchBankDetails;
 }
 
 const DUBAI_PROFILE: BranchAgreementProfile = {
@@ -56,6 +70,14 @@ const DUBAI_PROFILE: BranchAgreementProfile = {
   governingLawEn: 'This Agreement is governed by the laws of the Emirate of Dubai and the applicable federal laws of the United Arab Emirates. Subject to mandatory consumer or regulatory jurisdiction, the parties submit to the exclusive jurisdiction of the competent courts of Dubai, UAE. The English and Arabic texts are intended to correspond; if an inconsistency cannot be reconciled, the language given priority by mandatory local law shall prevail, otherwise the English text shall be used for contractual interpretation.',
   governingLawAr: 'تخضع هذه الاتفاقية لـ قوانين إمارة دبي والقوانين الاتحادية واجبة التطبيق في دولة الإمارات العربية المتحدة. ومع مراعاة أي اختصاص إلزامي للمستهلك أو الجهات التنظيمية، ينعقد الاختصاص الحصري لـ محاكم دبي المختصة، الإمارات العربية المتحدة. يقصد أن يتطابق النصان الإنجليزي والعربي؛ وإذا تعذر التوفيق بينهما، تسود اللغة التي يمنحها القانون المحلي الإلزامي الأولوية، وإلا فيستخدم النص الإنجليزي لتفسير العقد.',
   templateVariant: 'gulf',
+  bankDetails: {
+    bankName: 'WIO Bank',
+    accountHolderName: 'Global Navigator L.L.C-FZ',
+    accountNumber: '9641372527',
+    iban: 'AE790860000009641372527',
+    bic: 'WIOBAEADXXX',
+    bankAddress: 'Etihad Airways Centre 5th Floor, Abu Dhabi, UAE',
+  },
 };
 
 const ABU_DHABI_PROFILE: BranchAgreementProfile = {

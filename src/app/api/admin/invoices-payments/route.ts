@@ -164,6 +164,7 @@ async function getPayments(search: string, status: string, dateFrom: string, dat
       b.mobile AS dmBranchPhone,
       b.license_number AS dmBranchLicenseNumber,
       b.vat_gst_percent AS dmBranchVatGstPercent,
+      b.abbrv AS dmBranchAbbrv,
       (SELECT a.agreementNumber FROM crm_opportunity_agreements a
        WHERE a.opportunityId = p.opportunityId
        ORDER BY a.createdAt DESC LIMIT 1) AS agreementNumber
@@ -242,6 +243,7 @@ async function getInvoices(search: string, status: string, dateFrom: string, dat
       b.email AS branchEmail,
       b.license_number AS branchLicenseNumber,
       b.vat_gst_percent AS branchVatGstPercent,
+      b.abbrv AS branchAbbrv,
       e.name AS counselorName,
       p.paymentNumber, p.paidAmount, p.proofOfPaymentUrl, p.paymentMethod, p.paymentDate,
       p.clientName AS oppClientName, p.clientEmail AS oppClientEmail, p.clientPhone AS oppClientPhone,

@@ -24,6 +24,7 @@ type ClientWithBranch = CrmClientsAttributes & {
   branchMobile?: string;
   branchLicenseNumber?: string | null;
   branchVatGstPercent?: number | string | null;
+  branchAbbrv?: string | null;
   currencyCode?: string | null;
 };
 
@@ -238,6 +239,7 @@ export default function ClientsManagement() {
         mobile: client.branchMobile,
         licenseNumber: client.branchLicenseNumber,
         vatGstPercent: client.branchVatGstPercent,
+        abbrv: client.branchAbbrv,
       },
     });
     printReceiptDocument({
@@ -252,6 +254,7 @@ export default function ClientsManagement() {
       branchAddress: branchDetails.branchAddress,
       branchEmail: branchDetails.branchEmail,
       branchPhone: branchDetails.branchPhone,
+      branchAbbrv: branchDetails.branchAbbrv,
       licenseNumber: branchDetails.licenseNumber,
       vatGstPercent: branchDetails.vatGstPercent,
       paymentMethod: qp.method,

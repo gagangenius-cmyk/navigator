@@ -14,7 +14,7 @@
 // from the branch's own crm_branch record and address text, never hardcoded
 // to one specific branch's identity.
 
-import { getBranchAgreementProfile } from './branchAgreementProfiles';
+import { getBranchAgreementProfile, type BranchBankDetails } from './branchAgreementProfiles';
 
 export interface ReceiptBranchSource {
   name?: string | null;
@@ -385,6 +385,9 @@ export interface ReceiptFields {
   branchAddress?: string | null;
   branchEmail?: string | null;
   branchPhone?: string | null;
+  // crm_branch.abbrv — resolves the branch's bank details (see
+  // branchAgreementProfiles.ts) the same way agreements resolve legal text.
+  branchAbbrv?: string | null;
   licenseNumber?: string | null;
   vatGstPercent?: number | string | null;
   paymentMethod?: string | null;
@@ -400,8 +403,15 @@ export interface ReceiptFields {
 }
 
 // Shared by every screen that prints a payment receipt so they all render
-// the exact same formal tax-invoice-table layout — and the same per-branch
-// tax treatment — instead of maintaining divergent copies.
+// the exact same formal receipt layout — and the same per-branch tax
+// treatment — instead of maintaining divergent copies.
+//
+// Layout matches the signed "Official Payment Receipt" format (logo,
+// letterhead + bank-details box, file no., flat total inclusive of tax,
+// stamp) rather than the older itemized tax-invoice table — the amount and
+// tax-rate math (VAT/GST split, admin fee) is still computed per branch so
+// the numbers stay correct, it's just no longer broken out line-by-line on
+// the printed page.
 export function buildReceiptHtml(r: ReceiptFields): string {
   const cfg = getBranchReceiptConfig(
     r.branchName || r.companyName || '',
@@ -414,8 +424,10 @@ export function buildReceiptHtml(r: ReceiptFields): string {
   );
   const currency = r.currency || 'AED';
   const companyName = r.companyName || cfg.companyName;
-  const branchName = r.branchName || companyName;
   const branchAddress = (r.branchAddress || cfg.address || '').replace(/\n/g, ', ');
+  const branchPhone = r.branchPhone || '';
+  const branchEmail = r.branchEmail || cfg.email || COMPANY_FALLBACK_EMAIL;
+  const bank: BranchBankDetails | undefined = getBranchAgreementProfile(r.branchAbbrv).bankDetails;
   const fmt = (n: number) => `${currency} ${n.toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
   const totalAmount = Number(r.totalAmount || 0);
@@ -426,127 +438,91 @@ export function buildReceiptHtml(r: ReceiptFields): string {
     ? Number(r.remainingBalance)
     : Math.max(0, totalAmount - paidAmount);
 
-  // The tax/net split applies to the amount actually being receipted now
-  // (paidAmount) — matching how a tax invoice is issued per payment received.
-  const netAmount = cfg.hasVat ? paidAmount / (1 + cfg.vatRate / 100) : paidAmount;
-  const taxAmount = cfg.hasVat ? paidAmount - netAmount : 0;
-
-  const agOpportunityId = r.agreementNumber || (r.opportunityId !== undefined && r.opportunityId !== null && r.opportunityId !== '' ? String(r.opportunityId) : 'N/A');
-  const contactValue = [r.email, r.phone].filter(Boolean).join(' · ') || '—';
-  const dateStr = new Date(r.paymentDate || new Date()).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
-  const refLabel = getReferenceLabel(r.paymentMethod, cfg);
-
-  let taxRows: string;
-  let taxNote = cfg.taxNoteSentence;
-  if (cfg.taxLabel === 'GST' && cfg.hasVat) {
-    const half = cfg.vatRate / 2;
-    const halfAmount = taxAmount / 2;
-    taxRows = `<tr><td>CGST @ ${half}% + SGST @ ${half}% (Total GST ${cfg.vatRate}%)</td><td>${fmt(taxAmount)}</td></tr>`;
-    taxNote = `${taxNote} CGST ${fmt(halfAmount)} + SGST ${fmt(halfAmount)} = Total GST ${fmt(taxAmount)}.`;
-  } else if (cfg.hasVat) {
-    taxRows = `<tr><td>VAT — ${cfg.vatRate}% Standard Rate</td><td>${fmt(taxAmount)}</td></tr>`;
-  } else {
-    taxRows = `<tr><td>Tax — No Tax (${cfg.countryLabel})</td><td>${fmt(0)}</td></tr>`;
-  }
-  const taxNoteHeading = cfg.hasVat ? `${cfg.taxLabel} Note` : 'Tax Note';
-
   // Admin fee is a separate charge added to what's shown as collected on
   // this printed receipt — it never affects paidAmount/balance elsewhere
   // (agreement totals, opportunity remaining balance), only this document's
-  // own total-due and amount-in-words lines.
+  // own total-due line.
   const adminFeeAmount = r.adminFeeIncluded ? Math.max(0, Number(r.adminFeeAmount || 0)) : 0;
-  const adminFeeVatRate = adminFeeAmount > 0 ? getAdminFeeVatRate(branchName, branchAddress) : 0;
+  const adminFeeVatRate = adminFeeAmount > 0 ? getAdminFeeVatRate(companyName, branchAddress) : 0;
   const adminFeeVatAmount = adminFeeAmount * (adminFeeVatRate / 100);
-  const receiptTotalWithFee = paidAmount + adminFeeAmount + adminFeeVatAmount;
+  const receiptTotal = paidAmount + adminFeeAmount + adminFeeVatAmount;
 
-  const totalRowLabel = hasPreviouslyPaid ? 'AMOUNT PAID (THIS RECEIPT)' : cfg.totalLabel;
-
-  const companyNamePeriod = companyName.trim().endsWith('.') ? '' : '.';
-  const notes = [
-    cfg.legalValidityNote,
-    'All fees and payments made by the Client under this Agreement are final, non-refundable, and non-transferable, irrespective of the outcome of the services, change in the Client’s circumstances, withdrawal, cancellation, or decision not to proceed.',
-    'Please share the payment confirmation / transaction receipt referencing this invoice number for your records.',
-    `Transaction/gateway charges, if any, are borne by the applicant, not by ${companyName}${companyNamePeriod}`,
-    'Payment is recorded as "Payment Received" only once funds are realized and cleared — not upon initiation or submission of a transfer.',
-    r.branchEmail || cfg.email || COMPANY_FALLBACK_EMAIL,
-  ];
+  const fileNo = r.agreementNumber || (r.opportunityId !== undefined && r.opportunityId !== null && r.opportunityId !== '' ? String(r.opportunityId) : 'N/A');
+  const dateStr = new Date(r.paymentDate || new Date()).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '-');
+  const purpose = r.serviceName || 'Professional Migration & Visa Consulting Services';
+  const accountLabel = /kuwait/i.test(cfg.countryLabel) ? 'Kuwait Account'
+    : /qatar/i.test(cfg.countryLabel) ? 'Qatar Account'
+    : /india/i.test(cfg.countryLabel) ? 'India Account'
+    : 'UAE Account';
+  const docTitle = cfg.hasVat ? 'TAX INVOICE' : 'PAYMENT RECEIPT';
+  const totalLabel = `Total Amount Received${cfg.hasVat ? ` inclusive ${cfg.taxLabel} ${cfg.vatRate}%` : ''}`;
 
   return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"/>
-<title>Tax Invoice / Receipt</title>
+<title>Official Payment Receipt</title>
 <style>
   *{box-sizing:border-box;margin:0;padding:0}
-  body{font-family:Arial,sans-serif;color:#1a1a1a;font-size:10pt;padding:30px 48px 40px}
-  .company{text-align:center;font-size:14pt;font-weight:700;letter-spacing:.3px}
-  .company-sub{text-align:center;font-size:9.3pt;color:#333;margin-top:2px}
-  .company-addr{text-align:center;font-size:8.8pt;color:#555;margin-top:2px}
-  .hr{border:none;border-top:2px solid #1a1a1a;margin:10px 0 8px}
-  .doc-title{text-align:center;font-size:12pt;font-weight:700;letter-spacing:.5px}
-  .doc-title .sub{display:block;font-size:9.3pt;font-weight:400;margin-top:3px;color:#333}
-  table.info{width:100%;border-collapse:collapse;margin:10px 0}
-  table.info td{border:1px solid #999;padding:5px 9px;font-size:9.3pt;vertical-align:top}
-  table.info td.label{background:#e7e7e7;font-weight:700;width:34%}
-  table.desc{width:100%;border-collapse:collapse;margin:10px 0}
-  table.desc th{background:#1a1a1a;color:#fff;text-align:left;padding:5px 9px;font-size:9pt}
-  table.desc th:last-child, table.desc td:last-child{text-align:right;width:32%}
-  table.desc td{border:1px solid #999;padding:5px 9px;font-size:9.3pt}
-  table.desc tr.total td{font-weight:700;font-size:10pt;border-top:2px solid #1a1a1a}
-  .note{font-size:8.4pt;font-style:italic;color:#333;margin-top:3px}
-  .sigs{margin-top:26px;display:flex;justify-content:space-between;font-size:9pt;gap:40px;page-break-inside:avoid}
-  .sig-line{display:block;width:190px;border-bottom:1px solid #1a1a1a;height:28px}
-  ul.notes{margin-top:14px;padding-left:16px;font-size:8.2pt;color:#333;line-height:1.45;page-break-inside:avoid}
-  @media print{@page{size:A4 portrait;margin:0}body{padding:22px 40px 26px}}
+  body{font-family:Arial,sans-serif;color:#1a1a1a;font-size:10.5pt;padding:28px 46px 36px}
+  .logo{display:block;margin:0 auto 14px;height:64px;object-fit:contain}
+  table.letterhead{width:100%;border-collapse:collapse;margin-bottom:14px}
+  table.letterhead td{border:1.5px solid #1a1a1a;padding:10px 14px;font-size:9.6pt;vertical-align:top}
+  table.letterhead .bold{font-weight:700}
+  table.letterhead a{color:#1a1a1a}
+  .doc-title{text-align:center;font-size:13pt;font-weight:700;letter-spacing:.4px;margin:6px 0 10px}
+  table.info{width:100%;border-collapse:collapse;margin-bottom:0}
+  table.info td{border:1px solid #1a1a1a;padding:7px 12px;font-size:9.8pt;vertical-align:top}
+  table.info td.label{font-weight:700;width:60%}
+  table.info td.amount{width:40%;text-align:right;font-weight:700}
+  table.info tr.fileno td{background:#5CE1E6}
+  table.info tr.total td{font-weight:700;border-top:2px solid #1a1a1a}
+  .below{display:flex;justify-content:space-between;align-items:flex-start;margin-top:18px;gap:24px}
+  .below .field{font-size:9.8pt;margin-bottom:8px}
+  .stamp{width:130px;height:130px;border:3px double #1a3a8f;border-radius:50%;display:flex;align-items:center;justify-content:center;text-align:center;color:#1a3a8f;font-weight:700;font-size:7.6pt;line-height:1.3;transform:rotate(-8deg);padding:8px}
+  .note{font-size:9.3pt;margin-top:4px}
+  @media print{@page{size:A4 portrait;margin:0}body{padding:20px 38px 24px}}
 </style></head><body>
-<div class="company">${companyName.toUpperCase()}</div>
-<div class="company-sub">${cfg.countryLabel || ''}</div>
-${branchAddress ? `<div class="company-addr">${branchAddress}</div>` : ''}
-<hr class="hr"/>
-<div class="doc-title">${cfg.receiptTitle}<span class="sub">Invoice No.: ${r.receiptNumber || r.paymentNumber || 'N/A'}</span></div>
+<img class="logo" src="/logo.png" alt="Global Navigator"/>
+
+<table class="letterhead">
+  <tr>
+    <td>
+      <div class="bold">${companyName.toUpperCase()}</div>
+      ${branchAddress ? branchAddress.split(',').map((line, i, arr) => `<div${i === 0 ? ' class="bold"' : ''}>${line.trim()}${i < arr.length - 1 ? ',' : ''}</div>`).join('') : ''}
+      ${branchPhone ? `<div>Phone: ${branchPhone}</div>` : ''}
+      <div>Email: <a href="mailto:${branchEmail}">${branchEmail}</a></div>
+      ${bank ? `
+      <div style="margin-top:8px" class="bold">Bank Details:</div>
+      <div>${bank.accountHolderName}</div>
+      <div>Account number: ${bank.accountNumber}</div>
+      <div>IBAN: ${bank.iban}</div>
+      <div>BIC: ${bank.bic}</div>
+      ` : ''}
+    </td>
+  </tr>
+</table>
+
+<div class="doc-title">OFFICIAL PAYMENT RECEIPT</div>
 
 <table class="info">
-  <tr><td class="label">Company Legal Name</td><td>${companyName}</td></tr>
-  <tr><td class="label">${cfg.taxRegLabel}</td><td>${cfg.trn ? `${cfg.trn}${cfg.sacCodeSuffix}` : (cfg.noTaxRegNote || 'Not on file')}</td></tr>
-  <tr><td class="label">Date of Supply / Invoice Date</td><td>${dateStr}</td></tr>
+  <tr><td class="label">Date:</td><td class="amount">${dateStr}</td></tr>
+  <tr><td class="label" colspan="2">${docTitle}</td></tr>
+  <tr class="fileno"><td class="label" colspan="2">Client File No: ${fileNo}</td></tr>
+  <tr><td class="label">Received From: ${r.clientName || 'Client'}</td><td class="amount">${fmt(paidAmount)}</td></tr>
+  ${hasPreviouslyPaid ? `<tr><td class="label">Total Package Amount</td><td class="amount">${fmt(totalAmount)}</td></tr><tr><td class="label">Previously Paid</td><td class="amount">${fmt(previouslyPaid)}</td></tr>` : ''}
+  ${adminFeeAmount > 0 ? `<tr><td class="label">Administration Fee${adminFeeVatAmount > 0 ? ` (incl. ${adminFeeVatRate}% VAT)` : ''}</td><td class="amount">${fmt(adminFeeAmount + adminFeeVatAmount)}</td></tr>` : ''}
+  <tr class="total"><td class="label">${totalLabel}</td><td class="amount">${fmt(receiptTotal)}</td></tr>
+  ${hasPreviouslyPaid ? `<tr class="total"><td class="label">Balance Remaining</td><td class="amount">${fmt(balance)}</td></tr>` : ''}
 </table>
 
-<table class="info">
-  <tr><td class="label">Client Name</td><td>${r.clientName || 'Client'}</td></tr>
-  <tr><td class="label">Client Contact</td><td>${contactValue}</td></tr>
-  <tr><td class="label">Client Residency Status</td><td>${cfg.residencyStatusLine}</td></tr>
-  ${r.serviceName ? `<tr><td class="label">Service / Program</td><td>${r.serviceName}</td></tr>` : ''}
-  <tr><td class="label">Purpose of Payment</td><td>Professional Migration &amp; Visa Consulting Services${r.serviceName ? ` — ${r.serviceName}` : ''}</td></tr>
-  <tr><td class="label">Payment Mode</td><td>${titleCase(r.paymentMethod || 'Cash')}</td></tr>
-  <tr><td class="label">Payment Status</td><td>Payment Received</td></tr>
-</table>
-
-<table class="desc">
-  <tr><th>Description</th><th>Value</th></tr>
-  <tr><td>Net Amount — Professional Consulting Fee (${agOpportunityId})</td><td>${fmt(netAmount)}</td></tr>
-  ${taxRows}
-  ${hasPreviouslyPaid ? `<tr><td>Total Package Amount</td><td>${fmt(totalAmount)}</td></tr><tr><td>Previously Paid</td><td>${fmt(previouslyPaid)}</td></tr>` : ''}
-  ${adminFeeAmount > 0 ? `<tr><td>Administration Fee</td><td>${fmt(adminFeeAmount)}</td></tr>` : ''}
-  ${adminFeeVatAmount > 0 ? `<tr><td>VAT on Administration Fee — ${adminFeeVatRate}%</td><td>${fmt(adminFeeVatAmount)}</td></tr>` : ''}
-  <tr class="total"><td>${totalRowLabel}</td><td>${fmt(receiptTotalWithFee)}</td></tr>
-  ${hasPreviouslyPaid ? `<tr class="total"><td>Balance Remaining</td><td>${fmt(balance)}</td></tr>` : ''}
-</table>
-<div class="note">Amount in Words: ${amountInWords(receiptTotalWithFee, currency)}.</div>
-<div class="note"><strong>${taxNoteHeading}:</strong> ${taxNote}</div>
-${r.remark ? `<div class="note" style="font-style:normal;margin-top:8px;"><strong>Remark:</strong> ${r.remark}</div>` : ''}
-
-<table class="info">
-  <tr><td class="label">Payment Method</td><td>${titleCase(r.paymentMethod || 'Cash')}</td></tr>
-  <tr><td class="label">AG / Opportunity ID</td><td>${agOpportunityId}</td></tr>
-  ${r.transactionId ? `<tr><td class="label">${refLabel}</td><td>${r.transactionId}</td></tr>` : ''}
-  ${cfg.indiaState ? `<tr><td class="label">Place of Supply</td><td>${cfg.indiaState.name} (State Code: ${cfg.indiaState.code})</td></tr>` : ''}
-  <tr><td class="label">Branch / Country</td><td>${branchName}, ${cfg.countryLabel}</td></tr>
-</table>
-
-<div class="sigs">
-  <div style="flex:1"><span class="sig-line"></span>Client Signature</div>
+<div class="below">
+  <div>
+    <div class="field"><strong>Payment Method:</strong> ${titleCase(r.paymentMethod || 'Cash')}${/transfer/i.test(r.paymentMethod || '') ? ` to ${accountLabel}` : ''}</div>
+    ${r.transactionId ? `<div class="field"><strong>${getReferenceLabel(r.paymentMethod, cfg)}:</strong> ${r.transactionId}</div>` : ''}
+    <div class="field"><strong>Purpose:</strong> ${purpose}</div>
+    <div class="note">Advance amount paid is not refundable.</div>
+    ${r.remark ? `<div class="note"><strong>Remark:</strong> ${r.remark}</div>` : ''}
+  </div>
+  <div class="stamp">${companyName.toUpperCase()}<br/>${cfg.countryLabel}</div>
 </div>
-
-<ul class="notes">
-  ${notes.map((n) => `<li>${n}</li>`).join('\n  ')}
-</ul>
 </body></html>`;
 }
 
