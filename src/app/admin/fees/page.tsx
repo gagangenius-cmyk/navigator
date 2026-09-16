@@ -123,7 +123,7 @@ export default function FeesManagement() {
     }
   };
 
-  const handleAddFee = async (feeData: Partial<CrmFeeAttributes>) => {
+  const handleAddFee = async (feeData: FeeFormValues) => {
     try {
       const response = await fetch('/api/admin/fees', {
         method: 'POST',
@@ -143,7 +143,7 @@ export default function FeesManagement() {
     }
   };
 
-  const handleUpdateFee = async (feeData: Partial<CrmFeeAttributes>) => {
+  const handleUpdateFee = async (feeData: FeeFormValues) => {
     if (!selectedFee) return;
     try {
       const response = await fetch('/api/admin/fees', {
@@ -423,12 +423,17 @@ export default function FeesManagement() {
   );
 }
 
+// programType isn't stored on crm_fee — it's only collected here to key the
+// crm_countries_type_program mapping row the fees API creates on save (see
+// src/app/api/admin/fees/route.ts), so it rides along as an extra field.
+type FeeFormValues = Partial<CrmFeeAttributes> & { programType?: number | null };
+
 // Fee Form Modal Component
 interface FeeFormModalProps {
   title: string;
   initialData?: CrmFeeAttributes | null;
   lookup: LookupData;
-  onSubmit: (data: Partial<CrmFeeAttributes>) => void;
+  onSubmit: (data: FeeFormValues) => void;
   onClose: () => void;
 }
 
@@ -436,6 +441,7 @@ function FeeFormModal({ title, initialData, lookup, onSubmit, onClose }: FeeForm
   const [formData, setFormData] = useState({
     service: initialData?.service ?? null,
     country: initialData?.country ?? null,
+    programType: null as number | null,
     branch: initialData?.branch ?? null,
     currency: initialData?.currency ?? null,
     upfront: initialData?.upfront ?? 0,
@@ -499,6 +505,23 @@ function FeeFormModal({ title, initialData, lookup, onSubmit, onClose }: FeeForm
                 <option value="">Select Country</option>
                 {lookup.countries.map(c => (
                   <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </SearchableSelect>
+            </div>
+            {/* Program Type — used to key the crm_countries_type_program mapping;
+                saving auto-creates that mapping row if this exact country/type/program
+                combination doesn't already exist. */}
+            <div>
+              <label className={lbl}>Program Type *</label>
+              <SearchableSelect
+                required
+                value={formData.programType ?? ''}
+                onChange={e => setFormData(prev => ({ ...prev, programType: e.target.value ? Number(e.target.value) : null }))}
+                className={inp}
+              >
+                <option value="">Select Program Type</option>
+                {lookup.programTypes.map(t => (
+                  <option key={t.id} value={t.id}>{t.name}</option>
                 ))}
               </SearchableSelect>
             </div>

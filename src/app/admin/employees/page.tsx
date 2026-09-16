@@ -23,12 +23,7 @@ type EmployeeRow = CrmEmployeeAttributes & {
 type RoleOption = { id: number; name: string; type: string };
 type BranchOption = { id: number; name: string };
 type RegionOption = { id: number; name: string };
-
-// crm_department has no seeded rows, so department is tracked here as a
-// small fixed id->label enum rather than a real FK lookup. Keep this in
-// sync with scripts/seed-employees.js's DEPT map if you add another id.
-const DEPARTMENT_LABELS: Record<number, string> = { 1: 'Sales', 2: 'Operations', 3: 'Admin', 4: 'HR', 5: 'Accounts' };
-const departmentLabel = (id: number | null | undefined) => DEPARTMENT_LABELS[Number(id)] || 'Admin';
+type DepartmentOption = { id: number; name: string };
 
 export default function EmployeesManagement() {
   const { user } = useAuth();
@@ -37,6 +32,9 @@ export default function EmployeesManagement() {
   const [roles, setRoles] = useState<RoleOption[]>([]);
   const [branches, setBranches] = useState<BranchOption[]>([]);
   const [regions, setRegions] = useState<RegionOption[]>([]);
+  const [departments, setDepartments] = useState<DepartmentOption[]>([]);
+  const departmentLabel = (id: number | null | undefined) =>
+    departments.find((d) => d.id === Number(id))?.name || (id ? `#${id}` : 'Unassigned');
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedEmployee, setSelectedEmployee] = useState<EmployeeRow | null>(null);
@@ -76,6 +74,7 @@ export default function EmployeesManagement() {
     fetchRoles();
     fetchBranches();
     fetchRegions();
+    fetchDepartments();
   }, []);
 
   const fetchRoles = async () => {
@@ -111,6 +110,18 @@ export default function EmployeesManagement() {
       }
     } catch (error) {
       console.error('Error fetching regions:', error);
+    }
+  };
+
+  const fetchDepartments = async () => {
+    try {
+      const response = await fetch('/api/admin/departments?limit=100&status=1');
+      const result = await response.json();
+      if (response.ok) {
+        setDepartments((result.data || []).map((d: any) => ({ id: d.id, name: d.name })));
+      }
+    } catch (error) {
+      console.error('Error fetching departments:', error);
     }
   };
 
@@ -321,11 +332,9 @@ export default function EmployeesManagement() {
             className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           >
             <option value="">All Departments</option>
-            <option value="1">Sales</option>
-            <option value="2">Operations</option>
-            <option value="3">Admin</option>
-            <option value="4">HR</option>
-            <option value="5">Accounts</option>
+            {departments.map((d) => (
+              <option key={d.id} value={d.id}>{d.name}</option>
+            ))}
           </SearchableSelect>
           <SearchableSelect
             value={filters.status}
@@ -570,6 +579,7 @@ export default function EmployeesManagement() {
         roles={roles}
         branches={branches}
         regions={regions}
+        departments={departments}
         onSubmit={handleAddEmployee}
         onClose={() => setShowAddModal(false)}
       />
@@ -582,6 +592,7 @@ export default function EmployeesManagement() {
         roles={roles}
         branches={branches}
         regions={regions}
+        departments={departments}
         onSubmit={handleUpdateEmployee}
         onClose={() => { setShowEditModal(false); setSelectedEmployee(null); }}
       />
@@ -596,6 +607,7 @@ interface EmployeeFormModalProps {
   roles: RoleOption[];
   branches: BranchOption[];
   regions: RegionOption[];
+  departments: DepartmentOption[];
   onSubmit: (data: Partial<CrmEmployeeAttributes>) => void;
   onClose: () => void;
 }
@@ -635,7 +647,7 @@ function buildEmployeeFormData(initialData?: EmployeeRow | null) {
 // `initialData` whenever it opens) so the drawer's slide in/out animation plays
 // correctly instead of the form popping open/closed with the old conditionally
 // mounted modal.
-function EmployeeFormDrawer({ open, title, initialData, roles, branches, regions, onSubmit, onClose }: EmployeeFormModalProps) {
+function EmployeeFormDrawer({ open, title, initialData, roles, branches, regions, departments, onSubmit, onClose }: EmployeeFormModalProps) {
   const [formData, setFormData] = useState(() => buildEmployeeFormData(initialData));
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -702,11 +714,9 @@ function EmployeeFormDrawer({ open, title, initialData, roles, branches, regions
               onChange={(e) => setFormData(prev => ({ ...prev, department: parseInt(e.target.value) }))}
               className={employeeInputClass}
             >
-              <option value={1}>Sales</option>
-              <option value={2}>Operations</option>
-              <option value={3}>Admin</option>
-              <option value={4}>HR</option>
-              <option value={5}>Accounts</option>
+              {departments.map((d) => (
+                <option key={d.id} value={d.id}>{d.name}</option>
+              ))}
             </SearchableSelect>
           </div>
 

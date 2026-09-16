@@ -4,6 +4,7 @@ import { sequelize } from '@/lib/sequelize';
 import { verifyToken } from '@/lib/auth';
 import { isCeo } from '@/lib/roleChecks';
 import { requireAuth, isAuthError } from '@/lib/apiAuth';
+import { ensureCountryProgramMapping } from '@/lib/countryProgramMapping';
 
 export async function GET(request: NextRequest) {
   try {
@@ -55,30 +56,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'programId, countryId, and typeId are required' }, { status: 400 });
     }
 
-    const [existing] = await sequelize.query<{ id: number }>(
-      `SELECT id FROM crm_countries_type_program WHERE country = :countryId AND type = :typeId AND program = :programId LIMIT 1`,
-      {
-        replacements: { countryId: Number(countryId), typeId: Number(typeId), programId: Number(programId) },
-        type: QueryTypes.SELECT,
-      }
-    );
-
-    if (existing) {
+    const created = await ensureCountryProgramMapping(Number(countryId), Number(typeId), Number(programId), Number(cu.id || 0));
+    if (!created) {
       return NextResponse.json({ error: 'This mapping already exists' }, { status: 409 });
     }
-
-    await sequelize.query(
-      `INSERT INTO crm_countries_type_program (country, type, program, created, created_by) VALUES (:countryId, :typeId, :programId, NOW(), :userId)`,
-      {
-        replacements: {
-          countryId: Number(countryId),
-          typeId: Number(typeId),
-          programId: Number(programId),
-          userId: Number(cu.id || 0),
-        },
-        type: QueryTypes.INSERT,
-      }
-    );
 
     return NextResponse.json({ success: true });
   } catch (err) {

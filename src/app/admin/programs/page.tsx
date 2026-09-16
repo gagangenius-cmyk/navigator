@@ -76,6 +76,14 @@ export default function ProgramsManagement() {
   const [mapError, setMapError] = useState('');
   const [mapBusy, setMapBusy] = useState(false);
 
+  // Program types already mapped for the selected country, so the "Add New
+  // Mapping" form can't offer a combination the backend will just 409 on.
+  const mappedTypeIdsForCountry = new Set(
+    mapForm.countryId
+      ? mappings.filter(m => m.country === Number(mapForm.countryId)).map(m => m.type)
+      : []
+  );
+
   // Lookup data
   const [lookup, setLookup] = useState<LookupData>({ programs: [], countries: [], programTypes: [], branches: [] });
 
@@ -578,7 +586,7 @@ export default function ProgramsManagement() {
               <div className="flex gap-2">
                 <SearchableSelect
                   value={mapForm.countryId}
-                  onChange={e => setMapForm(p => ({ ...p, countryId: e.target.value }))}
+                  onChange={e => setMapForm({ countryId: e.target.value, typeId: '' })}
                   className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="">Select Country</option>
@@ -589,12 +597,15 @@ export default function ProgramsManagement() {
                 <SearchableSelect
                   value={mapForm.typeId}
                   onChange={e => setMapForm(p => ({ ...p, typeId: e.target.value }))}
-                  className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  disabled={!mapForm.countryId}
+                  className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
                 >
-                  <option value="">Select Program Type</option>
-                  {lookup.programTypes.map(t => (
-                    <option key={t.id} value={t.id}>{t.name}</option>
-                  ))}
+                  <option value="">{mapForm.countryId ? 'Select Program Type' : 'Select a country first'}</option>
+                  {lookup.programTypes
+                    .filter(t => !mappedTypeIdsForCountry.has(t.id))
+                    .map(t => (
+                      <option key={t.id} value={t.id}>{t.name}</option>
+                    ))}
                 </SearchableSelect>
                 <button
                   onClick={handleAddMapping}

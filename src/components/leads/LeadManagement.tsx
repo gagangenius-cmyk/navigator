@@ -5,23 +5,20 @@ import { useSortableData, SortableTh } from '@/components/ui/sortable-th';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { AnimatePresence, motion } from 'framer-motion';
 import {
   Search, Plus, Edit, Trash2, Download, Upload, Users,
   Filter, Calendar, Phone, Mail, MapPin, DollarSign, MessageCircle,
   Eye, CheckCircle, Clock,
   Target, X, Save, LayoutList, LayoutGrid, Briefcase, MessageSquare, Settings,
   Receipt, AlertCircle, Printer, Loader2, ChevronsLeft, ChevronsRight, ChevronLeft, ChevronRight, RotateCcw, ExternalLink, XCircle,
-  ClipboardCheck
+  ClipboardCheck, Table2
 } from 'lucide-react';
 import LeadKanbanSimple from './LeadKanbanSimple';
 import ConversationHistoryModal from '@/components/shared/ConversationHistoryModal';
 import { Lead } from '@/types/lead';
 import { useAuth } from '@/contexts/AuthContext';
 import { isBranchManagerOrCeo, isCeo, isFoe, isFoeOrBranchManagerOrCeo, isCounsellor } from '@/lib/roleChecks';
-import { BANK_PAYMENT_OPTIONS, CARD_PAYMENT_OPTIONS } from '@/lib/paymentOptions';
 import { getLeadBranchDetails, printReceipt as printReceiptDocument } from '@/lib/receiptTemplate';
-import { useLeadStatuses } from '@/hooks/useLeadStatuses';
 
 interface LeadManagementProps {
   onLeadSelect?: (lead: Lead) => void;
@@ -50,6 +47,7 @@ interface LeadFilterOptions {
   countries: FilterOption[];
   services: FilterOption[];
   sources: FilterOption[];
+  leadQualities: FilterOption[];
 }
 
 type LeadActionType = 'appointment' | 'followup' | 'remark' | 'status';
@@ -78,7 +76,6 @@ interface LeadActionForm {
   status: string;
   programId: string;
   countryId: string;
-  metaLeadQuality: string;
 }
 
 interface LeadActivity {
@@ -159,8 +156,6 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
   const tableScrollRef = useRef<HTMLDivElement>(null);
   const [tableScrollWidth, setTableScrollWidth] = useState(0);
   const syncingScrollRef = useRef<'top' | 'table' | null>(null);
-  const tabBarRef = useRef<HTMLDivElement>(null);
-  const [tabBarHeight, setTabBarHeight] = useState(0);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
@@ -175,6 +170,7 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
     countryInterest: '',
     serviceInterest: '',
     marketSource: '',
+    leadQuality: '',
     dateFrom: '',
     dateTo: '',
     assignTo: ''
@@ -186,7 +182,8 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
     regions: [],
     countries: [],
     services: [],
-    sources: []
+    sources: [],
+    leadQualities: []
   });
   const [pagination, setPagination] = useState<PaginationData>({
     page: 1,
@@ -194,13 +191,19 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
     total: 0,
     pages: 0
   });
+  // Shown as a badge on the Duplicate Leads tab even while another tab is
+  // active - refreshed alongside every fetchLeads() call (see below) rather
+  // than only when that tab is open, so the count doesn't go stale while
+  // browsing other tabs.
+  const [duplicateLeadsCount, setDuplicateLeadsCount] = useState(0);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
   const [currentLead, setCurrentLead] = useState<Lead | null>(null);
   const [formData, setFormData] = useState<Partial<Lead>>({});
   const [importing, setImporting] = useState(false);
-  const [viewMode, setViewMode] = useState<'list' | 'kanban'>('list');
+  // 'list' = table rows, 'card' = the card-grid layout, 'kanban' = the board.
+  const [viewMode, setViewMode] = useState<'list' | 'kanban' | 'card'>('list');
   const [activeTab, setActiveTab] = useState<LeadTab>('leads');
   const [showLeadActionModal, setShowLeadActionModal] = useState(false);
   const [returnToViewModalOnClose, setReturnToViewModalOnClose] = useState(false);
@@ -215,13 +218,11 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
     priority: 'medium',
     status: '',
     programId: '',
-    countryId: '',
-    metaLeadQuality: ''
+    countryId: ''
   });
   const [leadActionSaving, setLeadActionSaving] = useState(false);
-  const [metaQualityOptions, setMetaQualityOptions] = useState<string[]>([]);
   // Status popup: the Program dropdown is scoped to whichever Country is
-  // selected (crm_fee is the only table that actually links a program to a
+  // selected (dm_fee is the only table that actually links a program to a
   // destination country) - null means "no country picked, show every
   // program", matching filterOptions.services' unscoped list.
   const [statusModalPrograms, setStatusModalPrograms] = useState<FilterOption[] | null>(null);
@@ -247,7 +248,6 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
   const [assignSearch, setAssignSearch] = useState('');
   const [assignLoading, setAssignLoading] = useState(false);
   const [assignSaving, setAssignSaving] = useState(false);
-  const [releasingLeadId, setReleasingLeadId] = useState<number | null>(null);
 
   // ── Counselor filter dropdown (BM sees their own branch, CEO sees everyone) ──
   const [counselorFilterOptions, setCounselorFilterOptions] = useState<Array<{ id: number; name: string }>>([]);
@@ -259,7 +259,6 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
   const [bulkTransferSearch, setBulkTransferSearch] = useState('');
 
   const { user } = useAuth();
-  const { statuses: leadStatuses, usesPriorityScale, badgeClassFor } = useLeadStatuses();
   const isDSorBM = useMemo(() => {
     const t = String(user?.type || '').toLowerCase().replace(/[\s-]+/g, '_');
     return ['director_of_sales', 'director', 'dos', 'branch_manager', 'bm', 'admin', 'administrator', 'super_admin'].includes(t) || user?.role === 1;
@@ -270,10 +269,10 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
   const showMyLeadsTab = isBranchManagerOrCeo(user);
 
   useEffect(() => {
-    if (!isFoeOrBranchManagerOrCeo(user)) return;
+    if (!isBranchManagerOrCeo(user)) return;
     (async () => {
       try {
-        // FOE/BM only see counselors in their own branch; CEO sees everyone -
+        // BM only sees counselors in their own branch; CEO sees everyone -
         // same branch-scoping convention used for lead reassignment (loadCounselors, below).
         const params = new URLSearchParams({ status: '1', limit: '200' });
         if (!isCeo(user) && user?.branch) params.set('branch', String(user.branch));
@@ -329,12 +328,13 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
     countryInterest: '',
     serviceInterest: '',
     marketSource: '',
+    leadQuality: '',
     dateFrom: '',
     dateTo: '',
     assignTo: ''
   });
 
-  // Build a lookup map from crm_source id → name using the already-loaded filter options
+  // Build a lookup map from dm_source id → name using the already-loaded filter options
   const sourceNameMap = useMemo(() => {
     const map: Record<string, string> = {};
     filterOptions.sources.forEach((s) => { map[s.value] = s.label; });
@@ -385,48 +385,6 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
     if (hasOpp) return { label: 'Opportunity Created', color: 'bg-orange-100 text-orange-800 border-orange-200', stepIndex: 2 };
     if (lead.assignTo || stepComplete >= 1) return { label: 'With Counselor', color: 'bg-sky-100 text-sky-800 border-sky-200', stepIndex: 1 };
     return { label: 'New Lead', color: 'bg-gray-100 text-gray-800 border-gray-200', stepIndex: 0 };
-  };
-
-  const getLeadFlowChecks = (lead: any) => {
-    const hasOpportunity = Boolean(lead.resolved_opportunity_id || lead.opportunity_id);
-    const discountStatus = String(lead.discount_status || '').toLowerCase();
-    const financeStatus = String(lead.finance_status || '').toLowerCase();
-    const complianceStatus = String(lead.compliance_status || '').toLowerCase();
-    const agreementGenerated = Boolean(lead.agreementGenerated || lead.agreementNumber || lead.agreementSigned);
-    const receiptGenerated = Boolean(lead.receiptNumber || lead.paymentReceived || lead.paymentStatus);
-
-    const statusClass = (done: boolean, rejected = false) => {
-      if (rejected) return 'border-rose-200 bg-rose-50 text-rose-700';
-      if (done) return 'border-emerald-200 bg-emerald-50 text-emerald-700';
-      return 'border-gray-200 bg-gray-50 text-gray-500';
-    };
-
-    return [
-      { key: 'opportunity', label: 'Opportunity Flow', done: hasOpportunity, detail: hasOpportunity ? `Opp #${lead.resolved_opportunity_id || lead.opportunity_id}` : 'Not started' },
-      {
-        key: 'discount',
-        label: 'Discount Approval',
-        done: discountStatus === 'approved' || discountStatus === 'not_required' || discountStatus === '',
-        rejected: discountStatus === 'rejected',
-        detail: discountStatus ? discountStatus.replace('_', ' ') : 'Not required',
-      },
-      {
-        key: 'finance',
-        label: 'Finance Approval',
-        done: financeStatus === 'approved',
-        rejected: financeStatus === 'rejected',
-        detail: financeStatus ? financeStatus.replace('_', ' ') : 'Pending',
-      },
-      {
-        key: 'compliance',
-        label: 'Compliance Approval',
-        done: complianceStatus === 'approved',
-        rejected: complianceStatus === 'rejected',
-        detail: complianceStatus ? complianceStatus.replace('_', ' ') : 'Pending',
-      },
-      { key: 'agreement', label: 'Agreement Generated', done: agreementGenerated, detail: lead.agreementNumber || (agreementGenerated ? 'Generated' : 'Pending') },
-      { key: 'receipt', label: 'Receipt Generated', done: receiptGenerated, detail: lead.receiptNumber || (receiptGenerated ? 'Generated' : 'Pending') },
-    ].map((item) => ({ ...item, className: statusClass(item.done, Boolean(item.rejected)) }));
   };
 
   const { sorted: sortedLeadRows, sortKey: leadSortKey, sortDirection: leadSortDirection, toggleSort: toggleLeadSort } = useSortableData(
@@ -531,6 +489,20 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
 
         setLeads(data.leads || []);
         setPagination(data.pagination);
+        if (activeTab === 'duplicates') {
+          setDuplicateLeadsCount(data.pagination?.total || 0);
+        } else {
+          // Cheap count-only lookup (limit=1) so the tab badge stays correct
+          // without waiting for someone to actually open the Duplicates tab -
+          // fired alongside every list refresh instead of on its own timer,
+          // so it reflects new web-to-leads/Meta/manual leads promptly.
+          fetch(`/api/leads?opportunityView=duplicates&limit=1&page=1`, {
+            headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+          })
+            .then((res) => res.ok ? res.json() : null)
+            .then((json) => { if (json?.pagination) setDuplicateLeadsCount(json.pagination.total || 0); })
+            .catch(() => {});
+        }
       } else {
         console.error('Error fetching leads:', data.error);
         setLeads([]);
@@ -563,15 +535,6 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
     return () => window.removeEventListener('resize', measure);
   }, [viewMode, leads, activeTab]);
 
-  // Re-measure the sticky tab bar's height so the table header (also sticky)
-  // can be offset below it instead of overlapping it - the tab row wraps
-  // (flex-wrap) on narrow screens, which changes its height at runtime.
-  useEffect(() => {
-    const measure = () => setTabBarHeight(tabBarRef.current?.offsetHeight || 0);
-    measure();
-    window.addEventListener('resize', measure);
-    return () => window.removeEventListener('resize', measure);
-  }, [showMyLeadsTab]);
 
   const handleTopScroll = () => {
     if (syncingScrollRef.current === 'table') { syncingScrollRef.current = null; return; }
@@ -600,7 +563,8 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
           regions: data.regions || [],
           countries: data.countries || [],
           services: data.services || [],
-          sources: data.sources || []
+          sources: data.sources || [],
+          leadQualities: data.leadQualities || []
         });
       } catch (error) {
         console.error('Error fetching lead filter options:', error);
@@ -761,7 +725,32 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
   const handleRevertOpportunity = async (lead: Lead) => {
     const opportunityId = (lead as any).resolved_opportunity_id || (lead as any).opportunity_id;
     if (!opportunityId) {
-      window.toast.error('No opportunity found for this lead.');
+      // The lead shows under Opportunities purely because opportunity_status
+      // was set to 'draft' when the wizard was opened - the real
+      // dmc_opportunities row (created by the wizard's Payment stage) never
+      // came into existence, so there's nothing for /api/opportunities/:id
+      // to delete. Reverting here just means clearing that draft flag.
+      if (!confirm('This opportunity was only just started - the wizard never reached Payment stage, so no opportunity record exists yet. Clear the draft flag and send this lead back to the Leads tab?')) return;
+      try {
+        const response = await fetch(`/api/leads/${lead.id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({ opportunity_status: null }),
+        });
+        if (response.ok) {
+          window.toast.success('Draft opportunity cleared — the lead is back in the Leads tab.');
+          fetchLeads();
+        } else {
+          const result = await response.json().catch(() => ({}));
+          window.toast.error(result.error || 'Failed to clear the draft opportunity flag');
+        }
+      } catch (error) {
+        console.error('Error clearing draft opportunity flag:', error);
+        window.toast.error('Failed to clear the draft opportunity flag');
+      }
       return;
     }
     if (!confirm('Revert this opportunity back to a lead? This permanently deletes its draft payment, agreement, and document records. This cannot be undone.')) return;
@@ -849,14 +838,10 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
           : '',
       notes: '',
       meetingType: actionType === 'appointment' ? 'consultation' : 'follow_up',
-      // P1-P4 priority values (used when the lead's status has the P-priority
-      // scale, e.g. Hot) must keep their case to match the SearchableSelect's
-      // option values — only the low/medium/high scale gets lowercased.
-      priority: /^P[1-4]$/i.test(String(lead.priority || '')) ? String(lead.priority).toUpperCase() : String(lead.priority || 'medium').toLowerCase(),
+      priority: String(lead.priority || 'medium').toLowerCase(),
       status: String(lead.status || ''),
       programId: String((lead as any).service_interest || ''),
-      countryId: String((lead as any).country_interest || ''),
-      metaLeadQuality: ''
+      countryId: String((lead as any).country_interest || '')
     });
     setCrossBranchEnabled(false);
     setCrossBranchTargetBranch('');
@@ -874,22 +859,6 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
       setReturnToViewModalOnClose(false);
     }
   };
-
-  // Loads the "Meta Lead Quality" dropdown options once the status popup
-  // opens — a no-op call for leads that didn't come from Meta Lead Ads, but
-  // the option list itself is shared/admin-configured so it's fetched fresh
-  // rather than hardcoded here.
-  useEffect(() => {
-    if (!showLeadActionModal || leadActionType !== 'status') return;
-    let cancelled = false;
-    fetch('/api/meta-leads/quality-options', {
-      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-    })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => { if (!cancelled) setMetaQualityOptions(data?.data || []); })
-      .catch(() => { if (!cancelled) setMetaQualityOptions([]); });
-    return () => { cancelled = true; };
-  }, [showLeadActionModal, leadActionType, token]);
 
   // Scopes the status popup's Program dropdown to the selected Country -
   // clears back to "every program" when no country is picked, matching
@@ -1070,8 +1039,6 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
             notes: leadActionForm.notes,
             ...(leadActionForm.programId ? { service_interest: leadActionForm.programId } : {}),
             ...(leadActionForm.countryId ? { country_interest: leadActionForm.countryId } : {}),
-            ...(leadActionForm.metaLeadQuality ? { metaLeadQuality: leadActionForm.metaLeadQuality } : {}),
-            ...(usesPriorityScale(leadActionForm.status) ? { priority: leadActionForm.priority } : {}),
           })
         });
 
@@ -1125,6 +1092,25 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
 
       const confirmed = confirm(`Open opportunity wizard for ${lead.fname} ${lead.lname}?`);
       if (!confirmed) return;
+
+      // Mark the lead as a draft opportunity immediately so it moves out of the
+      // Leads tab and into Opportunity Draft the moment conversion starts -
+      // same as handleBulkConvertToOpportunity below. Without this, a lead
+      // opened straight from this per-row button never shows in either the
+      // Opportunities or Clients tab until the wizard's Payment stage creates
+      // the real dmc_opportunities row (or not at all, if that's never reached).
+      try {
+        await fetch(`/api/leads/${numericLeadId}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({ opportunity_status: 'draft' }),
+        });
+      } catch (err) {
+        console.error('Error marking lead as draft opportunity:', err);
+      }
 
       router.push(`/admin/leads/opportunity-flow?leadId=${numericLeadId}`);
     } catch (error) {
@@ -1187,34 +1173,6 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
     }
   };
 
-  // Pulls an already-owned lead back into the shared Lead Pool
-  // (src/app/admin/lead-pool) so any agent in its branch can claim it -
-  // e.g. an overloaded or underperforming counselor's lead. Only ever
-  // targets the lead's own record, never a bulk selection.
-  const handleReleaseToPool = async (lead: Lead) => {
-    const leadName = `${lead.fname} ${lead.lname}`.trim() || `Lead #${lead.id}`;
-    if (!confirm(`Release "${leadName}" back to the Lead Pool? Any agent in this branch will be able to claim it.`)) return;
-    setReleasingLeadId(lead.id);
-    try {
-      const res = await fetch('/api/admin/lead-pool/release', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ leadId: lead.id }),
-      });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(json.error || 'Failed to release lead to pool');
-      setLeads(prev => prev.map(l =>
-        Number(l.id) === Number(lead.id) ? { ...l, assignTo: 0, Counsilor: 0, dmEmployeeByASSIGNTo: undefined } : l
-      ));
-      window.toast.success('Lead released to the pool');
-    } catch (err) {
-      console.error('Error releasing lead to pool:', err);
-      window.toast.error(err instanceof Error ? err.message : 'Failed to release lead to pool');
-    } finally {
-      setReleasingLeadId(null);
-    }
-  };
-
   const openQuickPayForLead = (lead: Lead) => {
     setQuickPayLead({
       lead,
@@ -1230,7 +1188,7 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
   };
 
   // Branch branding (legal name, address, contact, licence) is resolved from
-  // the lead's own crm_branch record via the centralized receipt template
+  // the lead's own dm_branch record via the centralized receipt template
   // shared with the Opportunity Flow wizard and the Clients page, instead of
   // a hardcoded per-branch-name lookup table that silently fell back to
   // Dubai's details for any branch it didn't recognize.
@@ -1253,7 +1211,7 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
       vatGstPercent: branchDetails.vatGstPercent,
       paymentMethod: qp.method,
       transactionId: qp.txnId,
-      currency: currencyCode || 'AED',
+      currency: currencyCode || 'CAD',
       totalAmount: lead.payTotal,
       previouslyPaid: lead.paidYet,
       paidAmount: qp.amount,
@@ -1327,7 +1285,7 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
   const isClientLead = (lead: Lead) => {
     const status = String(lead.status || '').toLowerCase();
     const opportunityStatus = String((lead as any).opportunity_status || '').toLowerCase();
-    return ['retained', 'converted', 'client', 'enrolled'].includes(status) || opportunityStatus === 'won';
+    return ['retained', 'converted', 'client'].includes(status) || opportunityStatus === 'won';
   };
 
   const handleOpenOperations = async (lead: Lead) => {
@@ -1404,7 +1362,7 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
 
     // Mark the lead as a draft opportunity immediately so it moves out of the
     // Leads tab and into Opportunity Draft the moment conversion starts, rather
-    // than only once the wizard's Payment stage creates the real crm_opportunities
+    // than only once the wizard's Payment stage creates the real dmc_opportunities
     // row. This intentionally does NOT create that row itself - doing so here
     // would make ensureOpportunityForClient() (opportunity-flow-wizard.tsx) find
     // an "existing opportunity" and skip creating the actual payment/invoice/
@@ -1557,7 +1515,17 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
 
       if (response.ok) {
         const data = await response.json();
-        window.toast.info(data.message);
+        // The summary count alone ("3 errors") gives no way to fix a bad
+        // file - surface the actual per-row reasons (e.g. an unmatched
+        // Source/Country value) so a failed import is diagnosable without
+        // digging into server logs.
+        if (data.errors?.length) {
+          const sample = data.errors.slice(0, 5).map((e: { row: number; error: string }) => `Row ${e.row}: ${e.error}`).join('\n');
+          const more = data.errors.length > 5 ? `\n…and ${data.errors.length - 5} more` : '';
+          window.toast.error(`${data.message}\n${sample}${more}`, { durationMs: 12000 });
+        } else {
+          window.toast.info(data.message);
+        }
         fetchLeads();
       } else {
         const data = await response.json().catch(() => null);
@@ -1593,12 +1561,18 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
     }
   };
 
-  // 'untouched' is a system lifecycle sentinel, not part of the
-  // admin-configurable crm_lead_status list — kept as a literal case here
-  // since it's never something an admin would rename/reconfigure.
   const getStatusColor = (status: string) => {
-    if (status === 'untouched') return 'bg-amber-100 text-amber-800';
-    return badgeClassFor(status);
+    switch (status) {
+      case 'untouched': return 'bg-amber-100 text-amber-800';
+      case 'Prospect': return 'bg-blue-100 text-blue-800';
+      case 'Not Interested': return 'bg-red-100 text-red-800';
+      case 'DNQ': return 'bg-gray-100 text-gray-800';
+      case 'Not_answered': return 'bg-yellow-100 text-yellow-800';
+      case 'Could Not Connect': return 'bg-orange-100 text-orange-800';
+      case 'Call Back': return 'bg-purple-100 text-purple-800';
+      case 'Abroad Lead': return 'bg-green-100 text-green-800';
+      default: return 'bg-gray-100 text-gray-800';
+    }
   };
 
   const getPriorityColor = (priority: string) => {
@@ -1606,10 +1580,15 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
       case 'High': return 'bg-red-100 text-red-800';
       case 'Medium': return 'bg-yellow-100 text-yellow-800';
       case 'Low': return 'bg-green-100 text-green-800';
-      case 'P1': return 'bg-red-100 text-red-800';
-      case 'P2': return 'bg-orange-100 text-orange-800';
-      case 'P3': return 'bg-yellow-100 text-yellow-800';
-      case 'P4': return 'bg-gray-100 text-gray-800';
+      default: return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const getQualityColor = (quality: string) => {
+    switch (quality) {
+      case 'Hot': return 'bg-red-100 text-red-800';
+      case 'Warm': return 'bg-orange-100 text-orange-800';
+      case 'Cold': return 'bg-blue-100 text-blue-800';
       default: return 'bg-gray-100 text-gray-800';
     }
   };
@@ -1669,14 +1648,14 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
         </div>
       )}
       <div className="bg-white rounded-t-lg">
-      <div ref={tabBarRef} className="border-b border-gray-200 bg-white px-3 py-2">
+      <div className="border-b border-gray-200 bg-white px-3 py-2">
         <div className="flex flex-wrap items-center gap-1.5">
           <button
             onClick={() => handleTabChange('leads')}
             className={`flex shrink-0 items-center px-3 py-2 rounded-md text-sm font-semibold transition-colors ${
               activeTab === 'leads'
-                ? 'bg-[var(--cmg-blue)] text-white shadow-sm'
-                : 'text-[var(--cmg-muted)] hover:bg-[#FBF0E9] hover:text-[var(--cmg-ink)]'
+                ? 'bg-blue-600 text-white shadow-sm'
+                : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
             }`}
           >
             <Users className="w-4 h-4 mr-2" />
@@ -1687,8 +1666,8 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
               onClick={() => handleTabChange('my-leads')}
               className={`flex shrink-0 items-center px-3 py-2 rounded-md text-sm font-semibold transition-colors ${
                 activeTab === 'my-leads'
-                  ? 'bg-[var(--cmg-blue)] text-white shadow-sm'
-                  : 'text-[var(--cmg-muted)] hover:bg-[#FBF0E9] hover:text-[var(--cmg-ink)]'
+                  ? 'bg-indigo-600 text-white shadow-sm'
+                  : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
               }`}
             >
               <Users className="w-4 h-4 mr-2" />
@@ -1699,8 +1678,8 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
             onClick={() => handleTabChange('opportunities')}
             className={`flex shrink-0 items-center px-3 py-2 rounded-md text-sm font-semibold transition-colors ${
               activeTab === 'opportunities'
-                ? 'bg-[var(--cmg-blue)] text-white shadow-sm'
-                : 'text-[var(--cmg-muted)] hover:bg-[#FBF0E9] hover:text-[var(--cmg-ink)]'
+                ? 'bg-amber-600 text-white shadow-sm'
+                : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
             }`}
           >
             <Target className="w-4 h-4 mr-2" />
@@ -1710,8 +1689,8 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
             onClick={() => handleTabChange('clients')}
             className={`flex shrink-0 items-center px-3 py-2 rounded-md text-sm font-semibold transition-colors ${
               activeTab === 'clients'
-                ? 'bg-[var(--cmg-blue)] text-white shadow-sm'
-                : 'text-[var(--cmg-muted)] hover:bg-[#FBF0E9] hover:text-[var(--cmg-ink)]'
+                ? 'bg-emerald-600 text-white shadow-sm'
+                : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
             }`}
           >
             <CheckCircle className="w-4 h-4 mr-2" />
@@ -1721,19 +1700,26 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
             onClick={() => handleTabChange('duplicates')}
             className={`flex shrink-0 items-center px-3 py-2 rounded-md text-sm font-semibold transition-colors ${
               activeTab === 'duplicates'
-                ? 'bg-[var(--cmg-red)] text-white shadow-sm'
-                : 'text-[var(--cmg-muted)] hover:bg-[#FBF0E9] hover:text-[var(--cmg-ink)]'
+                ? 'bg-red-600 text-white shadow-sm'
+                : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
             }`}
           >
             <AlertCircle className="w-4 h-4 mr-2" />
             Duplicate Leads
+            {duplicateLeadsCount > 0 && (
+              <span className={`ml-2 rounded-full px-1.5 py-0.5 text-xs font-bold ${
+                activeTab === 'duplicates' ? 'bg-white/25 text-white' : 'bg-red-100 text-red-700'
+              }`}>
+                {duplicateLeadsCount.toLocaleString()}
+              </span>
+            )}
           </button>
           <button
             onClick={() => handleTabChange('rejected')}
             className={`flex shrink-0 items-center px-3 py-2 rounded-md text-sm font-semibold transition-colors ${
               activeTab === 'rejected'
-                ? 'bg-[var(--cmg-red)] text-white shadow-sm'
-                : 'text-[var(--cmg-muted)] hover:bg-[#FBF0E9] hover:text-[var(--cmg-ink)]'
+                ? 'bg-rose-600 text-white shadow-sm'
+                : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
             }`}
             title="Opportunities rejected by Accounts, CRM Compliance, or a discount request"
           >
@@ -1745,8 +1731,9 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
 
       {/* Filters and Search */}
       <div className="border-b border-gray-200 bg-gradient-to-b from-white to-gray-50 p-3">
-        <div className="grid grid-cols-1 gap-3 2xl:grid-cols-[minmax(420px,1fr)_auto] 2xl:items-center">
-          <div className="grid min-w-0 grid-cols-1 gap-2 lg:grid-cols-[minmax(320px,1fr)_auto] lg:items-center">
+        {/* Row 1: search (left) — Add New Lead / Download Sample / Import / Export (right) */}
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <div className="min-w-[280px]">
               <div className="relative">
                 <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 transform text-gray-400" />
@@ -1764,84 +1751,42 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
                 )}
               </div>
             </div>
-            <div className="flex flex-wrap items-center gap-2 lg:justify-end">
-              <div className="inline-flex h-10 items-center gap-2 rounded-md border border-gray-200 bg-white px-3 text-sm shadow-sm">
-                <span className="font-semibold text-gray-500">Records</span>
-                <span className="font-bold text-gray-950">{pagination.total.toLocaleString()}</span>
-              </div>
-              {activeFilterCount > 0 && (
-                <button
-                  onClick={resetLeadFilters}
-                  className="inline-flex h-10 items-center gap-2 rounded-md border border-green-200 bg-green-50 px-3 text-sm font-semibold text-green-800 hover:bg-green-100"
-                  title="Clear active filters"
-                >
-                  <X className="h-4 w-4" />
-                  {activeFilterCount} active
-                </button>
-              )}
-              {loading && (
-                <span className="inline-flex h-10 items-center rounded-md border border-blue-100 bg-blue-50 px-3 text-sm font-semibold text-blue-700">
-                  Refreshing...
-                </span>
-              )}
+            <div className="inline-flex h-10 items-center gap-2 rounded-md border border-gray-200 bg-white px-3 text-sm shadow-sm">
+              <span className="font-semibold text-gray-500">Records</span>
+              <span className="font-bold text-gray-950">{pagination.total.toLocaleString()}</span>
             </div>
+            {activeFilterCount > 0 && (
+              <button
+                onClick={resetLeadFilters}
+                className="inline-flex h-10 items-center gap-2 rounded-md border border-green-200 bg-green-50 px-3 text-sm font-semibold text-green-800 hover:bg-green-100"
+                title="Clear active filters"
+              >
+                <X className="h-4 w-4" />
+                {activeFilterCount} active
+              </button>
+            )}
+            {loading && (
+              <span className="inline-flex h-10 items-center rounded-md border border-blue-100 bg-blue-50 px-3 text-sm font-semibold text-blue-700">
+                Refreshing...
+              </span>
+            )}
           </div>
 
           {showActions && (
-            <div className="flex flex-wrap items-center gap-2 2xl:justify-end">
-              {(activeTab === 'leads' || activeTab === 'my-leads') && (
-                <div className="flex h-10 items-center rounded-md bg-gray-100 p-1">
-                  <button
-                    onClick={() => setViewMode('list')}
-                    className={`flex h-8 items-center px-3 rounded-md text-sm font-medium transition-colors ${
-                      viewMode === 'list'
-                        ? 'bg-white text-gray-900 shadow-sm'
-                        : 'text-gray-600 hover:text-gray-900'
-                    }`}
-                  >
-                    <LayoutList className="w-4 h-4 mr-2" />
-                    List
-                  </button>
-                  <button
-                    onClick={() => setViewMode('kanban')}
-                    className={`flex h-8 items-center px-3 rounded-md text-sm font-medium transition-colors ${
-                      viewMode === 'kanban'
-                        ? 'bg-white text-gray-900 shadow-sm'
-                        : 'text-gray-600 hover:text-gray-900'
-                    }`}
-                  >
-                    <LayoutGrid className="w-4 h-4 mr-2" />
-                    Kanban
-                  </button>
-                </div>
-              )}
-
-              {(activeTab === 'leads' || activeTab === 'my-leads') && (
-                <>
-                  {activeTab === 'leads' && (
-                    <button
-                      onClick={() => router.push('/admin/leads/create')}
-                      className="flex h-10 items-center rounded-md bg-blue-600 px-3 text-sm font-semibold text-white hover:bg-blue-700"
-                    >
-                      <Plus className="w-4 h-4 mr-2" />
-                      Add New Lead
-                    </button>
-                  )}
-                  {!isFoe(user) && (
-                    <button
-                      onClick={handleBulkConvertToOpportunity}
-                      className="flex h-10 items-center rounded-md bg-[var(--dmc-gold)] px-3 text-sm font-semibold text-[var(--dmc-green-dark)] hover:brightness-95"
-                    >
-                      <Target className="w-4 h-4 mr-2" />
-                      Convert Selected to Opportunities
-                    </button>
-                  )}
-                </>
+            <div className="flex flex-wrap items-center gap-2">
+              {activeTab === 'leads' && (
+                <button
+                  onClick={() => router.push('/admin/leads/create')}
+                  className="flex h-10 items-center rounded-md bg-blue-600 px-3 text-sm font-semibold text-white hover:bg-blue-700"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add New Lead
+                </button>
               )}
               {activeTab === 'opportunities' && (
                 <button
                   onClick={() => router.push('/admin/leads/create?mode=opportunity')}
-                  className="flex h-10 items-center rounded-md bg-[var(--dmc-gold)] px-3 text-sm font-semibold text-[var(--dmc-green-dark)] hover:brightness-95"
+                  className="flex h-10 items-center rounded-md bg-amber-600 px-3 text-sm font-semibold text-white hover:bg-amber-700"
                 >
                   <Plus className="w-4 h-4 mr-2" />
                   Add New Opportunity
@@ -1885,6 +1830,57 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
           )}
         </div>
 
+        {/* Row 2: List/Kanban/Card toggle (left) — Convert Selected to Opportunities (right) */}
+        {showActions && (activeTab === 'leads' || activeTab === 'my-leads') && (
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+            <div className="flex h-10 items-center rounded-md bg-gray-100 p-1">
+              <button
+                onClick={() => setViewMode('list')}
+                className={`flex h-8 items-center px-3 rounded-md text-sm font-medium transition-colors ${
+                  viewMode === 'list'
+                    ? 'bg-white text-gray-900 shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                <Table2 className="w-4 h-4 mr-2" />
+                List
+              </button>
+              <button
+                onClick={() => setViewMode('kanban')}
+                className={`flex h-8 items-center px-3 rounded-md text-sm font-medium transition-colors ${
+                  viewMode === 'kanban'
+                    ? 'bg-white text-gray-900 shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                <LayoutGrid className="w-4 h-4 mr-2" />
+                Kanban
+              </button>
+              <button
+                onClick={() => setViewMode('card')}
+                className={`flex h-8 items-center px-3 rounded-md text-sm font-medium transition-colors ${
+                  viewMode === 'card'
+                    ? 'bg-white text-gray-900 shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                <LayoutList className="w-4 h-4 mr-2" />
+                Card
+              </button>
+            </div>
+
+            {!isFoe(user) && (
+              <button
+                onClick={handleBulkConvertToOpportunity}
+                className="flex h-10 items-center rounded-md bg-green-600 px-3 text-sm font-semibold text-white hover:bg-green-700"
+              >
+                <Target className="w-4 h-4 mr-2" />
+                Convert Selected to Opportunities
+              </button>
+            )}
+          </div>
+        )}
+
         <div className="mt-3 rounded-lg border border-gray-200 bg-white p-3 shadow-sm">
           <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2">
@@ -1919,7 +1915,7 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
               <option value="">Branch: All</option>
               {filteredBranchOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
             </SearchableSelect>
-            {isFoeOrBranchManagerOrCeo(user) && (
+            {isBranchManagerOrCeo(user) && (
               <SearchableSelect value={filters.assignTo} onChange={(e) => setFilters({...filters, assignTo: e.target.value})} className="h-9 rounded-md border border-gray-200 bg-gray-50 px-3 text-sm font-medium focus:bg-white focus:ring-2 focus:ring-blue-500">
                 <option value="">Counselor: All</option>
                 {counselorFilterOptions.map((option) => <option key={option.id} value={String(option.id)}>{option.name}</option>)}
@@ -1936,6 +1932,10 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
             <SearchableSelect value={filters.marketSource} onChange={(e) => setFilters({...filters, marketSource: e.target.value})} className="h-9 rounded-md border border-gray-200 bg-gray-50 px-3 text-sm font-medium focus:bg-white focus:ring-2 focus:ring-blue-500">
               <option value="">Source: All</option>
               {filterOptions.sources.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+            </SearchableSelect>
+            <SearchableSelect value={filters.leadQuality} onChange={(e) => setFilters({...filters, leadQuality: e.target.value})} className="h-9 rounded-md border border-gray-200 bg-gray-50 px-3 text-sm font-medium focus:bg-white focus:ring-2 focus:ring-blue-500">
+              <option value="">Quality: All</option>
+              {filterOptions.leadQualities.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
             </SearchableSelect>
             <div className="relative">
               <Calendar className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
@@ -1964,7 +1964,7 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
             <button
               onClick={handleBulkDelete}
               disabled={bulkActionSaving}
-              className="px-3 py-1.5 bg-[var(--cmg-red)] rounded-md text-sm font-medium hover:bg-[var(--cmg-red-dark)] disabled:opacity-50"
+              className="px-3 py-1.5 bg-red-600 rounded-md text-sm font-medium hover:bg-red-700 disabled:opacity-50"
             >
               Delete
             </button>
@@ -1978,8 +1978,8 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
         </div>
       )}
 
-      {/* Leads Display - List or Kanban View */}
-      {viewMode === 'list' ? (
+      {/* Leads Display - List (table), Card, or Kanban View */}
+      {viewMode !== 'kanban' ? (
         <div className="bg-slate-50">
           <div className="border-b border-gray-200 bg-white px-3 py-2">
             <div className="flex flex-wrap items-center justify-between gap-2">
@@ -2003,7 +2003,7 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
             </div>
           </div>
 
-          <div className="overflow-x-hidden p-3">
+          <div className={viewMode === 'card' ? 'overflow-x-hidden p-3' : 'hidden'}>
             {loading && (
               <div className="mb-3 flex items-center gap-2 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700">
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -2035,18 +2035,15 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
                 ))}
               </div>
             ) : sortedLeadRows.length === 0 ? (
-              <div className="flex h-full min-h-[280px] items-center justify-center rounded-lg border border-dashed border-[var(--cmg-border)] bg-white text-center">
+              <div className="flex h-full min-h-[280px] items-center justify-center rounded-lg border border-dashed border-gray-300 bg-white text-center">
                 <div>
-                  <div className="mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-full bg-[var(--cmg-blue-soft)]">
-                    <Users className="h-7 w-7 text-[var(--cmg-blue)]" />
-                  </div>
+                  <Users className="mx-auto mb-3 h-10 w-10 text-gray-300" />
                   <h3 className="text-sm font-bold text-gray-900">No leads found</h3>
                   <p className="mt-1 text-sm text-gray-500">Try changing filters or search terms.</p>
                 </div>
               </div>
             ) : (
               <div className={`grid grid-cols-1 gap-3 transition-opacity ${loading ? 'pointer-events-none opacity-55' : 'opacity-100'}`}>
-                <AnimatePresence initial={false} mode="popLayout">
                 {sortedLeadRows.map((lead: Lead, index) => {
                   const leadId = getSelectableLeadId(lead);
                   const stage = getPipelineStage(lead);
@@ -2056,17 +2053,11 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
                   const waLink = getWhatsAppLink(waNumber);
                   const name = [lead.fname, lead.mname, lead.lname].filter(Boolean).join(' ') || `Lead #${lead.id}`;
                   const initials = `${lead.fname?.[0] || ''}${lead.lname?.[0] || ''}`.toUpperCase() || 'LD';
-                  const flowChecks = getLeadFlowChecks(lead);
 
                   return (
-                    <motion.article
+                    <article
                       key={leadId ?? `${lead.email || 'lead'}-${index}`}
-                      layout
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, scale: 0.98 }}
-                      transition={{ duration: 0.22, delay: Math.min(index * 0.02, 0.2), ease: 'easeOut' }}
-                      className="group min-w-0 rounded-lg border border-gray-200 bg-white p-3 shadow-sm transition-all duration-150 hover:-translate-y-0.5 hover:border-[var(--cmg-blue)]/25 hover:shadow-md lg:p-4"
+                      className="min-w-0 rounded-lg border border-gray-200 bg-white p-3 shadow-sm transition hover:border-green-200 hover:shadow-md lg:p-4"
                     >
                       <div className="grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_auto]">
                         <div className="flex min-w-0 gap-3">
@@ -2079,7 +2070,7 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
                               className="mt-2 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                             />
                           )}
-                          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-[var(--cmg-blue)] to-[var(--dmc-green-medium)] text-sm font-black text-white shadow-sm transition-transform duration-200 group-hover:scale-105">
+                          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-green-600 to-emerald-400 text-sm font-black text-white shadow-sm">
                             {initials}
                           </div>
                           <div className="min-w-0 flex-1">
@@ -2100,6 +2091,9 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
                                 </button>
                               )}
                               <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-600">#{lead.id}</span>
+                              <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${getQualityColor(lead.lead_quality || 'Unknown')}`}>
+                                {lead.lead_quality || 'No Quality'}
+                              </span>
                             </div>
 
                             <div className="mt-2 grid grid-cols-1 gap-2 text-sm text-gray-600 sm:grid-cols-2 xl:grid-cols-3">
@@ -2129,20 +2123,7 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
                                 <div className="truncate text-gray-600" title={lead.campaign || undefined}>{lead.campaign || 'No campaign'}</div>
                               </div>
                               <div className="min-w-0 rounded-md bg-gray-50 p-2">
-                                <div className="flex items-center justify-between gap-1">
-                                  <div className="font-semibold uppercase text-gray-400">Owner</div>
-                                  {isBranchManagerOrCeo(user) && lead.dmEmployeeByASSIGNTo?.name && (
-                                    <button
-                                      type="button"
-                                      onClick={(e) => { e.stopPropagation(); handleReleaseToPool(lead); }}
-                                      disabled={releasingLeadId === lead.id}
-                                      className="shrink-0 text-[10px] font-semibold uppercase text-amber-600 hover:text-amber-800 disabled:opacity-50"
-                                      title="Release this lead back to the shared pool for any agent in this branch to claim"
-                                    >
-                                      {releasingLeadId === lead.id ? 'Releasing…' : 'Release'}
-                                    </button>
-                                  )}
-                                </div>
+                                <div className="font-semibold uppercase text-gray-400">Owner</div>
                                 {canAssignLeads ? (
                                   <button
                                     onClick={() => openAssignModal(lead)}
@@ -2176,27 +2157,9 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
                                 <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-semibold ${stage.color}`}>{stage.label}</span>
                                 <span className="text-xs font-semibold text-gray-400">{stage.stepIndex + 1}/{totalStages}</span>
                               </div>
-                              <div className="h-2 overflow-hidden rounded-full bg-[var(--cmg-blue-soft)]">
-                                <div className="h-full rounded-full bg-gradient-to-r from-[var(--cmg-blue)] to-[var(--dmc-gold)] transition-[width] duration-300" style={{ width: `${progressPct}%` }} />
+                              <div className="h-2 overflow-hidden rounded-full bg-gray-100">
+                                <div className="h-full rounded-full bg-gradient-to-r from-emerald-500 via-amber-400 to-green-600" style={{ width: `${progressPct}%` }} />
                               </div>
-                            </div>
-
-                            <div className="mt-3 grid grid-cols-1 gap-1.5 sm:grid-cols-2 xl:grid-cols-3">
-                              {flowChecks.map((item) => (
-                                <div key={item.key} className={`min-w-0 rounded-md border px-2 py-1.5 ${item.className}`} title={`${item.label}: ${item.detail}`}>
-                                  <div className="flex min-w-0 items-center gap-1.5">
-                                    {item.rejected ? (
-                                      <XCircle className="h-3.5 w-3.5 shrink-0" />
-                                    ) : item.done ? (
-                                      <CheckCircle className="h-3.5 w-3.5 shrink-0" />
-                                    ) : (
-                                      <Clock className="h-3.5 w-3.5 shrink-0" />
-                                    )}
-                                    <span className="truncate text-[11px] font-bold uppercase">{item.label}</span>
-                                  </div>
-                                  <div className="mt-0.5 truncate text-xs font-semibold">{item.detail}</div>
-                                </div>
-                              ))}
                             </div>
 
                             {activeTab === 'rejected' && (() => {
@@ -2232,10 +2195,10 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
 
                             {activeTab === 'clients' && Number(lead.payTotal) > 0 && (
                               <div className="mt-3 flex flex-wrap gap-2 text-xs">
-                                <span className="rounded-md bg-gray-100 px-2 py-1 font-semibold text-gray-700">Total AED {Number(lead.payTotal).toLocaleString()}</span>
-                                <span className="rounded-md bg-green-50 px-2 py-1 font-semibold text-green-700">Paid AED {Number(lead.paidYet || 0).toLocaleString()}</span>
+                                <span className="rounded-md bg-gray-100 px-2 py-1 font-semibold text-gray-700">Total {currencyCode} {Number(lead.payTotal).toLocaleString()}</span>
+                                <span className="rounded-md bg-green-50 px-2 py-1 font-semibold text-green-700">Paid {currencyCode} {Number(lead.paidYet || 0).toLocaleString()}</span>
                                 <span className={`rounded-md px-2 py-1 font-semibold ${Number(lead.payBalance) > 0 ? 'bg-red-50 text-red-700' : 'bg-emerald-50 text-emerald-700'}`}>
-                                  {Number(lead.payBalance) > 0 ? `Balance AED ${Number(lead.payBalance).toLocaleString()}` : 'Fully paid'}
+                                  {Number(lead.payBalance) > 0 ? `Balance ${currencyCode} ${Number(lead.payBalance).toLocaleString()}` : 'Fully paid'}
                                 </span>
                               </div>
                             )}
@@ -2244,29 +2207,29 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
 
                         <div className="flex flex-wrap items-center gap-1.5 xl:max-w-[210px] xl:justify-end">
                           {activeTab === 'clients' && Number(lead.payBalance) > 0 && (
-                            <button onClick={() => openQuickPayForLead(lead)} title="Collect balance and receipt" className="inline-flex h-9 min-w-9 items-center justify-center rounded-md bg-[var(--cmg-red)] px-2 text-xs font-bold text-white hover:bg-[var(--cmg-red-dark)]">
+                            <button onClick={() => openQuickPayForLead(lead)} title="Collect balance and receipt" className="inline-flex h-9 min-w-9 items-center justify-center rounded-md bg-orange-500 px-2 text-xs font-bold text-white hover:bg-orange-600">
                               <Receipt className="h-4 w-4" />
                             </button>
                           )}
-                          <button onClick={() => handleViewLead(lead)} className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-[var(--cmg-blue-soft)] text-[var(--cmg-blue)] hover:bg-[#F5D9C6]" title="View lead">
+                          <button onClick={() => handleViewLead(lead)} className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-blue-50 text-blue-700 hover:bg-blue-100" title="View lead">
                             <Eye className="h-4 w-4" />
                           </button>
                           <Link
                             href={`/admin/leads/${lead.id}/edit`}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-[var(--cmg-blue-soft)] text-[var(--cmg-blue)] hover:bg-[#F5D9C6]"
+                            className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-cyan-50 text-cyan-700 hover:bg-cyan-100"
                             title="Open lead in new tab"
                           >
                             <ExternalLink className="h-4 w-4" />
                           </Link>
-                          <button onClick={() => openLeadActionModal(lead, 'appointment')} className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-[var(--cmg-blue-soft)] text-[var(--cmg-blue)] hover:bg-[#F5D9C6]" title="Book appointment">
+                          <button onClick={() => openLeadActionModal(lead, 'appointment')} className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-indigo-50 text-indigo-700 hover:bg-indigo-100" title="Book appointment">
                             <Calendar className="h-4 w-4" />
                           </button>
-                          <button onClick={() => openLeadActionModal(lead, 'followup')} className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-[var(--cmg-blue-soft)] text-[var(--cmg-blue)] hover:bg-[#F5D9C6]" title="Add follow-up">
+                          <button onClick={() => openLeadActionModal(lead, 'followup')} className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-amber-50 text-amber-700 hover:bg-amber-100" title="Add follow-up">
                             <Clock className="h-4 w-4" />
                           </button>
-                          <button onClick={() => openLeadActionModal(lead, 'remark')} className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-[var(--cmg-blue-soft)] text-[var(--cmg-blue)] hover:bg-[#F5D9C6]" title="Add remark">
+                          <button onClick={() => openLeadActionModal(lead, 'remark')} className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-slate-100 text-slate-700 hover:bg-slate-200" title="Add remark">
                             <MessageSquare className="h-4 w-4" />
                           </button>
                           {waLink && (
@@ -2275,59 +2238,58 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
                             </a>
                           )}
                           {(activeTab === 'leads' || activeTab === 'my-leads') && !isFoe(user) && (
-                            <button onClick={() => handleConvertToOpportunity(Number(lead.id))} className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-[var(--dmc-gold-soft)] text-[var(--dmc-green-dark)] hover:bg-[var(--dmc-gold)] hover:text-white" title="Start Opportunity Flow">
+                            <button onClick={() => handleConvertToOpportunity(Number(lead.id))} className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-emerald-50 text-emerald-700 hover:bg-emerald-100" title="Start Opportunity Flow">
                               <Target className="h-4 w-4" />
                             </button>
                           )}
                           {(activeTab === 'leads' || activeTab === 'my-leads') && !isFoe(user) && (isBranchManagerOrCeo(user) || String(lead.dmBranch?.abbrv || '').trim().toUpperCase() === 'HYD') && (
-                            <Link href={`/admin/leads/evaluation-report-flow?leadId=${lead.id}`} className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-[var(--cmg-blue-soft)] text-[var(--cmg-blue)] hover:bg-[#F5D9C6]" title="Generate Evaluation Report">
+                            <Link href={`/admin/leads/evaluation-report-flow?leadId=${lead.id}`} className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-teal-50 text-teal-700 hover:bg-teal-100" title="Generate Evaluation Report">
                               <ClipboardCheck className="h-4 w-4" />
                             </Link>
                           )}
                           {activeTab === 'rejected' && !isFoe(user) && (
-                            <button onClick={() => handleConvertToOpportunity(Number(lead.id))} className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-[var(--dmc-gold-soft)] text-[var(--dmc-green-dark)] hover:bg-[var(--dmc-gold)] hover:text-white" title="Restart Opportunity Flow from the beginning">
+                            <button onClick={() => handleConvertToOpportunity(Number(lead.id))} className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-emerald-50 text-emerald-700 hover:bg-emerald-100" title="Restart Opportunity Flow from the beginning">
                               <RotateCcw className="h-4 w-4" />
                             </button>
                           )}
                           {activeTab === 'clients' && isClientLead(lead) && (
-                            <button onClick={() => handleOpenClientOpportunityFlow(lead)} className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-[var(--cmg-blue-soft)] text-[var(--cmg-blue)] hover:bg-[#F5D9C6]" title="Edit opportunity flow">
+                            <button onClick={() => handleOpenClientOpportunityFlow(lead)} className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-amber-50 text-amber-700 hover:bg-amber-100" title="Edit opportunity flow">
                               <Settings className="h-4 w-4" />
                             </button>
                           )}
                           {activeTab === 'clients' && isClientLead(lead) && (
-                            <button onClick={() => handleOpenOperations(lead)} className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-[var(--cmg-blue-soft)] text-[var(--cmg-blue)] hover:bg-[#F5D9C6]" title="Open Operations">
+                            <button onClick={() => handleOpenOperations(lead)} className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-purple-50 text-purple-700 hover:bg-purple-100" title="Open Operations">
                               <Briefcase className="h-4 w-4" />
                             </button>
                           )}
                           {activeTab === 'opportunities' && (
-                            <Link href={`/admin/leads/opportunity-flow?leadId=${lead.id}`} className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-[var(--cmg-blue-soft)] text-[var(--cmg-blue)] hover:bg-[#F5D9C6]" title="Edit opportunity flow">
+                            <Link href={`/admin/leads/opportunity-flow?leadId=${lead.id}`} className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-amber-50 text-amber-700 hover:bg-amber-100" title="Edit opportunity flow">
                               <Settings className="h-4 w-4" />
                             </Link>
                           )}
                           {activeTab === 'opportunities' && isCeo(user) && (
-                            <button onClick={() => handleRevertOpportunity(lead)} className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-[var(--cmg-blue-soft)] text-[var(--cmg-blue)] hover:bg-[#F5D9C6]" title="Revert to lead">
+                            <button onClick={() => handleRevertOpportunity(lead)} className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-orange-50 text-orange-700 hover:bg-orange-100" title="Revert to lead">
                               <RotateCcw className="h-4 w-4" />
                             </button>
                           )}
-                          <Link href={`/admin/leads/${lead.id}/edit`} className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-[var(--cmg-blue-soft)] text-[var(--cmg-blue)] hover:bg-[#F5D9C6]" title="Edit lead">
+                          <Link href={`/admin/leads/${lead.id}/edit`} className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-gray-100 text-gray-700 hover:bg-gray-200" title="Edit lead">
                             <Edit className="h-4 w-4" />
                           </Link>
                           {isCeo(user) && (
-                            <button onClick={() => handleDeleteLead(lead.id)} className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-red-50 text-[var(--cmg-red)] hover:bg-red-100" title="Delete lead">
+                            <button onClick={() => handleDeleteLead(lead.id)} className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-red-50 text-red-700 hover:bg-red-100" title="Delete lead">
                               <Trash2 className="h-4 w-4" />
                             </button>
                           )}
                         </div>
                       </div>
-                    </motion.article>
+                    </article>
                   );
                 })}
-                </AnimatePresence>
               </div>
             )}
           </div>
 
-          {false && tableScrollWidth > 0 && (
+          {viewMode === 'list' && tableScrollWidth > 0 && (
             <div
               ref={topScrollRef}
               onScroll={handleTopScroll}
@@ -2341,11 +2303,11 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
               the sticky thead below can actually stick as the page scrolls -
               an ancestor with overflow-hidden on both axes would otherwise
               become the thead's sticky containing block instead of <main>. */}
-          <div ref={tableScrollRef} onScroll={handleTableScroll} className="hidden">
+          <div ref={tableScrollRef} onScroll={handleTableScroll} className={viewMode === 'list' ? 'overflow-x-auto' : 'hidden'}>
             <table className="min-w-full divide-y divide-gray-200">
-              <thead className="sticky z-10 bg-gray-50 shadow-sm" style={{ top: tabBarHeight }}>
+              <thead className="sticky top-0 z-10 bg-gray-50 shadow-sm">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     {activeTab === 'leads' && (
                       <input
                         type="checkbox"
@@ -2355,35 +2317,22 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
                       />
                     )}
                   </th>
-                  <SortableTh
-                    label={activeTab === 'clients' ? 'Client Information' : activeTab === 'opportunities' ? 'Opportunity Draft' : 'Lead Information'}
-                    sortKey="name" activeKey={leadSortKey} direction={leadSortDirection} onSort={toggleLeadSort}
-                  />
-                  <SortableTh label="Contact" sortKey="contact" activeKey={leadSortKey} direction={leadSortDirection} onSort={toggleLeadSort} />
-                  <SortableTh label="Interest / Source" sortKey="interest" activeKey={leadSortKey} direction={leadSortDirection} onSort={toggleLeadSort} />
-                  <SortableTh label="Latest Remark" sortKey="remark" activeKey={leadSortKey} direction={leadSortDirection} onSort={toggleLeadSort} />
-                  <SortableTh label="Pipeline Stage" sortKey="stage" activeKey={leadSortKey} direction={leadSortDirection} onSort={toggleLeadSort} />
+                  <SortableTh label="Contact Name" sortKey="name" activeKey={leadSortKey} direction={leadSortDirection} onSort={toggleLeadSort} />
+                  <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
+                  <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Phone</th>
                   <SortableTh label="Status" sortKey="status" activeKey={leadSortKey} direction={leadSortDirection} onSort={toggleLeadSort} />
-                  {activeTab === 'clients' && (
-                    <SortableTh label="Balance Due" sortKey="balanceDue" activeKey={leadSortKey} direction={leadSortDirection} onSort={toggleLeadSort} />
-                  )}
-                  <SortableTh label="Registered" sortKey="registered" activeKey={leadSortKey} direction={leadSortDirection} onSort={toggleLeadSort} />
-                  {isBranchManagerOrCeo(user) && (
-                    <SortableTh label="Branch" sortKey="branch" activeKey={leadSortKey} direction={leadSortDirection} onSort={toggleLeadSort} />
-                  )}
-                  <SortableTh label="Assigned To" sortKey="assignedTo" activeKey={leadSortKey} direction={leadSortDirection} onSort={toggleLeadSort} />
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Actions
-                  </th>
+                  <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Remarks</th>
+                  <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {sortedLeadRows.map((lead: Lead, index) => {
                   const leadId = getSelectableLeadId(lead);
+                  const name = `${lead.fname || ''} ${lead.mname || ''} ${lead.lname || ''}`.replace(/\s+/g, ' ').trim() || `Lead #${lead.id}`;
 
                   return (
                   <tr key={leadId ?? `${lead.email || 'lead'}-${index}`} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="px-4 py-2.5 whitespace-nowrap">
                       {activeTab === 'leads' && (
                         <input
                           type="checkbox"
@@ -2394,224 +2343,50 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
                         />
                       )}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div>
-                        {activeTab === 'leads' || activeTab === 'opportunities' ? (
-                          <Link
-                            href={activeTab === 'leads' ? `/admin/leads/${lead.id}/edit` : `/admin/leads/opportunity-flow?leadId=${lead.id}`}
-                            className="text-sm font-semibold text-blue-700 hover:text-blue-900 hover:underline text-left"
-                          >
-                            {lead.fname} {lead.mname} {lead.lname}
-                          </Link>
-                        ) : (
-                          <button
-                            onClick={() => handleOpenOperations(lead)}
-                            className="text-sm font-semibold text-blue-700 hover:text-blue-900 hover:underline text-left"
-                          >
-                            {lead.fname} {lead.mname} {lead.lname}
-                          </button>
-                        )}
+                    <td className="px-4 py-2.5 whitespace-nowrap max-w-[220px]">
+                      {activeTab === 'leads' || activeTab === 'opportunities' ? (
                         <Link
-                          href={`/admin/leads/${lead.id}/edit`}
-                          className="text-xs text-blue-600 hover:text-blue-800 hover:underline"
-                          title="Open lead"
+                          href={activeTab === 'leads' ? `/admin/leads/${lead.id}/edit` : `/admin/leads/opportunity-flow?leadId=${lead.id}`}
+                          className="block truncate text-sm font-semibold text-blue-700 hover:text-blue-900 hover:underline"
+                          title={name}
                         >
-                          ID: {lead.id}
+                          {name}
                         </Link>
-                        <div className="text-sm text-gray-500">
-                          {[
-                            lead.gender,
-                            lead.dob && !String(lead.dob).startsWith('1970-01-01') ? formatDate(lead.dob) : null,
-                          ]
-                            .filter(Boolean)
-                            .join(' • ') || '—'}
-                        </div>
-                        {(activeTab === 'opportunities' || activeTab === 'clients') && (
-                          <div className="text-xs text-green-700 mt-1">
-                            Opp #{(lead as any).resolved_opportunity_id || (lead as any).opportunity_id || '—'}
-                          </div>
-                        )}
-                        {activeTab === 'clients' && (lead as any).agreementNumber && (
-                          <div className="text-xs text-violet-700 mt-0.5 font-medium">
-                            {(lead as any).agreementNumber}
-                          </div>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900 flex items-center">
-                        <Mail className="w-4 h-4 mr-1 text-gray-400" />
-                        {lead.email}
-                      </div>
-                      <div className="text-sm text-gray-500 flex items-center mt-1">
-                        <Phone className="w-4 h-4 mr-1 text-gray-400" />
-                        {lead.phone}
-                      </div>
-                      {(() => {
-                        const waNumber = lead.whatsapp_number || lead.mobile;
-                        const waLink = getWhatsAppLink(waNumber);
-                        if (!waLink) return null;
-                        return (
-                          <a
-                            href={waLink}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            onClick={(e) => e.stopPropagation()}
-                            className="text-sm text-green-600 flex items-center mt-1 hover:text-green-700 hover:underline"
-                            title="Chat on WhatsApp"
-                          >
-                            <MessageCircle className="w-4 h-4 mr-1 text-green-500" />
-                            {waNumber}
-                          </a>
-                        );
-                      })()}
-                      <div className="text-sm text-gray-500 flex items-center mt-1" title={lead.address || undefined}>
-                        <MapPin className="w-4 h-4 mr-1 text-gray-400" />
-                        {/* Braanch is the authoritative "where this lead belongs" — lead.address is
-                            free text submitted by external intake forms (web-to-leads, etc.) and can
-                            be wrong/inconsistent with the branch (e.g. a residency-country default
-                            the visitor never changed), so it's shown as a hover tooltip, not the label. */}
-                        {lead.dmBranch?.name || lead.address || '—'}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="text-sm font-medium text-gray-900">{(lead as any).country_interest_label || lead.country_interest || '—'}</div>
-                      <div className="text-sm text-gray-600">{(lead as any).service_interest_label || lead.service_interest || '—'}</div>
-                      {resolveSourceName(lead) ? (
-                        <div className="text-xs text-indigo-600 mt-1">
-                          Source: {resolveSourceName(lead)}
-                        </div>
-                      ) : null}
-                      {lead.campaign ? (
-                        <div className="text-xs text-purple-600 mt-0.5">
-                          Campaign: {lead.campaign}
-                        </div>
-                      ) : null}
-                    </td>
-                    <td className="px-6 py-4 max-w-[180px]">
-                      {/* lead.lead_remark is intentionally excluded here — for
-                          web/pop/live-chat intake it's an auto-generated
-                          Source/Campaign/UTM summary (already shown in the
-                          Interest / Source column), not a real remark. Only
-                          genuine entries from crm_forum_leads_remarks count. */}
-                      {lead.latest_remark ? (
-                        <div
-                          className="text-xs text-gray-700 line-clamp-3 leading-relaxed"
-                          title={lead.latest_remark}
-                        >
-                          {lead.latest_remark}
-                        </div>
                       ) : (
-                        <span className="text-xs text-gray-400">No remarks</span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      {(() => {
-                        const stage = getPipelineStage(lead);
-                        const totalStages = PIPELINE_STAGES.length;
-                        const progressPct = Math.round(((stage.stepIndex) / (totalStages - 1)) * 100);
-                        return (
-                          <div className="space-y-1.5">
-                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${stage.color}`}>
-                              {stage.label}
-                            </span>
-                            <div className="relative w-full" title={`Stage ${stage.stepIndex + 1} of ${totalStages}: ${PIPELINE_STAGES[stage.stepIndex]?.label || stage.label}`}>
-                              <div className="w-full bg-gray-200 rounded-full h-1.5">
-                                <div className={`h-1.5 rounded-full transition-all ${
-                                  stage.stepIndex >= 10 ? 'bg-emerald-500' :
-                                  stage.stepIndex >= 9 ? 'bg-teal-500' :
-                                  stage.stepIndex >= 7 ? 'bg-violet-500' :
-                                  stage.stepIndex >= 5 ? 'bg-blue-500' :
-                                  stage.stepIndex >= 3 ? 'bg-amber-500' :
-                                  'bg-gray-400'
-                                }`} style={{ width: `${progressPct}%` }} />
-                              </div>
-                              <span className="text-[10px] text-gray-400 mt-0.5">{stage.stepIndex + 1}/{totalStages}</span>
-                            </div>
-                          </div>
-                        );
-                      })()}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex flex-col space-y-1">
                         <button
-                          type="button"
-                          onClick={() => openLeadActionModal(lead, 'status')}
-                          title="Click to update status with a remark"
-                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium hover:ring-2 hover:ring-offset-1 hover:ring-current transition-shadow ${getStatusColor(lead.status || 'Unknown')}`}
+                          onClick={() => handleOpenOperations(lead)}
+                          className="block w-full truncate text-left text-sm font-semibold text-blue-700 hover:text-blue-900 hover:underline"
+                          title={name}
                         >
-                          {lead.status || 'No Status'}
+                          {name}
                         </button>
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getPriorityColor(lead.priority)}`}>
-                          {lead.priority} Priority
-                        </span>
-                      </div>
-                    </td>
-                    {activeTab === 'clients' && (
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        {Number(lead.payTotal) > 0 ? (
-                          <div className="space-y-1">
-                            <div className="text-xs text-gray-500">
-                              Total: <span className="font-medium text-gray-800">AED {Number(lead.payTotal).toLocaleString()}</span>
-                            </div>
-                            <div className="text-xs text-gray-500">
-                              Paid: <span className="font-medium text-green-700">AED {Number(lead.paidYet || 0).toLocaleString()}</span>
-                            </div>
-                            {Number(lead.payBalance) > 0 ? (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-bold rounded-lg bg-red-100 text-red-700 border border-red-200">
-                                <AlertCircle className="w-3 h-3" />
-                                AED {Number(lead.payBalance).toLocaleString()}
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold rounded-lg bg-green-100 text-green-700">
-                                <CheckCircle className="w-3 h-3" />
-                                Fully Paid
-                              </span>
-                            )}
-                          </div>
-                        ) : (
-                          <span className="text-xs text-gray-400">—</span>
-                        )}
-                      </td>
-                    )}
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {formatDate(lead.regdate)}
-                    </td>
-                    {isBranchManagerOrCeo(user) && (
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {lead.dmBranch?.name || '—'}
-                      </td>
-                    )}
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      <div>
-                        {canAssignLeads ? (
-                          <button
-                            onClick={() => openAssignModal(lead)}
-                            className={lead.dmEmployeeByASSIGNTo?.name
-                              ? 'text-gray-700 hover:text-blue-700 font-medium underline decoration-dotted'
-                              : 'text-red-600 hover:text-red-800 font-medium underline'}
-                            title="Click to assign or reassign this lead"
-                          >
-                            {lead.dmEmployeeByASSIGNTo?.name || 'Unassigned'}
-                          </button>
-                        ) : (
-                          lead.dmEmployeeByASSIGNTo?.name || 'Unassigned'
-                        )}
-                      </div>
-                      <div className="text-xs text-gray-400">{lead.dmBranch?.name}</div>
-                      {lead.appointment && (
-                        <div className="flex items-center text-xs text-blue-600 mt-1">
-                          <Calendar className="w-3 h-3 mr-1" />
-                          {new Date(lead.appointment).toLocaleDateString()}
-                        </div>
                       )}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <div className="relative flex items-center space-x-2 flex-wrap gap-y-1">
+                    <td className="px-4 py-2.5 whitespace-nowrap max-w-[200px] truncate text-sm text-gray-700" title={lead.email || undefined}>
+                      {lead.email || '—'}
+                    </td>
+                    <td className="px-4 py-2.5 whitespace-nowrap text-sm text-gray-700">
+                      {lead.phone || lead.mobile || '—'}
+                    </td>
+                    <td className="px-4 py-2.5 whitespace-nowrap">
+                      <button
+                        type="button"
+                        onClick={() => openLeadActionModal(lead, 'status')}
+                        title="Click to update status with a remark"
+                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium hover:ring-2 hover:ring-offset-1 hover:ring-current transition-shadow ${getStatusColor(lead.status || 'Unknown')}`}
+                      >
+                        {lead.status || 'No Status'}
+                      </button>
+                    </td>
+                    <td className="px-4 py-2.5 max-w-[220px] truncate text-xs text-gray-600" title={lead.latest_remark || undefined}>
+                      {lead.latest_remark || <span className="text-gray-400">No remarks</span>}
+                    </td>
+                    <td className="px-4 py-2.5 whitespace-nowrap text-sm font-medium">
+                      <div className="flex items-center gap-1.5">
                         {activeTab === 'clients' && Number(lead.payBalance) > 0 && (
                           <button
                             onClick={() => openQuickPayForLead(lead)}
-                            title={`Collect balance AED ${Number(lead.payBalance).toLocaleString()} & generate receipt`}
+                            title={`Collect balance ${currencyCode} ${Number(lead.payBalance).toLocaleString()} & generate receipt`}
                             className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-orange-500 text-white hover:bg-orange-600"
                           >
                             <Receipt className="w-3.5 h-3.5" />
@@ -2897,6 +2672,7 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
                 <p><span className="font-medium">Country:</span> {currentLead.country_interest_label || currentLead.country_interest || 'N/A'}</p>
                 <p><span className="font-medium">Service:</span> {currentLead.service_interest_label || currentLead.service_interest || 'N/A'}</p>
                 <p><span className="font-medium">Source:</span> {resolveSourceName(currentLead) || 'N/A'}</p>
+                <p><span className="font-medium">Quality:</span> {currentLead.lead_quality || 'N/A'}</p>
               </div>
 
               <div className="rounded-lg border border-gray-200 p-4">
@@ -3124,70 +2900,20 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
                   <label className="block text-sm font-medium text-gray-700 mb-1">New Status</label>
                   <SearchableSelect
                     value={leadActionForm.status}
-                    onChange={(e) => {
-                      const nextStatus = e.target.value;
-                      const wasPScale = usesPriorityScale(leadActionForm.status);
-                      const isPScale = usesPriorityScale(nextStatus);
-                      setLeadActionForm({
-                        ...leadActionForm,
-                        status: nextStatus,
-                        priority: isPScale && !wasPScale ? 'P1' : !isPScale && wasPScale ? 'Medium' : leadActionForm.priority,
-                      });
-                    }}
+                    onChange={(e) => setLeadActionForm({ ...leadActionForm, status: e.target.value })}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                   >
                     <option value="">Select status</option>
-                    {/* A lot of real leads predate this dropdown — their status is
-                        free-text ("he is not interested", "no answer messaged on
-                        whatsapp", etc.) typed directly into the column rather than
-                        one of the values below. Surface it here instead of letting
-                        the select silently fall back to some other option, which
-                        would misrepresent what the lead's status actually is. */}
-                    {leadActionForm.status
-                      && !['New', 'untouched'].includes(leadActionForm.status)
-                      && !leadStatuses.some(s => s.name === leadActionForm.status)
-                      && (
-                        <option value={leadActionForm.status}>Current (legacy): {leadActionForm.status}</option>
-                      )}
-                    {leadStatuses.map(s => (
-                      <option key={s.id} value={s.name}>{s.name}</option>
-                    ))}
+                    <option value="Prospect">Prospect/Interested</option>
+                    <option value="Not Interested">Not Interested</option>
+                    <option value="DNQ">DNQ</option>
+                    <option value="Not_answered">Not Answered</option>
+                    <option value="Could Not Connect">Could Not Connect/Wrong Number</option>
+                    <option value="Call Back">Call Back</option>
+                    <option value="Abroad Lead">Abroad Lead</option>
+                    <option value="Junk">Junk</option>
+                    <option value="Duplicate">Duplicate</option>
                   </SearchableSelect>
-                </div>
-              )}
-
-              {leadActionType === 'status' && usesPriorityScale(leadActionForm.status) && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Priority</label>
-                  <SearchableSelect
-                    value={leadActionForm.priority}
-                    onChange={(e) => setLeadActionForm({ ...leadActionForm, priority: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="P1">P1</option>
-                    <option value="P2">P2</option>
-                    <option value="P3">P3</option>
-                    <option value="P4">P4</option>
-                  </SearchableSelect>
-                </div>
-              )}
-
-              {leadActionType === 'status' && metaQualityOptions.length > 0 && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Meta Lead Quality (optional)</label>
-                  <SearchableSelect
-                    value={leadActionForm.metaLeadQuality}
-                    onChange={(e) => setLeadActionForm({ ...leadActionForm, metaLeadQuality: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="">Don&apos;t report to Meta</option>
-                    {metaQualityOptions.map(opt => (
-                      <option key={opt} value={opt}>{opt}</option>
-                    ))}
-                  </SearchableSelect>
-                  <p className="text-xs text-gray-400 mt-1">
-                    Only applies to leads that came from Meta/Facebook Lead Ads — reports this outcome back so Meta can find similar high-quality leads.
-                  </p>
                 </div>
               )}
 
@@ -3474,6 +3200,16 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
                 <option value="Medium">Medium</option>
                 <option value="Low">Low</option>
               </SearchableSelect>
+              <SearchableSelect
+                value={formData.lead_quality || ''}
+                onChange={(e) => setFormData({...formData, lead_quality: e.target.value})}
+                className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">Select Quality</option>
+                <option value="Hot">Hot</option>
+                <option value="Warm">Warm</option>
+                <option value="Cold">Cold</option>
+              </SearchableSelect>
             </div>
             <div className="mt-6 flex justify-end space-x-3">
               <button
@@ -3651,21 +3387,21 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
               <div className="flex gap-3">
                 <div className="flex-1 bg-gray-50 rounded-lg p-3 text-center">
                   <div className="text-xs text-gray-500">Total Fee</div>
-                  <div className="font-bold text-gray-800">AED {Number(quickPayLead.lead.payTotal || 0).toLocaleString()}</div>
+                  <div className="font-bold text-gray-800">{currencyCode} {Number(quickPayLead.lead.payTotal || 0).toLocaleString()}</div>
                 </div>
                 <div className="flex-1 bg-green-50 rounded-lg p-3 text-center">
                   <div className="text-xs text-green-600">Paid So Far</div>
-                  <div className="font-bold text-green-700">AED {Number(quickPayLead.lead.paidYet || 0).toLocaleString()}</div>
+                  <div className="font-bold text-green-700">{currencyCode} {Number(quickPayLead.lead.paidYet || 0).toLocaleString()}</div>
                 </div>
                 <div className="flex-1 bg-red-50 rounded-lg p-3 text-center">
                   <div className="text-xs text-red-600">Balance Due</div>
-                  <div className="font-bold text-red-700">AED {Number(quickPayLead.lead.payBalance || 0).toLocaleString()}</div>
+                  <div className="font-bold text-red-700">{currencyCode} {Number(quickPayLead.lead.payBalance || 0).toLocaleString()}</div>
                 </div>
               </div>
               {!quickPayLead.success ? (
                 <>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Amount Received (AED)</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Amount Received ({currencyCode})</label>
                     <input type="number" min="0" value={quickPayLead.amount}
                       onChange={e => setQuickPayLead(p => p ? { ...p, amount: e.target.value } : null)}
                       className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
@@ -3677,21 +3413,10 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
                       onChange={e => setQuickPayLead(p => p ? { ...p, method: e.target.value } : null)}
                       className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
                       <option value="cash">Cash</option>
+                      <option value="interac">Interac</option>
                       <option value="bank_transfer">Bank Transfer</option>
-                      <option value="credit_card">Credit Card</option>
-                      <option value="debit_card">Debit Card</option>
-                      <option value="cheque">Cheque</option>
-                      <option value="online">Online</option>
-                      <optgroup label="Bank">
-                        {BANK_PAYMENT_OPTIONS.map((opt) => (
-                          <option key={opt.value} value={opt.value}>{opt.label}</option>
-                        ))}
-                      </optgroup>
-                      <optgroup label="Card / POS">
-                        {CARD_PAYMENT_OPTIONS.map((opt) => (
-                          <option key={opt.value} value={opt.value}>{opt.label}</option>
-                        ))}
-                      </optgroup>
+                      <option value="wire_transfer">Wire Transfer</option>
+                      <option value="stripe">Payment Gateway Stripe</option>
                     </SearchableSelect>
                   </div>
                   <div>

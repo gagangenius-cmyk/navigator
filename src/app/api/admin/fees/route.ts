@@ -4,6 +4,7 @@ import { isCeo } from '@/lib/roleChecks';
 import { CrmFee } from '@/models/CrmFee';
 import type { CrmFeeAttributes } from '@/models/CrmFee';
 import { Op } from 'sequelize';
+import { ensureCountryProgramMapping } from '@/lib/countryProgramMapping';
 
 export async function GET(request: NextRequest) {
   const auth = requireAuth(request, ['fees.manage']);
@@ -76,12 +77,19 @@ export async function POST(request: NextRequest) {
   const auth = requireAuth(request, ['fees.manage']);
   if (isAuthError(auth)) return auth;
   try {
-    const body = await request.json();
-    
+    // programType isn't a crm_fee column — it only exists to key the
+    // crm_countries_type_program mapping below, so a fee can't be added
+    // against a country/program pair that has no corresponding mapping row.
+    const { programType, ...feeFields } = await request.json();
+
     const newFee = await CrmFee.create({
-      ...body,
+      ...feeFields,
       status: 1,
     });
+
+    if (feeFields.service && feeFields.country && programType) {
+      await ensureCountryProgramMapping(Number(feeFields.country), Number(programType), Number(feeFields.service), Number(auth.id));
+    }
 
     return NextResponse.json(newFee.get({ plain: true }), { status: 201 });
   } catch (error) {
@@ -97,11 +105,10 @@ export async function PUT(request: NextRequest) {
   const auth = requireAuth(request, ['fees.manage']);
   if (isAuthError(auth)) return auth;
   try {
-    const body = await request.json();
-    const { id, ...updateData } = body;
+    const { id, programType, ...updateData } = await request.json();
 
     const fee = await CrmFee.findByPk(id);
-    
+
     if (!fee) {
       return NextResponse.json(
         { error: 'Fee not found' },
@@ -110,6 +117,12 @@ export async function PUT(request: NextRequest) {
     }
 
     await fee.update(updateData);
+
+    const service = updateData.service ?? fee.service;
+    const country = updateData.country ?? fee.country;
+    if (service && country && programType) {
+      await ensureCountryProgramMapping(Number(country), Number(programType), Number(service), Number(auth.id));
+    }
 
     return NextResponse.json(fee.get({ plain: true }));
   } catch (error) {

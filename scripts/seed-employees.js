@@ -18,9 +18,10 @@ const baseConfig = {
 
 // Single-branch company (Dubai SZR only) - see seed-branches.js.
 const BRANCH_ABBRV = { DXB: 'DXB SZR' };
-// crm_department has no seeded rows - src/app/admin/employees/page.tsx treats
-// this as a fixed id->label enum instead (DEPARTMENT_LABELS there). Keep
-// these ids in sync with that file if either changes.
+// Mirrors the seeded rows in crm_department (id -> name); the Add/Edit
+// Employee form at src/app/admin/employees/page.tsx now reads that table
+// directly via /api/admin/departments instead of a hardcoded enum, so keep
+// these ids in sync with the crm_department rows if either changes.
 const DEPT = { Sales: 1, Operations: 2, Admin: 3, HR: 4, Accounts: 5 };
 
 // Canonical active roster, matching the 9-role restructuring in
