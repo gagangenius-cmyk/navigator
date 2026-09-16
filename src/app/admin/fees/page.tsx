@@ -175,7 +175,10 @@ export default function FeesManagement() {
   const branchName = (id: number | null | undefined) =>
     lookup.branches.find(b => b.id === id)?.name || (id ? `#${id}` : 'N/A');
 
-  const { sorted: sortedFees, sortKey: feeSortKey, sortDirection: feeSortDirection, toggleSort: toggleFeeSort } = useSortableData(
+  const { sorted: sortedFees, sortKey: feeSortKey, sortDirection: feeSortDirection, toggleSort: toggleFeeSort } = useSortableData<
+    CrmFeeAttributes,
+    'id' | 'program' | 'country' | 'branch' | 'currency' | 'upfront' | 'profFee' | 'status'
+  >(
     fees,
     {
       id: (f) => f.id,
@@ -187,6 +190,8 @@ export default function FeesManagement() {
       profFee: (f) => f.prof_fee,
       status: (f) => f.status,
     },
+    'id',
+    'desc',
   );
 
   if (loading) {
