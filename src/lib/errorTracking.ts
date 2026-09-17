@@ -1,5 +1,3 @@
-import crypto from 'crypto';
-
 // Lightweight, dependency-free error reporting - no centralized error
 // tracking existed anywhere in this project; every failure path across all
 // ~261 API routes was a bare console.error with no aggregation, alerting,
@@ -65,7 +63,11 @@ export function captureError(error: unknown, context: CaptureErrorContext = {}):
     try {
       const message = error instanceof Error ? error.message : String(error);
       const errorName = error instanceof Error ? error.name : 'Error';
-      const eventId = crypto.randomUUID().replace(/-/g, '');
+      // globalThis.crypto (Web Crypto API), not Node's 'crypto' module - this
+      // file is loaded by src/instrumentation.ts under Edge Instrumentation,
+      // which can't resolve Node built-ins. globalThis.crypto.randomUUID is
+      // available in both the Node and Edge runtimes.
+      const eventId = globalThis.crypto.randomUUID().replace(/-/g, '');
 
       const payload: Record<string, unknown> = {
         event_id: eventId,
