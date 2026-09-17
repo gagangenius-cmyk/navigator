@@ -51,7 +51,7 @@ interface LeadFilterOptions {
 }
 
 type LeadActionType = 'appointment' | 'followup' | 'remark' | 'status';
-type LeadTab = 'leads' | 'my-leads' | 'opportunities' | 'clients' | 'duplicates' | 'rejected';
+type LeadTab = 'leads' | 'my-leads' | 'opportunities' | 'clients' | 'duplicates' | 'rejected' | 'today-activity';
 
 interface QuickPayLeadState {
   lead: Lead;
@@ -196,6 +196,8 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
   // than only when that tab is open, so the count doesn't go stale while
   // browsing other tabs.
   const [duplicateLeadsCount, setDuplicateLeadsCount] = useState(0);
+  // Same "badge stays fresh from any tab" treatment as duplicateLeadsCount above.
+  const [todayActivityCount, setTodayActivityCount] = useState(0);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
@@ -501,6 +503,16 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
           })
             .then((res) => res.ok ? res.json() : null)
             .then((json) => { if (json?.pagination) setDuplicateLeadsCount(json.pagination.total || 0); })
+            .catch(() => {});
+        }
+        if (activeTab === 'today-activity') {
+          setTodayActivityCount(data.pagination?.total || 0);
+        } else {
+          fetch(`/api/leads?opportunityView=today-activity&limit=1&page=1`, {
+            headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+          })
+            .then((res) => res.ok ? res.json() : null)
+            .then((json) => { if (json?.pagination) setTodayActivityCount(json.pagination.total || 0); })
             .catch(() => {});
         }
       } else {
@@ -1725,6 +1737,25 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
           >
             <XCircle className="w-4 h-4 mr-2" />
             Rejected
+          </button>
+          <button
+            onClick={() => handleTabChange('today-activity')}
+            className={`flex shrink-0 items-center px-3 py-2 rounded-md text-sm font-semibold transition-colors ${
+              activeTab === 'today-activity'
+                ? 'bg-teal-600 text-white shadow-sm'
+                : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+            }`}
+            title="Leads with a remark, follow-up, or appointment logged today"
+          >
+            <Clock className="w-4 h-4 mr-2" />
+            Today's Activity
+            {todayActivityCount > 0 && (
+              <span className={`ml-2 rounded-full px-1.5 py-0.5 text-xs font-bold ${
+                activeTab === 'today-activity' ? 'bg-white/25 text-white' : 'bg-teal-100 text-teal-700'
+              }`}>
+                {todayActivityCount.toLocaleString()}
+              </span>
+            )}
           </button>
         </div>
       </div>

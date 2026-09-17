@@ -234,6 +234,11 @@ export async function GET(request: NextRequest) {
       EXISTS (SELECT 1 FROM crm_opportunities orj JOIN crm_opportunity_workflow_reviews wrj ON wrj.opportunity_id = orj.id WHERE orj.leadId = l.id AND (wrj.finance_status = 'rejected' OR wrj.compliance_status = 'rejected'))
       OR EXISTS (SELECT 1 FROM crm_discount_approvals da WHERE da.leadId = l.id AND da.status = 'rejected')
     )`
+    // "Today's Activity": a remark, follow-up, or appointment logged today -
+    // the three crm_remarks.action values written by logLeadRemark() from,
+    // respectively, src/app/api/lead-remarks/route.ts, follow-up-reminders/route.ts,
+    // and appointments/route.ts.
+    const TODAY_ACTIVITY_SQL = `EXISTS (SELECT 1 FROM crm_remarks cr WHERE cr.lead_id = l.id AND cr.action IN ('remark_added', 'followup_added', 'appointment_booked') AND DATE(cr.created_at) = CURDATE())`
 
     if (isMyLeadsView) {
       if (!isBranchManagerOrCeo(currentUser)) {
@@ -303,6 +308,18 @@ export async function GET(request: NextRequest) {
     } else if (opportunityView === 'duplicates') {
       whereConditions.push('l.duplicate = 1')
       whereConditions.push(`NOT ${CLIENT_STATUS_SQL}`)
+      if (isBranchManager) {
+        whereConditions.push('l.branch = ?')
+        replacements.push(currentUser.branch)
+      } else if (isRegionalManager) {
+        whereConditions.push('l.region = ?')
+        replacements.push(currentUser.region)
+      } else if (!canViewAll) {
+        whereConditions.push('(l.Counsilor = ? OR l.assignTo = ?)')
+        replacements.push(currentUser.id, currentUser.id)
+      }
+    } else if (opportunityView === 'today-activity') {
+      whereConditions.push(TODAY_ACTIVITY_SQL)
       if (isBranchManager) {
         whereConditions.push('l.branch = ?')
         replacements.push(currentUser.branch)
