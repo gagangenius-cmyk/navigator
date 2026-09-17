@@ -11,7 +11,7 @@ import {
   Eye, CheckCircle, Clock,
   Target, X, Save, LayoutList, LayoutGrid, Briefcase, MessageSquare, Settings,
   Receipt, AlertCircle, Printer, Loader2, ChevronsLeft, ChevronsRight, ChevronLeft, ChevronRight, RotateCcw, ExternalLink, XCircle,
-  ClipboardCheck, Table2
+  ClipboardCheck, Table2, Send, Sparkles
 } from 'lucide-react';
 import LeadKanbanSimple from './LeadKanbanSimple';
 import ConversationHistoryModal from '@/components/shared/ConversationHistoryModal';
@@ -198,6 +198,16 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
   const [duplicateLeadsCount, setDuplicateLeadsCount] = useState(0);
   // Same "badge stays fresh from any tab" treatment as duplicateLeadsCount above.
   const [todayActivityCount, setTodayActivityCount] = useState(0);
+  // Self-contained WhatsApp-send modal - deliberately not folded into the
+  // leadActionType/leadActionForm state machine below (appointment/followup/
+  // remark/status), which is already this file's most tangled piece of
+  // state (see docs/ENTERPRISE_READINESS_ROADMAP.md Phase 2's test-suite
+  // notes on this file recurring across "bug fixed" commits) - a 5th branch
+  // there wasn't worth the added risk for something this small.
+  const [whatsAppLead, setWhatsAppLead] = useState<Lead | null>(null);
+  const [whatsAppMessage, setWhatsAppMessage] = useState('');
+  const [whatsAppSending, setWhatsAppSending] = useState(false);
+  const [suggestingRemark, setSuggestingRemark] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
@@ -306,6 +316,62 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
     if (!digits) return null;
     const query = whatsappTemplate ? `?text=${encodeURIComponent(whatsappTemplate)}` : '';
     return `https://wa.me/${digits}${query}`;
+  };
+
+  const handleSuggestRemark = async () => {
+    if (!currentLead?.id) return;
+    setSuggestingRemark(true);
+    try {
+      const response = await fetch(`/api/leads/${currentLead.id}/suggest-remark`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      });
+      const data = await response.json().catch(() => ({}));
+      if (response.ok && data.suggestion) {
+        setLeadActionForm((prev) => ({ ...prev, notes: data.suggestion }));
+      } else {
+        window.toast.error(data.error || 'Failed to generate a suggestion.');
+      }
+    } catch (error) {
+      console.error('Error generating remark suggestion:', error);
+      window.toast.error('Failed to generate a suggestion.');
+    } finally {
+      setSuggestingRemark(false);
+    }
+  };
+
+  const openWhatsAppModal = (lead: Lead) => {
+    setWhatsAppLead(lead);
+    setWhatsAppMessage(whatsappTemplate || '');
+  };
+
+  const handleSendWhatsApp = async () => {
+    if (!whatsAppLead || !whatsAppMessage.trim()) return;
+    setWhatsAppSending(true);
+    try {
+      const response = await fetch(`/api/leads/${whatsAppLead.id}/send-whatsapp`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ message: whatsAppMessage.trim() }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (response.ok && data.success) {
+        window.toast.success('WhatsApp message sent.');
+        setWhatsAppLead(null);
+        setWhatsAppMessage('');
+        fetchLeads();
+      } else {
+        window.toast.error(data.error || 'Failed to send WhatsApp message.');
+      }
+    } catch (error) {
+      console.error('Error sending WhatsApp message:', error);
+      window.toast.error('Failed to send WhatsApp message.');
+    } finally {
+      setWhatsAppSending(false);
+    }
   };
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -2264,9 +2330,14 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
                             <MessageSquare className="h-4 w-4" />
                           </button>
                           {waLink && (
-                            <a href={waLink} target="_blank" rel="noopener noreferrer" className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-green-50 text-green-700 hover:bg-green-100" title="WhatsApp">
+                            <a href={waLink} target="_blank" rel="noopener noreferrer" className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-green-50 text-green-700 hover:bg-green-100" title="Open in WhatsApp">
                               <MessageCircle className="h-4 w-4" />
                             </a>
+                          )}
+                          {waNumber && (
+                            <button onClick={() => openWhatsAppModal(lead)} className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-green-50 text-green-700 hover:bg-green-100" title="Send WhatsApp message from the CRM">
+                              <Send className="h-4 w-4" />
+                            </button>
                           )}
                           {(activeTab === 'leads' || activeTab === 'my-leads') && !isFoe(user) && (
                             <button onClick={() => handleConvertToOpportunity(Number(lead.id))} className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-emerald-50 text-emerald-700 hover:bg-emerald-100" title="Start Opportunity Flow">
@@ -3123,9 +3194,23 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
               )}
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {leadActionType === 'remark' || leadActionType === 'status' ? 'Remark' : 'Notes'}
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-sm font-medium text-gray-700">
+                    {leadActionType === 'remark' || leadActionType === 'status' ? 'Remark' : 'Notes'}
+                  </label>
+                  {leadActionType === 'remark' && (
+                    <button
+                      type="button"
+                      onClick={handleSuggestRemark}
+                      disabled={suggestingRemark}
+                      className="inline-flex items-center gap-1 rounded-md bg-purple-50 px-2 py-1 text-xs font-medium text-purple-700 hover:bg-purple-100 disabled:opacity-50"
+                      title="Draft a suggestion from this lead's recent activity (Claude)"
+                    >
+                      {suggestingRemark ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                      {suggestingRemark ? 'Drafting...' : 'Suggest'}
+                    </button>
+                  )}
+                </div>
                 <textarea
                   value={leadActionForm.notes}
                   onChange={(e) => setLeadActionForm({ ...leadActionForm, notes: e.target.value })}
@@ -3660,6 +3745,54 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
                 className="px-4 py-2 border border-gray-300 rounded-lg text-sm hover:bg-gray-50"
               >
                 Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {whatsAppLead && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-xl bg-white shadow-xl">
+            <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4">
+              <h3 className="flex items-center gap-2 text-sm font-semibold text-gray-900">
+                <Send className="h-4 w-4 text-green-600" />
+                Send WhatsApp to {[whatsAppLead.fname, whatsAppLead.lname].filter(Boolean).join(' ')}
+              </h3>
+              <button onClick={() => setWhatsAppLead(null)} className="text-gray-400 hover:text-gray-600">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="space-y-2 px-5 py-4">
+              <p className="text-xs text-gray-500">
+                To: {whatsAppLead.whatsapp_number || whatsAppLead.mobile || whatsAppLead.phone}
+              </p>
+              <textarea
+                value={whatsAppMessage}
+                onChange={(e) => setWhatsAppMessage(e.target.value)}
+                rows={5}
+                placeholder="Type your message..."
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-100"
+              />
+              <p className="text-xs text-gray-400">
+                Delivers only if this contact has messaged this WhatsApp number within the last 24 hours,
+                or if it matches an approved message template - a Meta WhatsApp Business API rule, not a CRM limitation.
+              </p>
+            </div>
+            <div className="flex justify-end gap-2 border-t border-gray-200 px-5 py-3">
+              <button
+                onClick={() => setWhatsAppLead(null)}
+                className="rounded-lg border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSendWhatsApp}
+                disabled={whatsAppSending || !whatsAppMessage.trim()}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50"
+              >
+                {whatsAppSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                Send
               </button>
             </div>
           </div>

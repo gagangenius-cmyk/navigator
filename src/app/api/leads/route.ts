@@ -239,7 +239,7 @@ export async function GET(request: NextRequest) {
     // the three crm_remarks.action values written by logLeadRemark() from,
     // respectively, src/app/api/lead-remarks/route.ts, follow-up-reminders/route.ts,
     // and appointments/route.ts.
-    const TODAY_ACTIVITY_SQL = `EXISTS (SELECT 1 FROM crm_remarks cr WHERE cr.lead_id = l.id AND cr.action IN ('remark_added', 'followup_added', 'appointment_booked') AND DATE(cr.created_at) = CURDATE())`
+    const TODAY_ACTIVITY_SQL = `EXISTS (SELECT 1 FROM crm_remarks cr WHERE cr.lead_id = l.id AND cr.action IN ('remark_added', 'followup_added', 'appointment_booked', 'whatsapp_sent') AND DATE(cr.created_at) = CURDATE())`
 
     if (isMyLeadsView) {
       if (!isBranchManagerOrCeo(currentUser)) {

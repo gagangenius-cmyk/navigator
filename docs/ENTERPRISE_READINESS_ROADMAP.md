@@ -71,22 +71,25 @@ Sources: [Salesmate — Best Enterprise CRM Software 2026](https://www.salesmate
 
 ---
 
-## Phase 3 — Client Communication & AI Assist (not started)
+## Phase 3 — Client Communication & AI Assist (in progress)
 
-**Open decisions needed before starting**:
-- WhatsApp send: Meta WhatsApp Cloud API vs. Twilio/MSG91?
-- AI features: which LLM provider/API key is authorized, and is a vision-capable model
-  acceptable for document OCR or is a dedicated OCR service preferred?
+**Decisions**: WhatsApp send → Meta WhatsApp Cloud API (user's call). AI features → Anthropic
+(Claude) (user's call).
 
-1. Outbound WhatsApp/SMS send wired into the existing `ops-conversations` history, with
-   a template-management page (reusing the `email-templates` page pattern).
-2. `/admin/notifications` page (or header bell dropdown, if one doesn't already exist)
-   surfacing `crm_notifications` with mark-as-read, using existing Pusher wiring.
-3. AI-assisted features, in order of value-to-effort:
-   - Passport/ID auto-fill via OCR on document upload.
-   - Draft-remark/follow-up suggestions during the lead-remark flow.
-   - Lead scoring — start with a heuristic/logistic-regression model over historical
-     conversion fields before reaching for an LLM call.
+**Correction to this doc's own earlier survey**: item 2 below ("no dedicated notification
+page") was wrong — `src/components/notifications/NotificationCenter.tsx` already exists,
+is wired into `DashboardLayout.tsx`'s header, and is a fully real-time (Pusher), mark-as-read
+notification bell covering `crm_notifications`. No gap here; dropped from scope.
+
+| # | Item | Status | Files |
+|---|------|--------|-------|
+| 1 | WhatsApp send | ✅ Done | `src/lib/whatsapp.ts` (new — mirrors `mailer.ts`'s exact shape: `sendWhatsAppMessage()` over Meta's Cloud API via plain `fetch`, self-migrating `crm_whatsapp_delivery_log` table, throws a descriptive error when `WHATSAPP_ACCESS_TOKEN`/`WHATSAPP_PHONE_NUMBER_ID` aren't set). New route `src/app/api/leads/[id]/send-whatsapp` (rate-limited by actor, also writes a normal row to `crm_forum_leads_remarks` so it shows in the lead's existing Remarks history, and a `whatsapp_sent` entry to `crm_remarks` — new `LeadRemarkAction` value, also added to the Today's Activity tab's activity-types list). UI: a new "Send WhatsApp message from the CRM" button next to the existing wa.me click-to-chat link in `LeadManagement.tsx`'s row actions, opening a small self-contained modal (deliberately *not* folded into the existing `leadActionType` state machine — see the code comment on why). **Not** wired into `ops-conversations` — that page is an unrelated internal client-portal chat thread (`dm_client_conversations`), a different audience (needs client-portal login) from a WhatsApp send to a lead's real phone number; conflating the two would have been the wrong integration point. Verified live: sending against an unconfigured environment correctly fails with `"WHATSAPP_ACCESS_TOKEN / WHATSAPP_PHONE_NUMBER_ID are not configured"` and logs it to `crm_whatsapp_delivery_log`; not-found-lead and missing-message cases both return the right error. |
+| 2 | Notification center | ✅ Already existed | See correction above — no work needed. |
+| 3a | AI: draft-remark suggestions | ✅ Done | `src/lib/anthropic.ts` (new — same plain-`fetch` pattern, defaults to Haiku since this is a short/cheap text task, `ANTHROPIC_MODEL` overridable). New route `src/app/api/leads/[id]/suggest-remark` (rate-limited — an LLM call has real per-request cost unlike most routes here) builds a prompt from the lead's last 10 `crm_remarks` activity rows plus basic lead fields, returns a 2-3 sentence draft. UI: a "Suggest" button (Claude icon) next to the Remark textarea in the Lead Action modal, visible only for the remark action type — fills the textarea, the counsellor edits/sends normally; nothing is auto-filed. Verified live: correctly returns 503 `"ANTHROPIC_API_KEY is not configured"` against this environment's current (unset) key. |
+| 3b | AI: passport/ID OCR auto-fill | ⏳ Next | Not started this batch — deferred deliberately rather than rushed; needs its own exploration of the document-upload surfaces (client portal vs. admin) and a field-mapping design before touching either. |
+| 3c | AI: lead scoring | ⏳ Not started | Start with a heuristic/logistic-regression model over historical conversion fields before reaching for an LLM call - a data-science pass, not just an API call. |
+
+**Verification**: dev server smoke-tested against the real dev DB. `npx tsc --noEmit` clean after every batch. Both new `.env` sections (`WHATSAPP_*`, `ANTHROPIC_*`) added as empty placeholders with setup comments, matching the existing Meta/Resend sections' style — every new capability here degrades to a clear, logged error rather than crashing when unconfigured, same contract as `mailer.ts`/`pusherServer.ts`/`errorTracking.ts`.
 
 ---
 
