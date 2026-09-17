@@ -4,6 +4,8 @@ import { sequelize } from '@/lib/sequelize';
 import { notifyUser, notifyRole } from '@/lib/notify';
 import { requireAuth, isAuthError } from '@/lib/apiAuth';
 import { isBranchManagerOrCeo, isCeo } from '@/lib/roleChecks';
+import { logAudit } from '@/lib/auditLog';
+import { captureError } from '@/lib/errorTracking';
 
 const ensureTable = async () => {
   await sequelize.query(`
@@ -241,6 +243,7 @@ export async function POST(request: NextRequest) {
     }, { status: 201 });
   } catch (error: any) {
     console.error('Error creating compliance approval:', error);
+    captureError(error, { route: 'POST /api/opportunity-compliance-approvals' });
     return NextResponse.json(
       { success: false, error: 'Failed to create compliance approval: ' + error.message },
       { status: 500 }
@@ -318,6 +321,18 @@ export async function PUT(request: NextRequest) {
       ]
     });
 
+    if (['approved', 'rejected'].includes(body.status)) {
+      await logAudit({
+        entityType: 'compliance_approval',
+        entityId: id,
+        action: body.status === 'approved' ? 'compliance_approved' : 'compliance_rejected',
+        summary: `Compliance review #${id} ${body.status}${body.reviewNotes ? `: ${body.reviewNotes}` : ''}`,
+        actorId: (auth as { id?: number }).id ?? null,
+        actorRole: (auth as { roleName?: string; type?: string }).roleName || (auth as { type?: string }).type || null,
+        after: { status: body.status, reviewNotes: body.reviewNotes || null },
+      });
+    }
+
     // Advance the compliance gate on crm_opportunity_workflow_reviews so the client
     // can surface in the Client List (src/app/api/admin/clients/route.ts reads
     // finance_status/compliance_status from there, not from this approvals table).
@@ -381,6 +396,7 @@ export async function PUT(request: NextRequest) {
     });
   } catch (error: any) {
     console.error('Error updating compliance approval:', error);
+    captureError(error, { route: 'PUT /api/opportunity-compliance-approvals' });
     return NextResponse.json(
       { success: false, error: 'Failed to update compliance approval: ' + error.message },
       { status: 500 }

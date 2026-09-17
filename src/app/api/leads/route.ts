@@ -12,6 +12,7 @@ import { recordLeadAssignment, logLeadRemark } from '@/lib/leadRemarks'
 import { ensureClientActualNameColumn } from '@/lib/ensureClientActualNameColumn'
 import { buildDefaultLeadData, insertLeadRecord } from '@/lib/leadDefaults'
 import { captureError } from '@/lib/errorTracking'
+import { checkRateLimit, recordFailedAttempt } from '@/lib/rateLimiter'
 
 interface CountResult {
   total: number
@@ -363,6 +364,20 @@ export async function GET(request: NextRequest) {
       if (!isBranchManagerOrCeo(currentUser)) {
         return NextResponse.json({ error: 'Only the CEO or a Branch Manager can export leads' }, { status: 403 })
       }
+
+      // Every export pulls the full unpaginated lead/PII set - throttle by
+      // actor so a compromised or scripted session can't scrape the whole
+      // table via repeated exports.
+      const exportRateLimitKey = `leads-export:${currentUser.id}`
+      const exportRateLimit = checkRateLimit(exportRateLimitKey, { windowMs: 15 * 60 * 1000, maxAttempts: 10 })
+      if (!exportRateLimit.allowed) {
+        return NextResponse.json(
+          { error: 'Too many exports in a short time. Please try again in a few minutes.' },
+          { status: 429, headers: { 'Retry-After': String(exportRateLimit.retryAfterSeconds) } }
+        )
+      }
+      recordFailedAttempt(exportRateLimitKey, { windowMs: 15 * 60 * 1000 })
+
       const leads = await sequelize.query<any>(`
         SELECT
           l.id, l.fname, l.mname, l.lname, l.email, l.phone, l.mobile, l.whatsapp_number, l.nationality,

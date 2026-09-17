@@ -7,6 +7,7 @@ import { getDiscountTier, canApproveDiscountTier, discountTierLabel } from '@/li
 import { getDiscountTierThresholds } from '@/lib/discountTierConfig';
 import { notifyUser } from '@/lib/notify';
 import { logDataAccess } from '@/lib/dataAccessAudit';
+import { logAudit } from '@/lib/auditLog';
 import { captureError } from '@/lib/errorTracking';
 
 // roleName is the only reliable signal for CEO (see lib/roleChecks.ts: CEO
@@ -85,7 +86,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
   } catch (error: any) {
     console.error('Error fetching discount approval:', error);
-    captureError(error, { route: '/api/discount-approvals/[id]' });
+    captureError(error, { route: 'GET /api/discount-approvals/[id]' });
     return NextResponse.json(
       { success: false, error: 'Failed to fetch discount approval: ' + error.message },
       { status: 500 }
@@ -183,6 +184,19 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
     const existingApproval = (existingResult as any[])[0];
 
+    if (['approved', 'rejected'].includes(body.status)) {
+      const reviewer = getAuthenticatedUser(request);
+      await logAudit({
+        entityType: 'discount_approval',
+        entityId: discountId,
+        action: body.status === 'approved' ? 'discount_approved' : 'discount_rejected',
+        summary: `Discount request #${discountId} ${body.status}`,
+        actorId: reviewer?.id ?? null,
+        actorRole: (reviewer as { roleName?: string; type?: string } | null)?.roleName || (reviewer as { type?: string } | null)?.type || null,
+        after: { status: body.status, discountAmount: existingApproval?.discountAmount, discountedAmount: existingApproval?.discountedAmount },
+      });
+    }
+
     if (['approved', 'rejected'].includes(body.status) && existingApproval?.leadId) {
       const [leadRow] = await sequelize.query<{ fname: string; lname: string }>(
         `SELECT fname, lname FROM crm_forum_leads WHERE id = ? LIMIT 1`,
@@ -244,6 +258,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
   } catch (error: any) {
     console.error('Error updating discount approval:', error);
+    captureError(error, { route: 'PUT /api/discount-approvals/[id]' });
     return NextResponse.json(
       { success: false, error: 'Failed to update discount approval: ' + error.message },
       { status: 500 }
@@ -253,7 +268,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    if (!getCeoApprover(request)) {
+    const ceo = getCeoApprover(request);
+    if (!ceo) {
       return NextResponse.json({ error: 'Only the CEO can delete records' }, { status: 403 });
     }
 
@@ -283,6 +299,15 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
       replacements: [discountId]
     });
 
+    await logAudit({
+      entityType: 'discount_approval',
+      entityId: discountId,
+      action: 'discount_approval_deleted',
+      summary: `Discount request #${discountId} deleted`,
+      actorId: ceo.id,
+      actorRole: ceo.roleName || ceo.type || null,
+    });
+
     return NextResponse.json({
       success: true,
       message: 'Discount approval deleted successfully'
@@ -290,6 +315,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
 
   } catch (error: any) {
     console.error('Error deleting discount approval:', error);
+    captureError(error, { route: 'DELETE /api/discount-approvals/[id]' });
     return NextResponse.json(
       { success: false, error: 'Failed to delete discount approval: ' + error.message },
       { status: 500 }

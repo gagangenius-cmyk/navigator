@@ -5,6 +5,9 @@ import { notifyUser } from '@/lib/notify';
 import { resolveBranchCurrency } from '@/lib/branchCurrency';
 import { formatDocumentNumber } from '@/lib/documentNumbering';
 import { requireAuth, isAuthError } from '@/lib/apiAuth';
+import { logAudit } from '@/lib/auditLog';
+import { captureError } from '@/lib/errorTracking';
+import { checkRateLimit, recordFailedAttempt } from '@/lib/rateLimiter';
 
 let dbInitialized = false;
 const ensureDB = async () => { if (!dbInitialized) { await connectDB(); dbInitialized = true; } };
@@ -20,6 +23,19 @@ export async function PUT(request: NextRequest) {
     const auth = requireAuth(request, ['finance.view', 'finance.manage', 'payments.view']);
     if (isAuthError(auth)) return auth;
     const currentUser = auth;
+
+    // Throttle by the accountant's own id - this guards against a
+    // compromised/scripted session mass-verifying or mass-rejecting
+    // payments, not anonymous brute force.
+    const rateLimitKey = `payment-verify:${currentUser.id}`;
+    const rateLimit = checkRateLimit(rateLimitKey, { windowMs: 15 * 60 * 1000, maxAttempts: 60 });
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        { error: 'Too many payment reviews in a short time. Please try again in a few minutes.' },
+        { status: 429, headers: { 'Retry-After': String(rateLimit.retryAfterSeconds) } }
+      );
+    }
+    recordFailedAttempt(rateLimitKey, { windowMs: 15 * 60 * 1000 });
 
     await ensureDB();
     const body = await request.json();
@@ -47,6 +63,16 @@ export async function PUT(request: NextRequest) {
         type: QueryTypes.UPDATE,
       }
     );
+
+    await logAudit({
+      entityType: 'opportunity_payment',
+      entityId: paymentId,
+      action: status === 'verified' ? 'payment_verified' : 'payment_rejected',
+      summary: `Payment #${paymentId} ${status} by Accounts${remarks ? `: ${remarks}` : ''}`,
+      actorId: currentUser?.id ?? null,
+      actorRole: currentUser?.roleName || currentUser?.type || null,
+      after: { status, remarks: remarks || null },
+    });
 
     let agreementNumber: string | null = null;
 
@@ -204,6 +230,7 @@ export async function PUT(request: NextRequest) {
     });
   } catch (error) {
     console.error('Error verifying payment:', error);
+    captureError(error, { route: 'PUT /api/admin/opportunity-payments/verify' });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

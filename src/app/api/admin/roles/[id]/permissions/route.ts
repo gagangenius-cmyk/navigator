@@ -4,6 +4,8 @@ import { CrmPermission } from '@/models/CrmPermission';
 import { CrmRolePermission } from '@/models/CrmRolePermission';
 import { sequelize } from '@/lib/sequelize';
 import { requireAuth, isAuthError } from '@/lib/apiAuth';
+import { logAudit } from '@/lib/auditLog';
+import { captureError } from '@/lib/errorTracking';
 
 export async function GET(
   request: NextRequest,
@@ -67,6 +69,15 @@ export async function PUT(
     const body = await request.json();
     const permissionKeys: string[] = Array.isArray(body.permissionKeys) ? body.permissionKeys : [];
 
+    // Before-state for the audit entry below - the granted key set as it
+    // stood immediately prior to this write.
+    const previousGrants = await CrmRolePermission.findAll({ where: { role_id: roleId, status: 1 } });
+    const previousPermissionIds = previousGrants.map((grant) => grant.getDataValue('permission_id'));
+    const previousPermissions = previousPermissionIds.length
+      ? await CrmPermission.findAll({ where: { id: previousPermissionIds } })
+      : [];
+    const previousKeys = previousPermissions.map((permission) => permission.getDataValue('permission_key')).sort();
+
     const permissions = await CrmPermission.findAll({ where: { permission_key: permissionKeys, status: 1 } });
     const permissionIds = permissions.map((permission) => permission.getDataValue('id'));
 
@@ -81,9 +92,22 @@ export async function PUT(
       );
     }
 
+    const newKeys = permissions.map((permission) => permission.getDataValue('permission_key')).sort();
+    await logAudit({
+      entityType: 'role_permissions',
+      entityId: roleId,
+      action: 'role_permissions_updated',
+      summary: `Permissions updated for role "${role.getDataValue('name')}" (#${roleId})`,
+      actorId: (auth as { id?: number }).id ?? null,
+      actorRole: (auth as { roleName?: string; type?: string }).roleName || (auth as { type?: string }).type || null,
+      before: { permissionKeys: previousKeys },
+      after: { permissionKeys: newKeys },
+    });
+
     return NextResponse.json({ roleId, grantedCount: permissionIds.length });
   } catch (error) {
     console.error('Error updating role permissions:', error);
+    captureError(error, { route: 'PUT /api/admin/roles/[id]/permissions' });
     return NextResponse.json({ error: 'Failed to update role permissions' }, { status: 500 });
   }
 }

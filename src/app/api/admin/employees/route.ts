@@ -5,6 +5,8 @@ import { HRService } from '@/services/hr-service';
 import { verifyToken } from '@/lib/auth';
 import { isCeo } from '@/lib/roleChecks';
 import { requireAuth, isAuthError } from '@/lib/apiAuth';
+import { logAudit } from '@/lib/auditLog';
+import { captureError } from '@/lib/errorTracking';
 
 let dbReady = false;
 const ensureDB = async () => { if (!dbReady) { await connectDB(); dbReady = true; } };
@@ -124,12 +126,35 @@ export async function PUT(request: NextRequest) {
     if (!Number.isFinite(id)) {
       return NextResponse.json({ error: 'Valid employee id is required' }, { status: 400 });
     }
+    // Before-state, so a role/status/branch change (the privilege-relevant
+    // fields) can be diffed and audit-logged below - a plain field edit
+    // (phone number, address, ...) isn't worth a log entry.
+    const before = await HRService.getEmployeeById(id);
     const employee = await HRService.updateEmployee({ ...body, id });
     if (!employee) return NextResponse.json({ error: 'Employee not found' }, { status: 404 });
+
+    const after = employee as { role?: number; status?: number; branch?: number };
+    const beforeTyped = before as { role?: number; status?: number; branch?: number } | null;
+    if (beforeTyped && (
+      beforeTyped.role !== after.role || beforeTyped.status !== after.status || beforeTyped.branch !== after.branch
+    )) {
+      await logAudit({
+        entityType: 'employee',
+        entityId: id,
+        action: 'employee_privileges_changed',
+        summary: `Employee #${id} role/status/branch changed`,
+        actorId: (auth as { id?: number }).id ?? null,
+        actorRole: (auth as { roleName?: string; type?: string }).roleName || (auth as { type?: string }).type || null,
+        before: { role: beforeTyped.role, status: beforeTyped.status, branch: beforeTyped.branch },
+        after: { role: after.role, status: after.status, branch: after.branch },
+      });
+    }
+
     return NextResponse.json(employee);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to update employee';
     console.error('Error updating employee:', error);
+    captureError(error, { route: 'PUT /api/admin/employees' });
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
@@ -148,9 +173,20 @@ export async function DELETE(request: NextRequest) {
     if (!Number.isFinite(id)) {
       return NextResponse.json({ error: 'Valid employee id is required' }, { status: 400 });
     }
-    return NextResponse.json(await HRService.softDeleteEmployee(id));
+    const result = await HRService.softDeleteEmployee(id);
+    await logAudit({
+      entityType: 'employee',
+      entityId: id,
+      action: 'employee_deactivated',
+      summary: `Employee #${id} deactivated`,
+      actorId: currentUser.id,
+      actorRole: currentUser.roleName || currentUser.type || null,
+      after: { status: 0 },
+    });
+    return NextResponse.json(result);
   } catch (error) {
     console.error('Error deleting employee:', error);
+    captureError(error, { route: 'DELETE /api/admin/employees' });
     return NextResponse.json({ error: 'Failed to delete employee' }, { status: 500 });
   }
 }
