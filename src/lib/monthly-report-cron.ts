@@ -1,4 +1,5 @@
 import { MonthlyReportService } from '@/services/monthly-report-service';
+import { withCronRunLog } from '@/lib/cronRunLog';
 
 type CronTask = {
   start: () => void;
@@ -42,7 +43,7 @@ export async function startMonthlyReportCron() {
     schedule.expression,
     async () => {
       try {
-        await MonthlyReportService.runMonthlyReportScan();
+        await withCronRunLog('monthly_report_scan', () => MonthlyReportService.runMonthlyReportScan());
       } catch (error) {
         console.error('Monthly report scan failed:', error);
       }

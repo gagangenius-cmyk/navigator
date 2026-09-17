@@ -2,7 +2,7 @@ import crypto from 'crypto';
 import { QueryTypes } from 'sequelize';
 import { sequelize } from '@/lib/sequelize';
 import { hashPassword, verifyPassword } from '@/lib/auth';
-import { sendEmail } from '@/lib/mailer';
+import { enqueueJob } from '@/lib/jobQueue';
 import { getChecklistRulesForService } from '@/lib/clientChecklistRules';
 
 type VerifiedLead = {
@@ -24,13 +24,11 @@ type VerifiedOpportunity = {
 type DocumentStatus = 'Pending' | 'Submitted' | 'Approved' | 'Rejected' | 'Resubmit Requested';
 
 const sendClientEmail = async (to: string, subject: string, html: string) => {
-  try {
-    await sendEmail({ to, subject, html });
-  } catch (error) {
-    // Client-facing email is best-effort - a missing RESEND_API_KEY in dev
-    // must never block credential generation or document review.
-    console.warn('Failed to send client portal email:', error instanceof Error ? error.message : error);
-  }
+  // Queued rather than sent inline: a missing RESEND_API_KEY in dev or a
+  // transient Resend outage must never block credential generation or
+  // document review, and this way it gets retry/backoff instead of one
+  // best-effort attempt - see src/lib/job-queue-cron.ts's 'send_email' handler.
+  await enqueueJob('send_email', { to, subject, html });
 };
 
 export class ClientPortalService {

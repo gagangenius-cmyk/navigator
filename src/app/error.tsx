@@ -5,6 +5,16 @@ import { useEffect } from 'react';
 export default function AppError({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
   useEffect(() => {
     console.error('Application rendering error:', error);
+    // Mirrors global-error.tsx's own report call - this boundary catches
+    // segment-level errors (e.g. a client component crashing after
+    // hydration) that never pass through a server request at all, so
+    // instrumentation.ts's onRequestError hook can't see them. Same
+    // fire-and-forget contract: a failed report must never itself throw.
+    fetch('/api/client-error-report', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: error.message, digest: error.digest, stack: error.stack, url: window.location.href }),
+    }).catch(() => {});
   }, [error]);
 
   return (

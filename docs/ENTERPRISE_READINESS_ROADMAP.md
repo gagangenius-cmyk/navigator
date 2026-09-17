@@ -53,24 +53,21 @@ Sources: [Salesmate — Best Enterprise CRM Software 2026](https://www.salesmate
 
 ---
 
-## Phase 2 — Reliability Infrastructure (not started)
+## Phase 2 — Reliability Infrastructure (items 1, 2, 4 done; item 3 pending a decision)
 
-**Open decision needed before starting**: async job processing via (a) a DB-backed queue
-table polled by the existing `node-cron` heartbeat in `src/instrumentation.ts` — zero new
-infra — or (b) Redis + BullMQ. Recommend (a) unless Redis is already available in the
-deployment environment.
+**Queue decision**: confirmed no Redis/ioredis/bullmq anywhere in this project (checked
+`node_modules`, `.env`) — went with (a), a DB-backed queue table polled by the existing
+`node-cron` heartbeat. Zero new infrastructure to provision or operate.
 
-1. Move `src/lib/mailer.ts` (Resend) sends and Pusher notification fan-out off the
-   synchronous request path onto the queue, with retry + a "failed jobs" admin view.
-2. Give `lead-pool-sla-cron.ts` / renewal reminders / monthly report scan visible run
-   history instead of silent no-ops.
-3. Baseline test suite: configure the already-present (unconfigured) Playwright
-   devDependency for a few critical end-to-end flows (login+MFA, lead → opportunity →
-   payment) + lightweight unit tests around money-critical pure functions (fee/
-   exchange-rate calc, discount-approval state machine). **Ask which flow breaks most
-   often** (recent git history shows repeated "bug fixed" commits) to target the
-   highest-ROI regression test first.
-4. Add `error.tsx`/`global-error.tsx` under `src/app/admin` if not already present.
+| # | Item | Status | Files |
+|---|------|--------|-------|
+| 1 | Async job queue | ✅ Done | `src/lib/jobQueue.ts` (new `crm_job_queue` table, self-migrating; `enqueueJob()`, `processDueJobs()` with exponential backoff up to 5 attempts, `retryFailedJob()`, `getJobQueueSummary()`). `src/lib/job-queue-cron.ts` (new — runs every minute via `node-cron`, registers the `send_email` handler wrapping the existing `sendEmail()` in `mailer.ts`). Wired into `src/instrumentation.ts` alongside the other 3 cron starts. Migrated the two email call sites that were pure fire-and-forget with no synchronous status dependency: `hr-joining-exit-service.ts`'s workflow notifications and `client-portal-service.ts`'s client emails. **Deliberately left un-migrated**: `monthly-report-service.ts` and `hr-service.ts`'s password-reset email both return an immediate Sent/Failed status to their caller (an admin-visible per-recipient result list, and an `emailSent` flag HR relies on to know whether to manually share a reset password) — queuing them would make that immediate status inaccurate, a real behavior change beyond infra hardening. Revisit only if that's an accepted tradeoff. |
+| 2 | Cron run visibility | ✅ Done | `src/lib/cronRunLog.ts` (new — self-migrating `crm_cron_run_log` table, `withCronRunLog()` wrapper records status/duration/detail per run). Wired into all 4 cron tasks (lead pool SLA sweep, renewal reminders, monthly report scan, job queue processor) — each `catch` block is unchanged, so existing console.error behavior is preserved, this is additive. |
+| — | Failed-jobs / cron-history admin view | ✅ Done | `src/app/admin/system-jobs/page.tsx` + `src/app/api/system-jobs/route.ts` (GET for queue counts/recent jobs + cron run history, POST for the "Retry" action on a failed job — audit-logged via `logAudit()`). Nav entry + `roleAccess.ts` permission added, same `admin.access`/`roles.manage` gate as Audit Log. |
+| 4 | Uncaught render errors get reported | ✅ Done | `src/app/error.tsx` already existed as a working boundary but only did `console.error` — now also POSTs to `/api/client-error-report` (mirroring `global-error.tsx`, which already did this), so segment-level client crashes reach Sentry via `captureError`, not just fatal root-layout failures. No new `error.tsx` needed under `/admin` — the root one already covers it (no more specific one exists to override it). |
+| 3 | Baseline test suite | ⏳ Pending a scope decision | Git-log evidence now backs a concrete target: `src/app/api/leads/route.ts` and `src/components/leads/LeadManagement.tsx` recur across multiple "bug fixed" commits (`53f9e4c`, `461665a`, `aefd98a`), and the lead→opportunity→payment→agreement pipeline dominates the largest fix (`adebb74 "agreement fixed"`, 12 files: clients, invoices-payments, opportunity-flow-wizard, receipt, agreement templates, fee resolver). That's the highest-ROI target for a first Playwright e2e test. **Still needs a decision before starting**: this project's only database is the shared remote dev DB (`crm_next` — the same one this whole Phase 1/2 build was verified against read-only); running a real e2e test suite needs either a way to point it at an isolated test database, or tests written to clean up after themselves precisely against real data. Not something to decide unilaterally. |
+
+**Verification**: dev server smoke-tested against the real dev DB — `job_queue_processor` cron confirmed running on its 1-minute schedule and logging a real row to `crm_cron_run_log` (`{"processed":0,"succeeded":0,"failed":0}`, `durationMs: 1521`); `/admin/system-jobs` and `/api/system-jobs` both gate and render correctly. `npx tsc --noEmit` clean after every batch of edits. Did not manufacture a test job through a real business workflow to verify the retry/failure path live, for the same reason mutating endpoints weren't exercised in Phase 1 (shared dev DB) — verified by code review instead.
 
 ---
 

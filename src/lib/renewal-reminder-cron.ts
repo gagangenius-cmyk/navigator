@@ -1,4 +1,5 @@
 import { RenewalReminderService } from '@/services/renewal-reminder-service';
+import { withCronRunLog } from '@/lib/cronRunLog';
 
 type CronTask = {
   start: () => void;
@@ -42,7 +43,7 @@ export async function startRenewalReminderCron() {
     schedule.expression,
     async () => {
       try {
-        await RenewalReminderService.runDailyReminderScan();
+        await withCronRunLog('renewal_reminder_scan', () => RenewalReminderService.runDailyReminderScan());
       } catch (error) {
         console.error('Daily renewal reminder scan failed:', error);
       }

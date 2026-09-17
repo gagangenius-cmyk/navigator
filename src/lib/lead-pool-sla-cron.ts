@@ -1,4 +1,5 @@
 import { runSlaSweep, getSlaMinutes } from '@/lib/leadPool';
+import { withCronRunLog } from '@/lib/cronRunLog';
 
 type CronTask = {
   start: () => void;
@@ -47,7 +48,7 @@ export async function startLeadPoolSlaCron() {
     SCHEDULE_EXPRESSION,
     async () => {
       try {
-        const result = await runSlaSweep();
+        const result = await withCronRunLog('lead_pool_sla_sweep', () => runSlaSweep());
         if (result.scanned > 0) {
           console.log(`Lead pool SLA sweep: ${result.autoAssigned} auto-assigned, ${result.stillUnassignable} still unassignable (of ${result.scanned} overdue).`);
         }

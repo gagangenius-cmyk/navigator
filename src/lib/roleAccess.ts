@@ -142,6 +142,7 @@ export const canAccessAdminPath = (user: AccessUser | null | undefined, pathname
     { test: (value) => value === '/admin/programs' || value === '/admin/fees' || value === '/admin/currency' || value === '/admin/countries', permissions: ['programs.manage', 'fees.manage', 'currency.manage', 'countries.manage'] },
     { test: (value) => value === '/admin/roles' || value.startsWith('/admin/roles/'), permissions: ['roles.manage', 'admin.access'] },
     { test: (value) => value === '/admin/audit-log', permissions: ['roles.manage', 'admin.access'] },
+    { test: (value) => value === '/admin/system-jobs', permissions: ['roles.manage', 'admin.access'] },
     { test: (value) => value === '/admin/market-sources', permissions: ['marketing.manage'] },
     { test: (value) => value === '/admin/campaigns', permissions: ['campaigns.manage'] },
     { test: (value) => value === '/admin/email-templates', permissions: ['templates.manage'] },

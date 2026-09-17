@@ -2,7 +2,7 @@ import crypto from 'crypto';
 import { QueryTypes } from 'sequelize';
 import { sequelize } from '@/lib/sequelize';
 import { HRService } from '@/services/hr-service';
-import { sendEmail } from '@/lib/mailer';
+import { enqueueJob } from '@/lib/jobQueue';
 
 type CandidateInput = { full_name: string; email: string; phone?: string; applied_position: string; applied_date?: string; source?: string; created_by?: string };
 type ExitInput = {
@@ -49,14 +49,12 @@ export class HRJoiningExitService {
 
     // Only attempt a real send when the recipient is an actual email address - many callers
     // pass a role name (e.g. "HR", "Branch Manager / Director of Sales") that has no inbox to
-    // resolve to. Best-effort: a missing RESEND_API_KEY or send failure must never break the
-    // workflow action that triggered this notification.
+    // resolve to. Queued rather than sent inline: nothing here depends on knowing the outcome
+    // synchronously, so this gets retry/backoff via the job queue for free instead of a single
+    // best-effort attempt - see src/lib/job-queue-cron.ts's 'send_email' handler. enqueueJob()
+    // never throws (same fire-and-forget contract as every other log/notify hook here).
     if (recipient.includes('@')) {
-      try {
-        await sendEmail({ to: recipient, subject, html: `<p>${subject}</p>` });
-      } catch (error) {
-        console.warn('HR workflow notification email failed:', error instanceof Error ? error.message : error);
-      }
+      await enqueueJob('send_email', { to: recipient, subject, html: `<p>${subject}</p>` });
     }
   }
 

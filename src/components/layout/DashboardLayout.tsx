@@ -312,6 +312,7 @@ const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
         { name: 'Roles', href: '/admin/roles', icon: UserCheck, permission: 'roles.manage' },
         { name: 'Role Permissions', href: '/admin/roles/permissions', icon: Shield, permission: 'admin.access' },
         { name: 'Audit Log', href: '/admin/audit-log', icon: ListChecks, permission: 'admin.access' },
+        { name: 'System Jobs', href: '/admin/system-jobs', icon: Activity, permission: 'admin.access' },
         { name: 'Lead Statuses', href: '/admin/lead-statuses', icon: Tag, permission: 'admin.access' },
         { name: 'Market Sources', href: '/admin/market-sources', icon: BarChart3, permission: 'marketing.manage' },
         { name: 'Campaigns', href: '/admin/campaigns', icon: MessageSquare, permission: 'campaigns.manage' },
