@@ -11,7 +11,7 @@ import {
   Eye, CheckCircle, Clock,
   Target, X, Save, LayoutList, LayoutGrid, Briefcase, MessageSquare, Settings,
   Receipt, AlertCircle, Printer, Loader2, ChevronsLeft, ChevronsRight, ChevronLeft, ChevronRight, RotateCcw, ExternalLink, XCircle,
-  ClipboardCheck, Table2, Send, Sparkles
+  ClipboardCheck, Table2, Send, Sparkles, Flame
 } from 'lucide-react';
 import LeadKanbanSimple from './LeadKanbanSimple';
 import ConversationHistoryModal from '@/components/shared/ConversationHistoryModal';
@@ -1729,6 +1729,17 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
     }
   };
 
+  // Rule-based score (src/lib/leadScore.ts) - a different badge style from
+  // getQualityColor above so it doesn't read as a duplicate of the
+  // counsellor-set "Quality" badge sitting right next to it.
+  const getLeadScoreColor = (label: string) => {
+    switch (label) {
+      case 'Hot': return 'bg-rose-50 text-rose-700 border border-rose-200';
+      case 'Warm': return 'bg-amber-50 text-amber-700 border border-amber-200';
+      default: return 'bg-slate-50 text-slate-600 border border-slate-200';
+    }
+  };
+
   const getLeadActionTitle = () => {
     if (leadActionType === 'appointment') return 'Book Appointment';
     if (leadActionType === 'followup') return 'Add Follow-up';
@@ -2249,6 +2260,15 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
                               <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${getQualityColor(lead.lead_quality || 'Unknown')}`}>
                                 {lead.lead_quality || 'No Quality'}
                               </span>
+                              {typeof lead.lead_score === 'number' && (
+                                <span
+                                  className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${getLeadScoreColor(lead.lead_score_label || 'Cold')}`}
+                                  title={(Array.isArray(lead.lead_score_reasons) ? lead.lead_score_reasons : (() => { try { return JSON.parse(String(lead.lead_score_reasons || '[]')); } catch { return []; } })()).join(' • ') || 'Rule-based score - see src/lib/leadScore.ts'}
+                                >
+                                  <Flame className="h-3 w-3" />
+                                  {lead.lead_score_label} {lead.lead_score}
+                                </span>
+                              )}
                             </div>
 
                             <div className="mt-2 grid grid-cols-1 gap-2 text-sm text-gray-600 sm:grid-cols-2 xl:grid-cols-3">
@@ -2529,14 +2549,25 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
                       {lead.phone || lead.mobile || '—'}
                     </td>
                     <td className="px-4 py-2.5 whitespace-nowrap">
-                      <button
-                        type="button"
-                        onClick={() => openLeadActionModal(lead, 'status')}
-                        title="Click to update status with a remark"
-                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium hover:ring-2 hover:ring-offset-1 hover:ring-current transition-shadow ${getStatusColor(lead.status || 'Unknown')}`}
-                      >
-                        {lead.status || 'No Status'}
-                      </button>
+                      <div className="flex flex-wrap items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => openLeadActionModal(lead, 'status')}
+                          title="Click to update status with a remark"
+                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium hover:ring-2 hover:ring-offset-1 hover:ring-current transition-shadow ${getStatusColor(lead.status || 'Unknown')}`}
+                        >
+                          {lead.status || 'No Status'}
+                        </button>
+                        {typeof lead.lead_score === 'number' && (
+                          <span
+                            className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${getLeadScoreColor(lead.lead_score_label || 'Cold')}`}
+                            title={(Array.isArray(lead.lead_score_reasons) ? lead.lead_score_reasons : (() => { try { return JSON.parse(String(lead.lead_score_reasons || '[]')); } catch { return []; } })()).join(' • ') || 'Rule-based score - see src/lib/leadScore.ts'}
+                          >
+                            <Flame className="h-3 w-3" />
+                            {lead.lead_score}
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-2.5 max-w-[220px] truncate text-xs text-gray-600" title={lead.latest_remark || undefined}>
                       {lead.latest_remark || <span className="text-gray-400">No remarks</span>}
@@ -2588,6 +2619,15 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
                         >
                           <CheckCircle className="w-4 h-4" />
                         </button>
+                        {(lead.whatsapp_number || lead.mobile || lead.phone) && (
+                          <button
+                            onClick={() => openWhatsAppModal(lead)}
+                            className="text-green-600 hover:text-green-900"
+                            title="Send WhatsApp message from the CRM"
+                          >
+                            <Send className="w-4 h-4" />
+                          </button>
+                        )}
                         {activeTab === 'leads' && !isFoe(user) && (
                           <button
                             onClick={() => handleConvertToOpportunity(Number(lead.id))}

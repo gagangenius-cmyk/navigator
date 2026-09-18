@@ -15,6 +15,9 @@ export async function register() {
 
     const { startJobQueueCron } = await import('@/lib/job-queue-cron');
     await startJobQueueCron();
+
+    const { startLeadScoreCron } = await import('@/lib/lead-score-cron');
+    await startLeadScoreCron();
   }
 }
 

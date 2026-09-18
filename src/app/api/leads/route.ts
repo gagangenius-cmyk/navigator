@@ -13,6 +13,7 @@ import { ensureClientActualNameColumn } from '@/lib/ensureClientActualNameColumn
 import { buildDefaultLeadData, insertLeadRecord } from '@/lib/leadDefaults'
 import { captureError } from '@/lib/errorTracking'
 import { checkRateLimit, recordFailedAttempt } from '@/lib/rateLimiter'
+import { ensureLeadScoreTable } from '@/lib/leadScore'
 
 interface CountResult {
   total: number
@@ -74,6 +75,7 @@ export async function GET(request: NextRequest) {
     // Ensure database connection is established
     await ensureDBConnection();
     await ensureClientActualNameColumn();
+    await ensureLeadScoreTable();
 
     const { searchParams } = new URL(request.url)
     const page = parseInt(searchParams.get('page') || '1')
@@ -467,6 +469,7 @@ export async function GET(request: NextRequest) {
         l.regdate, l.payTotal, l.paidYet, l.payBalance, l.lead_remark, l.created,
         l.assignTo, l.branch, l.region, l.stepComplete,
         l.opportunity_id, l.opportunity_status, l.campaign, l.meta_leadgen_id,
+        lsc.score as lead_score, lsc.label as lead_score_label, lsc.reasons as lead_score_reasons,
         (SELECT remark FROM crm_forum_leads_remarks WHERE \`lead\` = l.id ORDER BY id DESC LIMIT 1) as latest_remark,
         COALESCE(cp.name, l.country_interest) as country_interest_label,
         COALESCE(s.name, pt.type, l.service_interest) as service_interest_label,
@@ -491,6 +494,7 @@ export async function GET(request: NextRequest) {
       LEFT JOIN crm_service s ON s.id = CAST(l.service_interest AS UNSIGNED)
       LEFT JOIN crm_program_type pt ON pt.id = CAST(l.service_interest AS UNSIGNED)
       LEFT JOIN crm_source ms ON ms.id = CAST(l.market_source AS UNSIGNED)
+      LEFT JOIN crm_lead_scores lsc ON lsc.lead_id = l.id
       LEFT JOIN crm_opportunities o ON o.id = COALESCE(l.opportunity_id, (SELECT MAX(o2.id) FROM crm_opportunities o2 WHERE o2.leadId = l.id))${withWorkflow ? `
       LEFT JOIN crm_opportunity_workflow_reviews wr ON wr.opportunity_id = o.id` : ''}
       ${whereClause}
