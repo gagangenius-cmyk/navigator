@@ -149,6 +149,62 @@ upgrade path if either data volume or retrieval sophistication grows).
 | 5 | Contract/agreement review assistant | ✅ Done (revised scope) | **Investigated and rejected two dead-end surfaces first**: `/admin/contract-generator` and `/admin/contract-templates` both looked like real features but turned out to be unwired UI shells — no `fetch()` calls in the generator page at all, and the templates page filters a hardcoded empty array (`const databaseTemplates: ContractTemplate[] = []`). Building "AI review" on top of non-functional pages wouldn't have been real. The actual functional review point is the **compliance-approval stage** (`/admin/compliance-approvals`, already touched in Phase 1 for audit logging) — a compliance officer manually cross-references the signed agreement, payment receipt, and counsellor's conversation summary before approving. New route `src/app/api/opportunity-compliance-approvals/[id]/ai-review` deliberately does **not** read the signed agreement document itself (those uploads accept `.pdf,.doc,.docx,.jpg,.jpeg,.png` — mixed formats Claude's image content blocks can't reliably handle, and guessing at undocumented PDF-vision API support wasn't worth the risk) — instead it cross-checks the same structured data the officer already has (paid vs. total amount, signature/date presence, whether the conversation summary looks generic or matches the service) and returns a short bulleted list of concerns, or "No concerns found." Never approves/rejects anything itself. UI: a "Run AI Review" button in the approval modal, next to the existing conversation-summary panel. Verified live: 503s correctly when unconfigured; the compliance-approvals page still renders. |
 | 6 | Client-portal FAQ chatbot | ✅ Done | Added `ai` + `@ai-sdk/anthropic` + `@ai-sdk/react` (v5-generation API — verified every type signature used below directly against the installed packages' `.d.ts` files rather than assuming from memory, since the SDK's API shape changed substantially across major versions). New route `src/app/api/clientportal/chat` uses `streamText()` + `toUIMessageStreamResponse()`. **Two hard security rules, not just prompt-asked**: (1) case context is assembled server-side from the *authenticated* client's own `leadId` only (`requireClientAuth`) — nothing in the request body ever selects whose data gets used, so there's no tampering surface via a manipulated `opportunityId`; (2) the system prompt explicitly tells the model to treat the assembled case data (which includes verbatim staff-written reviewer notes) as data only, never as instructions — a defense against prompt injection via case notes. Every exchange is logged to a new self-migrating `crm_client_chat_log` table (question/answer/leadId) for compliance/QA visibility into what the AI actually told clients. UI: `ClientChatWidget.tsx`, a floating chat bubble mounted once in `ProductPortalShell.tsx` (persists across every client-portal page), clearly labeled "AI Assistant - Answers from your case only - not your case officer" to avoid confusion with the real "Conversation" page (an actual human case-officer channel this is deliberately kept separate from). Verified live: unauthenticated request correctly 401s; client-portal pages render correctly with the widget mounted. **Not fully exercised end-to-end** with a real authenticated client streaming session — this database has zero rows in `crm_opportunities` (the same finding from Phase 3 item 3c), so no lead has ever qualified for real client-portal credentials to test against; fabricating a full won-opportunity-plus-compliance-approval chain just to test this would have touched far more of the compliance pipeline than a smoke test warrants. Verified instead by type-checking against the installed SDK's actual definitions and live-testing every piece that doesn't require that specific chain (auth gate, page rendering). |
 
+## Phase 5 — npm Audit Cleanup & Dev Tooling (done)
+
+Direct user request: review the project as npm-package-level enterprise enhancements,
+grounded in `npm audit` output and actual dependency usage rather than guessing.
+
+**Vulnerability triage** — investigated each finding concretely before acting:
+- `next-auth` and `prisma`/`@prisma/client`: confirmed via `grep -rl` that neither has a
+  single import anywhere in `src/` — both were unused scaffolding. Removed outright rather
+  than patched, eliminating their vulnerability chains entirely. Also removed the orphaned
+  `prisma.config.ts`, `src/lib/prisma.ts`, and the `"postinstall": "prisma generate"` script
+  that depended on them.
+- `xlsx` (SheetJS): two advisories (prototype pollution, ReDoS) with no upstream fix, and
+  unlike most dependencies here it's fed **untrusted** input directly — the leads/employee
+  bulk-upload endpoints parse whatever `.xlsx` a staff member uploads. Migrated all 7 usages
+  (leads/employee Excel export, sample-template downloads, both bulk-upload import paths) to
+  `exceljs`. New `src/lib/excelCompat.ts` (server) and `src/lib/excelClientExport.ts`
+  (browser) replicate the exact `xlsx.utils` surface this codebase used
+  (`sheet_to_json`/`json_to_sheet`/`write`/`SSF.parse_date_code`), including the Excel
+  1900-leap-year-bug date-serial algorithm. Verified live: all 3 export endpoints produce
+  valid, correctly-populated `.xlsx` files (spot-checked cell content); a full bulk-upload
+  import round-trip (real POST → real DB row → verified fields including a numeric
+  Excel-date-serial → correct calendar date → cleaned up afterward) confirmed the
+  untrusted-input parsing path works correctly end to end.
+- `npm audit fix` applied for patch/minor-safe bumps (`next`, `mysql2`, `jspdf`, `ws`,
+  `@types/node`). **Not** forced: `exceljs`'s own `uuid` dependency (moderate, missing
+  buffer-bounds-check when a `buf` argument is explicitly passed) — checked
+  `node_modules/exceljs/lib/xlsx/xform/sheet/cf-ext/cf-rule-ext-xform.js` directly; it only
+  ever calls `uuidv4()` with no arguments, so the vulnerable code path is never exercised.
+  npm's suggested fix would downgrade `exceljs` to `3.4.0`, a breaking major-version
+  regression, for zero real risk reduction.
+- Regression caught before commit: removing `next-auth` silently also removed `jose` (it was
+  only present transitively via `next-auth`), but `src/proxy.ts` — the live Phase 1 admin
+  auth gate — imports `jose` directly. Caught via `npx tsc --noEmit` before anything was
+  committed; fixed by adding `jose` as its own explicit direct dependency.
+- A second, unrelated TS error surfaced during the migration: `Buffer<ArrayBufferLike>` no
+  longer structurally satisfies DOM's `BodyInit` under this project's current
+  `@types/node`/TypeScript lib combination (`ArrayBufferView`'s generic now requires a
+  non-shared `ArrayBuffer`, which Node's `Buffer` type doesn't guarantee) — a confirmed,
+  reproducible ecosystem-wide typing gap (isolated and reproduced outside this codebase's own
+  files), not something introduced by this migration. `jsonToSheetBuffer` now returns
+  `Uint8Array` (unambiguous `BodyInit`, identical at runtime) and the 4 `NextResponse`
+  construction sites cast at that single boundary with an explanatory comment.
+
+**Dev tooling** (user opted into both):
+- **Husky + lint-staged**: `.husky/pre-commit` runs `npx lint-staged`, configured in
+  `package.json` to `eslint --fix` staged `.ts/.tsx/.js/.jsx` files before every commit.
+- **Vitest**: `vitest.config.mts` (real `tests/unit/**/*.test.ts`, separate from the
+  Playwright e2e suite in `tests/e2e/` which needs a running dev server and the shared DB —
+  Vitest here never touches either). First two suites target genuinely pure,
+  correctness-critical logic that had zero prior coverage: `parseExcelDateCode`
+  (`tests/unit/excelCompat.test.ts` — the date-serial algorithm above, including the
+  1900-leap-year-bug boundary) and the discount-tier approval logic
+  (`tests/unit/discountApproval.test.ts` — `getDiscountTier`/`getDiscountPercentage`/
+  `canApproveDiscountTier`, money- and approval-routing-critical). `npm test` runs the suite;
+  `npm run test:watch` for local iteration.
+
 ## Sequencing
 
 Land Phase 1 as its own reviewable change (no external dependency, closes the biggest
