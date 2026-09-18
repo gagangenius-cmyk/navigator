@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { useClientAuth } from '@/contexts/ClientAuthContext';
 import { getClientPortalProduct } from '@/lib/clientPortalProducts';
+import ClientChatWidget from './ClientChatWidget';
 
 interface ProductRow {
   key: string;
@@ -120,6 +121,7 @@ export default function ProductPortalShell({ children }: { children: React.React
         </div>
       </div>
       <div className="ml-64 flex-1 p-6">{children}</div>
+      <ClientChatWidget opportunityId={opportunityId} product={product} />
     </div>
   );
 }
