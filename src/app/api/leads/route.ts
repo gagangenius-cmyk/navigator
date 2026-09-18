@@ -14,6 +14,7 @@ import { buildDefaultLeadData, insertLeadRecord } from '@/lib/leadDefaults'
 import { captureError } from '@/lib/errorTracking'
 import { checkRateLimit, recordFailedAttempt } from '@/lib/rateLimiter'
 import { ensureLeadScoreTable } from '@/lib/leadScore'
+import { checkDuplicatesWithAIInBackground } from '@/lib/duplicateAiCheck'
 
 interface CountResult {
   total: number
@@ -987,6 +988,12 @@ export async function POST(request: NextRequest) {
     } catch (error) {
       console.error('Fuzzy duplicate check failed (non-fatal):', error);
     }
+
+    // Fire-and-forget: reviews the same candidates with an LLM in the
+    // background and logs its verdict onto the matched lead's own activity
+    // history (see src/lib/duplicateAiCheck.ts) - never awaited, so it can't
+    // slow down this response even though possibleDuplicates already has.
+    checkDuplicatesWithAIInBackground(insertId, leadData, possibleDuplicates)
 
     return NextResponse.json({ ...createdLead, assignment, possibleDuplicates }, { status: 201 })
   } catch (error: any) {

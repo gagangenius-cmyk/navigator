@@ -207,6 +207,8 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
   const [whatsAppLead, setWhatsAppLead] = useState<Lead | null>(null);
   const [whatsAppMessage, setWhatsAppMessage] = useState('');
   const [whatsAppSending, setWhatsAppSending] = useState(false);
+  const [whatsAppIntent, setWhatsAppIntent] = useState('');
+  const [draftingWhatsApp, setDraftingWhatsApp] = useState(false);
   const [suggestingRemark, setSuggestingRemark] = useState(false);
   // "Report to Meta as..." on the status-change modal - only meaningful for
   // leads that actually came from Meta Lead Ads (currentLead.meta_leadgen_id).
@@ -365,6 +367,33 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
   const openWhatsAppModal = (lead: Lead) => {
     setWhatsAppLead(lead);
     setWhatsAppMessage(whatsappTemplate || '');
+    setWhatsAppIntent('');
+  };
+
+  const handleDraftWhatsApp = async () => {
+    if (!whatsAppLead) return;
+    setDraftingWhatsApp(true);
+    try {
+      const response = await fetch(`/api/leads/${whatsAppLead.id}/draft-message`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ channel: 'whatsapp', intent: whatsAppIntent.trim() }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (response.ok && data.draft) {
+        setWhatsAppMessage(data.draft);
+      } else {
+        window.toast.error(data.error || 'Failed to draft a message.');
+      }
+    } catch (error) {
+      console.error('Error drafting WhatsApp message:', error);
+      window.toast.error('Failed to draft a message.');
+    } finally {
+      setDraftingWhatsApp(false);
+    }
   };
 
   const handleSendWhatsApp = async () => {
@@ -3884,6 +3913,25 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
               <p className="text-xs text-gray-500">
                 To: {whatsAppLead.whatsapp_number || whatsAppLead.mobile || whatsAppLead.phone}
               </p>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={whatsAppIntent}
+                  onChange={(e) => setWhatsAppIntent(e.target.value)}
+                  placeholder="What's this about? (optional, e.g. 'remind about pending documents')"
+                  className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-xs focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-100"
+                />
+                <button
+                  type="button"
+                  onClick={handleDraftWhatsApp}
+                  disabled={draftingWhatsApp}
+                  className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-purple-50 px-3 py-2 text-xs font-medium text-purple-700 hover:bg-purple-100 disabled:opacity-50"
+                  title="Draft this message from the lead's recent activity (Claude)"
+                >
+                  {draftingWhatsApp ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                  {draftingWhatsApp ? 'Drafting...' : 'Draft with AI'}
+                </button>
+              </div>
               <textarea
                 value={whatsAppMessage}
                 onChange={(e) => setWhatsAppMessage(e.target.value)}

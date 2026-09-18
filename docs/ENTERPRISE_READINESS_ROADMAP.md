@@ -121,6 +121,34 @@ walk-in lead never sees it):
 so it needed no query change). Verified live: `/api/meta-leads/quality-options` returns the
 5 configured labels; leads/Kanban/edit pages all render without error.
 
+---
+
+## Phase 4 — Enterprise AI Feature Expansion
+
+Direct user request, following an advisory discussion of what AI features this CRM could
+reasonably add. Explicitly **excludes** three ideas that came up in that discussion —
+predictive lead scoring (ML), pipeline revenue forecasting, payment/discount anomaly
+detection — because they all need historical outcome data to train against, and (per
+Phase 3 item 3c above) `crm_opportunities` has zero rows. Everything below is LLM-in-context
+work instead: no training data required, same reasoning as the lead-scoring pivot.
+
+**Package decision**: evaluated adopting `ai` + `@ai-sdk/anthropic` (Vercel AI SDK) for this
+batch. Verdict: adopt it specifically where streaming genuinely matters (the client-portal
+chatbot, item 6) rather than migrating everything - the 4 AI features already shipped in
+Phase 3 work and are verified; rewriting working code for its own sake isn't worth the risk.
+Not adopting a vector database (Qdrant is available in this environment but is genuinely
+premature at 459 leads and per-conversation-bounded chatbot context - noted as the natural
+upgrade path if either data volume or retrieval sophistication grows).
+
+| # | Item | Status | Files |
+|---|------|--------|-------|
+| 1 | WhatsApp/email draft assist | ✅ Done | New route `src/app/api/leads/[id]/draft-message` (distinct from `suggest-remark` — drafts a message *to* the client, second person, vs. an internal note) — builds a prompt from the lead's last 6 `crm_remarks` rows plus an optional free-text "what's this about" intent. UI: a "Draft with AI" button + intent input added to the existing WhatsApp-send modal in `LeadManagement.tsx`, prefilling the message textarea (the counsellor still edits/sends). Not wired to email — this CRM has no generic "compose email to a lead" UI surface to extend; only WhatsApp send is a real outbound-to-client channel today. Verified live: 503s correctly when unconfigured. |
+| 2 | Duplicate detection AI upgrade | ✅ Done | A judgment layer on top of `checkForFuzzyDuplicate()` (`src/lib/duplicateLeadCheck.ts`), not a replacement — that function's SOUNDEX+Levenshtein candidate narrowing keeps working exactly as before. New `src/lib/duplicateAiCheck.ts` (`checkDuplicatesWithAI()`) sends the same small candidate set (max 5) it already produces to Claude for a plain-English verdict accounting for transliteration/nicknames a numeric similarity score can't judge. Integrated as a **fire-and-forget hook inside `POST /api/leads`** (`checkDuplicatesWithAIInBackground`), not a synchronous call — the create-lead page navigates away almost immediately after showing its existing duplicate toast, so there'd be nowhere for a slower AI verdict to land; instead it logs onto the *matched* lead's own activity history (`logLeadRemark`, action `duplicate_detected`) for whoever owns that lead to see later. A standalone `POST /api/leads/check-duplicate-ai` route also exists for any future synchronous caller (e.g. a duplicate-review page), reusing the same lib function. Verified live: created a real test lead (`#481`) with a name 97% similar to 5 existing test leads — `checkForFuzzyDuplicate` correctly found all 5, the background AI hook fired, failed gracefully (unconfigured key), and logged the failure without affecting the `201` response at all. |
+| 3 | Case handover summarization | ⏳ In progress | |
+| 4 | Document classification on upload | ⏳ Not started | |
+| 5 | Contract/agreement review assistant | ⏳ Not started | |
+| 6 | Client-portal FAQ chatbot | ⏳ Not started | Adopts `ai` + `@ai-sdk/anthropic` for streaming; needs explicit scoping so it can only ever answer from *that* client's own case data — a real risk to design against, not just implement. |
+
 ## Sequencing
 
 Land Phase 1 as its own reviewable change (no external dependency, closes the biggest
