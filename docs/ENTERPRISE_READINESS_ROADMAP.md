@@ -93,6 +93,34 @@ notification bell covering `crm_notifications`. No gap here; dropped from scope.
 
 ---
 
+## Post-Phase-3: wired up the dormant Meta lead-quality feedback loop
+
+Not part of the original gap analysis — a direct user request. Investigation found the
+backend for this was already fully built (`src/lib/meta/lead-quality-feedback.ts`,
+`src/lib/meta/conversions-api.ts`, the `crm_meta_quality_mappings` admin config at
+`/admin/meta-leads/quality-mappings`, and `crm_forum_leads.meta_leadgen_id` populated by
+the Meta webhook ingestion pipeline) and even had a dedicated `GET /api/meta-leads/quality-options`
+route whose own comment said it "feeds the Meta Lead Quality dropdown on the lead status
+form" — but no dropdown anywhere in the app actually called it, so the whole feature was
+dead code in practice.
+
+Wired a "Report to Meta as..." dropdown into every real place a lead's status can be
+changed, each shown only when that specific lead has a `meta_leadgen_id` (a manually-created
+walk-in lead never sees it):
+- `LeadManagement.tsx`'s status-change modal (`leadActionType === 'status'`) — sends
+  `metaLeadQuality` alongside the status update in the same `PUT /api/leads/{id}` call.
+- `/admin/leads/[id]/edit` — same dropdown in the Status & Priority section, same PUT contract.
+- Kanban drag-and-drop (`handleStatusChange` → `PUT /api/leads-simple/{id}`, which doesn't
+  accept `metaLeadQuality`) — since a drag has no form to put a dropdown in, a small
+  follow-up modal (`kanbanMetaPrompt`) appears after a successful drop for Meta-sourced
+  leads only, offering to report the outcome via a separate `PUT /api/leads/{id}` call
+  with just `{metaLeadQuality}`; skippable, never blocks the drag itself.
+
+`meta_leadgen_id` added to the `Lead` type and to the main paginated leads-list SELECT in
+`src/app/api/leads/route.ts` (the single-lead `GET /api/leads/[id]` already selected `l.*`,
+so it needed no query change). Verified live: `/api/meta-leads/quality-options` returns the
+5 configured labels; leads/Kanban/edit pages all render without error.
+
 ## Sequencing
 
 Land Phase 1 as its own reviewable change (no external dependency, closes the biggest

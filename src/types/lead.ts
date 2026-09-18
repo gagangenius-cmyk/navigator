@@ -19,6 +19,7 @@ export interface Lead {
   service_interest_label?: string;
   market_source: string;
   market_source_label?: string;
+  meta_leadgen_id?: string | null;
   appointment: string;
   followup: string;
   folowuptime: string;

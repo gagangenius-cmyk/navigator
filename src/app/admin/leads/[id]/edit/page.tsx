@@ -94,6 +94,7 @@ interface LeadApiData {
   roundrobin?: number | boolean | null;
   whatsapp?: number | boolean | null;
   transfer_date?: string | null;
+  meta_leadgen_id?: string | null;
 }
 
 interface SelectOption {
@@ -222,6 +223,14 @@ export default function AdminEditLeadPage() {
   const [employees, setEmployees] = useState<SelectOption[]>([]);
   const [loadingPrograms, setLoadingPrograms] = useState(false);
   const [loadingTypes, setLoadingTypes] = useState(false);
+  // This lead's Meta leadgen id, if it came from Meta Lead Ads - drives
+  // whether the "Report to Meta" dropdown below shows at all (see
+  // src/lib/meta/lead-quality-feedback.ts, a no-op for non-Meta leads
+  // anyway, but showing the control for a walk-in/manually-created lead
+  // would just be confusing).
+  const [isMetaLead, setIsMetaLead] = useState(false);
+  const [metaQualityOptions, setMetaQualityOptions] = useState<string[]>([]);
+  const [metaLeadQuality, setMetaLeadQuality] = useState('');
 
   // FOE and Branch Manager only ever reassign leads to their own branch's
   // counselors; CEO (and anyone else) can pick from every branch.
@@ -246,11 +255,12 @@ export default function AdminEditLeadPage() {
       setError('');
 
       try {
-        const [leadRes, countriesRes, sourcesRes, employeesRes] = await Promise.all([
+        const [leadRes, countriesRes, sourcesRes, employeesRes, metaQualityRes] = await Promise.all([
           fetch(`/api/leads/${leadId}`),
           fetch('/api/countries'),
           fetch('/api/lead-sources'),
-          fetch('/api/employees/active?role=counsellor')
+          fetch('/api/employees/active?role=counsellor'),
+          fetch('/api/meta-leads/quality-options')
         ]);
 
         if (!leadRes.ok) {
@@ -260,10 +270,12 @@ export default function AdminEditLeadPage() {
 
         const lead = await leadRes.json();
         setFormData(toFormData(lead));
+        setIsMetaLead(Boolean(lead.meta_leadgen_id));
 
         if (countriesRes.ok) setCountries(await countriesRes.json());
         if (sourcesRes.ok) setLeadSources([{ id: '', name: '--None--' }, ...(await sourcesRes.json())]);
         if (employeesRes.ok) setEmployees(await employeesRes.json());
+        if (metaQualityRes.ok) setMetaQualityOptions((await metaQualityRes.json()).data || []);
       } catch (loadError) {
         console.error('Error loading lead edit page:', loadError);
         setError(loadError instanceof Error ? loadError.message : 'Failed to load lead');
@@ -412,6 +424,7 @@ export default function AdminEditLeadPage() {
           priority: formData.priority,
           notes: formData.notes,
           leadQuality: formData.leadQuality,
+          ...(metaLeadQuality ? { metaLeadQuality } : {}),
           programCountry: formData.programCountry,
           program: formData.program,
           programType: formData.programType || formData.program
@@ -628,6 +641,17 @@ export default function AdminEditLeadPage() {
             <SelectField name="priority" label="Priority" value={formData.priority} onChange={handleInputChange}>
               {priorities.map((option) => <option key={option} value={option}>{option}</option>)}
             </SelectField>
+            {isMetaLead && (
+              <SelectField
+                label="Report to Meta as"
+                value={metaLeadQuality}
+                onChange={(e) => setMetaLeadQuality(e.target.value)}
+                hint="This lead came from Meta Lead Ads - optionally report this outcome back so Meta's ad delivery can learn from it."
+              >
+                <option value="">Don&apos;t report to Meta</option>
+                {metaQualityOptions.map((option) => <option key={option} value={option}>{option}</option>)}
+              </SelectField>
+            )}
             <TextAreaField name="notes" label="Notes" value={formData.notes} onChange={handleInputChange} rows={4} wide />
           </div>
         </FormSection>

@@ -466,7 +466,7 @@ export async function GET(request: NextRequest) {
         l.service_interest, l.market_source, l.priority, l.status, l.lead_quality,
         l.regdate, l.payTotal, l.paidYet, l.payBalance, l.lead_remark, l.created,
         l.assignTo, l.branch, l.region, l.stepComplete,
-        l.opportunity_id, l.opportunity_status, l.campaign,
+        l.opportunity_id, l.opportunity_status, l.campaign, l.meta_leadgen_id,
         (SELECT remark FROM crm_forum_leads_remarks WHERE \`lead\` = l.id ORDER BY id DESC LIMIT 1) as latest_remark,
         COALESCE(cp.name, l.country_interest) as country_interest_label,
         COALESCE(s.name, pt.type, l.service_interest) as service_interest_label,

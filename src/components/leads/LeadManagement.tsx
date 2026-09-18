@@ -208,6 +208,16 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
   const [whatsAppMessage, setWhatsAppMessage] = useState('');
   const [whatsAppSending, setWhatsAppSending] = useState(false);
   const [suggestingRemark, setSuggestingRemark] = useState(false);
+  // "Report to Meta as..." on the status-change modal - only meaningful for
+  // leads that actually came from Meta Lead Ads (currentLead.meta_leadgen_id).
+  const [metaQualityOptions, setMetaQualityOptions] = useState<string[]>([]);
+  const [metaLeadQuality, setMetaLeadQuality] = useState('');
+  // Kanban drag-and-drop has no form to put the dropdown above into - this
+  // is the post-drop equivalent, only surfaced for leads that came from
+  // Meta in the first place (see handleStatusChange).
+  const [kanbanMetaPrompt, setKanbanMetaPrompt] = useState<{ leadId: number; leadName: string } | null>(null);
+  const [kanbanMetaQuality, setKanbanMetaQuality] = useState('');
+  const [kanbanMetaSending, setKanbanMetaSending] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
@@ -307,6 +317,18 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
         setWhatsappTemplate(data.preferences?.whatsappTemplate || '');
       } catch (err) {
         console.error('Error loading WhatsApp message template:', err);
+      }
+    })();
+  }, [token]);
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch('/api/meta-leads/quality-options', token ? { headers: { Authorization: `Bearer ${token}` } } : undefined);
+        if (!res.ok) return;
+        const data = await res.json();
+        setMetaQualityOptions(data.data || []);
+      } catch (err) {
+        console.error('Error loading Meta quality options:', err);
       }
     })();
   }, [token]);
@@ -849,6 +871,9 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
   };
 
   const handleStatusChange = async (leadId: number, newStatus: string) => {
+    // Looked up before the fetch below refetches the list - meta_leadgen_id
+    // doesn't change, so the pre-drop snapshot is fine.
+    const draggedLead = leads.find((l) => Number(l.id) === leadId);
     try {
       const response = await fetch(`/api/leads-simple/${leadId}`, {
         method: 'PUT',
@@ -858,11 +883,41 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
 
       if (response.ok) {
         fetchLeads();
+        if (draggedLead?.meta_leadgen_id) {
+          setKanbanMetaQuality('');
+          setKanbanMetaPrompt({
+            leadId,
+            leadName: [draggedLead.fname, draggedLead.lname].filter(Boolean).join(' ') || `Lead #${leadId}`,
+          });
+        }
       } else {
         console.error('Error updating lead status');
       }
     } catch (error) {
       console.error('Error updating lead status:', error);
+    }
+  };
+
+  const handleKanbanMetaReport = async () => {
+    if (!kanbanMetaPrompt || !kanbanMetaQuality) return;
+    setKanbanMetaSending(true);
+    try {
+      const response = await fetch(`/api/leads/${kanbanMetaPrompt.leadId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ metaLeadQuality: kanbanMetaQuality }),
+      });
+      if (response.ok) {
+        window.toast.success('Reported to Meta.');
+        setKanbanMetaPrompt(null);
+      } else {
+        window.toast.error('Failed to report to Meta.');
+      }
+    } catch (error) {
+      console.error('Error reporting Meta lead quality:', error);
+      window.toast.error('Failed to report to Meta.');
+    } finally {
+      setKanbanMetaSending(false);
     }
   };
 
@@ -901,6 +956,7 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
     const currentTime = now.toTimeString().slice(0, 5);
     const leadName = `${lead.fname || ''} ${lead.lname || ''}`.trim() || `Lead #${lead.id}`;
 
+    setMetaLeadQuality('');
     setCurrentLead(lead);
     setReturnToViewModalOnClose(showViewModal);
     setShowViewModal(false);
@@ -932,6 +988,7 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
     setLeadActionSaving(false);
     setCrossBranchEnabled(false);
     setCrossBranchTargetBranch('');
+    setMetaLeadQuality('');
     if (returnToViewModalOnClose) {
       setShowViewModal(true);
       setReturnToViewModalOnClose(false);
@@ -1117,6 +1174,7 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
             notes: leadActionForm.notes,
             ...(leadActionForm.programId ? { service_interest: leadActionForm.programId } : {}),
             ...(leadActionForm.countryId ? { country_interest: leadActionForm.countryId } : {}),
+            ...(metaLeadQuality ? { metaLeadQuality } : {}),
           })
         });
 
@@ -3019,6 +3077,25 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
                 </div>
               )}
 
+              {leadActionType === 'status' && currentLead?.meta_leadgen_id && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Report to Meta as (optional)</label>
+                  <SearchableSelect
+                    value={metaLeadQuality}
+                    onChange={(e) => setMetaLeadQuality(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">Don&apos;t report to Meta</option>
+                    {metaQualityOptions.map((option) => (
+                      <option key={option} value={option}>{option}</option>
+                    ))}
+                  </SearchableSelect>
+                  <p className="mt-1 text-xs text-gray-400">
+                    This lead came from Meta Lead Ads - optionally report this outcome back so Meta&apos;s ad delivery can learn from it.
+                  </p>
+                </div>
+              )}
+
               {leadActionType === 'status' && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
@@ -3793,6 +3870,45 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
               >
                 {whatsAppSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                 Send
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {kanbanMetaPrompt && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-sm rounded-xl bg-white shadow-xl">
+            <div className="px-5 py-4">
+              <h3 className="text-sm font-semibold text-gray-900">Report to Meta?</h3>
+              <p className="mt-1 text-xs text-gray-500">
+                {kanbanMetaPrompt.leadName} came from Meta Lead Ads - optionally report this status change back so Meta&apos;s ad delivery can learn from it.
+              </p>
+              <select
+                value={kanbanMetaQuality}
+                onChange={(e) => setKanbanMetaQuality(e.target.value)}
+                className="mt-3 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+              >
+                <option value="">Select an outcome...</option>
+                {metaQualityOptions.map((option) => (
+                  <option key={option} value={option}>{option}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex justify-end gap-2 border-t border-gray-200 px-5 py-3">
+              <button
+                onClick={() => setKanbanMetaPrompt(null)}
+                className="rounded-lg border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50"
+              >
+                Skip
+              </button>
+              <button
+                onClick={handleKanbanMetaReport}
+                disabled={kanbanMetaSending || !kanbanMetaQuality}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                {kanbanMetaSending && <Loader2 className="h-4 w-4 animate-spin" />}
+                Report
               </button>
             </div>
           </div>
