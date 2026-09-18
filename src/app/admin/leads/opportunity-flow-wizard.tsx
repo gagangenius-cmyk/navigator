@@ -18,7 +18,7 @@ import {
   AlertCircle, FileText, Send, Eye, User, Calendar, DollarSign, FileSignature,
   Shield, X, ChevronRight, ChevronLeft, Save, Mail, Phone, Globe,
   Target, TrendingUp, Users, Briefcase, Flag, MessageSquare, FileCheck,
-  Receipt, FolderOpen, PenTool, Lock, RefreshCw, KeyRound
+  Receipt, FolderOpen, PenTool, Lock, RefreshCw, KeyRound, Sparkles, Loader2
 } from 'lucide-react';
 
 interface OpportunityFlowWizardProps {
@@ -3967,7 +3967,27 @@ function AgreementStage({ lead, data, setData, quotationData, paidAmount, progra
   const canDelete = isCeo(user as any);
   const [saving, setSaving] = useState(false);
   const [generatingPdf, setGeneratingPdf] = useState(false);
+  const [summarizing, setSummarizing] = useState(false);
   const counselorSummaryLength = data.counselorConversationSummary.trim().length;
+
+  const handleSummarizeCase = async () => {
+    if (!lead?.id) return;
+    setSummarizing(true);
+    try {
+      const response = await fetch(`/api/leads/${lead.id}/summarize-case`, { method: 'POST' });
+      const result = await response.json().catch(() => ({}));
+      if (response.ok && result.summary) {
+        setData({ ...data, counselorConversationSummary: result.summary });
+      } else {
+        window.toast.error(result.error || 'Failed to generate a summary.');
+      }
+    } catch (error) {
+      console.error('Error summarizing case:', error);
+      window.toast.error('Failed to generate a summary.');
+    } finally {
+      setSummarizing(false);
+    }
+  };
 
   const handleSave = async () => {
     setSaving(true);
@@ -4203,9 +4223,21 @@ function AgreementStage({ lead, data, setData, quotationData, paidAmount, progra
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          Counselor Conversation Summary <span className="text-red-500">*</span>
-        </label>
+        <div className="mb-2 flex items-center justify-between">
+          <label className="block text-sm font-medium text-gray-700">
+            Counselor Conversation Summary <span className="text-red-500">*</span>
+          </label>
+          <button
+            type="button"
+            onClick={handleSummarizeCase}
+            disabled={summarizing}
+            className="inline-flex items-center gap-1 rounded-md bg-purple-50 px-2 py-1 text-xs font-medium text-purple-700 hover:bg-purple-100 disabled:opacity-50"
+            title="Draft this summary from the lead's full activity history (Claude)"
+          >
+            {summarizing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+            {summarizing ? 'Summarizing...' : 'Summarize with AI'}
+          </button>
+        </div>
         <textarea
           value={data.counselorConversationSummary}
           onChange={(e) => setData({ ...data, counselorConversationSummary: e.target.value })}

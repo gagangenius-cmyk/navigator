@@ -46,6 +46,8 @@ interface PortalDocumentRow {
   file_url: string | null;
   file_name: string | null;
   review_note: string | null;
+  ai_check_status?: 'match' | 'mismatch' | null;
+  ai_check_note?: string | null;
 }
 
 interface QuickPayState {
@@ -537,7 +539,17 @@ export default function ClientsManagement() {
                     {portalDocuments.map((doc) => (
                       <div key={doc.document_id} className="flex items-center justify-between rounded-md border border-slate-100 p-2 text-xs">
                         <div>
-                          <p className="font-medium text-slate-800">{doc.document_label}</p>
+                          <p className="flex items-center gap-1 font-medium text-slate-800">
+                            {doc.document_label}
+                            {doc.ai_check_status === 'mismatch' && (
+                              <span
+                                className="inline-flex items-center gap-0.5 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800"
+                                title={doc.ai_check_note || 'AI content check flagged this file as possibly not matching the expected document type.'}
+                              >
+                                <AlertCircle className="h-2.5 w-2.5" /> AI: check this
+                              </span>
+                            )}
+                          </p>
                           <p className="text-slate-500">{doc.status}{doc.file_name ? ` · ${doc.file_name}` : ''}</p>
                         </div>
                         {doc.status === 'Submitted' && (

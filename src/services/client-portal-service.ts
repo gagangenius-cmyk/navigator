@@ -83,6 +83,14 @@ export class ClientPortalService {
     if (!columnNames.has('accepted_formats')) {
       await sequelize.query(`ALTER TABLE crm_client_documents ADD COLUMN accepted_formats VARCHAR(255) NULL AFTER mandatory`);
     }
+    // AI content-verification result (src/lib/documentClassification.ts) - set
+    // by a fire-and-forget check after upload, never blocks the upload itself.
+    if (!columnNames.has('ai_check_status')) {
+      await sequelize.query(`ALTER TABLE crm_client_documents ADD COLUMN ai_check_status VARCHAR(20) NULL AFTER file_name`);
+    }
+    if (!columnNames.has('ai_check_note')) {
+      await sequelize.query(`ALTER TABLE crm_client_documents ADD COLUMN ai_check_note TEXT NULL AFTER ai_check_status`);
+    }
     const credentialColumns = await sequelize.query<{ Field: string }>(`SHOW COLUMNS FROM crm_client_credentials`, { type: QueryTypes.SELECT });
     const credentialColumnNames = new Set(credentialColumns.map((column) => column.Field));
     if (!credentialColumnNames.has('temporary_password')) {
@@ -358,10 +366,24 @@ export class ClientPortalService {
     );
 
     return sequelize.query(
-      `SELECT document_id, status, file_url, file_name FROM crm_client_documents
+      `SELECT document_id, status, file_url, file_name, document_label FROM crm_client_documents
        WHERE lead_id = :leadId AND opportunity_id = :opportunityId AND checklist_key = :checklistKey LIMIT 1`,
       { replacements: input, type: QueryTypes.SELECT }
     );
+  }
+
+  // Called from the fire-and-forget AI content check in the upload route -
+  // never throws to the caller's face, matching every other background hook
+  // in this codebase (notifyMetaLeadQuality, checkDuplicatesWithAIInBackground).
+  static async recordDocumentCheck(documentId: string, status: 'match' | 'mismatch', note: string): Promise<void> {
+    try {
+      await sequelize.query(
+        `UPDATE crm_client_documents SET ai_check_status = :status, ai_check_note = :note WHERE document_id = :documentId`,
+        { replacements: { documentId, status, note } }
+      );
+    } catch (error) {
+      console.error('Failed to record document AI check:', error);
+    }
   }
 
   static async reviewDocument(input: {
@@ -404,7 +426,8 @@ export class ClientPortalService {
     await this.ensureTables();
     return sequelize.query(
       `SELECT d.document_id, d.opportunity_id, d.checklist_key, d.document_label, d.file_url, d.file_name,
-              d.status, d.review_note, d.uploaded_at, d.reviewed_at, e.name AS reviewerName
+              d.status, d.review_note, d.uploaded_at, d.reviewed_at, e.name AS reviewerName,
+              d.ai_check_status, d.ai_check_note
        FROM crm_client_documents d
        LEFT JOIN crm_employee e ON CAST(e.id AS CHAR) COLLATE utf8mb4_general_ci = d.reviewer_id
        WHERE d.lead_id = :leadId ORDER BY d.opportunity_id, d.checklist_key`,
