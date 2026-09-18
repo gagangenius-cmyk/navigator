@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { sequelize, connectDB } from '@/lib/sequelize'
 import { resolveLeadAssignment } from '@/lib/assignmentRuleEngine'
 import { QueryTypes } from 'sequelize'
-import * as XLSX from 'xlsx'
+import { jsonToSheetBuffer, readWorkbookFromBase64, sheetToJson } from '@/lib/excelCompat'
 import { verifyToken } from '@/lib/auth'
 import { isCeo, isFoeOrBranchManagerOrCeo, isBranchManagerOrCeo, isCounsellor } from '@/lib/roleChecks'
 import { checkForDuplicate, findExistingLead, recordDuplicateLeadAttempt, normalizePhone, checkForFuzzyDuplicate } from '@/lib/duplicateLeadCheck'
@@ -409,7 +409,7 @@ export async function GET(request: NextRequest) {
       })
 
       // Convert to Excel format
-      const ws = XLSX.utils.json_to_sheet(leads.map((lead: any) => ({
+      const excelBuffer = await jsonToSheetBuffer(leads.map((lead: any) => ({
         'ID': lead.id,
         'First Name': lead.fname,
         'Middle Name': lead.mname,
@@ -437,13 +437,13 @@ export async function GET(request: NextRequest) {
         'Balance': lead.payBalance,
         'Lead Remark': lead.lead_remark,
         'Created': lead.created
-      })))
+      })), 'Leads')
 
-      const wb = XLSX.utils.book_new()
-      XLSX.utils.book_append_sheet(wb, ws, 'Leads')
-      const excelBuffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' })
-
-      return new NextResponse(excelBuffer, {
+      // Buffer<ArrayBufferLike>/Uint8Array<ArrayBufferLike> no longer structurally
+      // satisfy BodyInit under this project's current @types/node + TS lib.dom
+      // (ArrayBufferView<ArrayBuffer> now requires a non-shared backing buffer) -
+      // a confirmed, ecosystem-wide typing gap, not a real runtime concern.
+      return new NextResponse(excelBuffer as unknown as BodyInit, {
         headers: {
           'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
           'Content-Disposition': 'attachment; filename="leads-export.xlsx"'
@@ -581,9 +581,9 @@ export async function POST(request: NextRequest) {
       }
       const uploaderBranchId = Number(currentUser.branch || 0) || 1
       try {
-        const workbook = XLSX.read(data.fileData, { type: 'base64' })
-        const worksheet = workbook.Sheets[workbook.SheetNames[0]]
-        const jsonData = XLSX.utils.sheet_to_json(worksheet)
+        const workbook = await readWorkbookFromBase64(data.fileData)
+        const worksheet = workbook.worksheets[0]
+        const jsonData = sheetToJson(worksheet)
 
         const createdLeads = []
         const errors = []

@@ -146,7 +146,8 @@ export default function SalesReportPage() {
         page += 1;
       } while (page <= totalPages);
 
-      const XLSX = await import('xlsx');
+      const { addJsonSheet, downloadWorkbook } = await import('@/lib/excelClientExport');
+      const ExcelJS = (await import('exceljs')).default;
       const sheetRows = allRows.map((r) => ({
         'Client': r.client,
         'Opportunity': r.name,
@@ -167,23 +168,21 @@ export default function SalesReportPage() {
         'Date': r.date,
       }));
 
-      const wb = XLSX.utils.book_new();
-      const ws = XLSX.utils.json_to_sheet(sheetRows);
-      XLSX.utils.book_append_sheet(wb, ws, 'Sales Report');
+      const workbook = new ExcelJS.Workbook();
+      addJsonSheet(workbook, sheetRows, 'Sales Report');
 
       if (summary) {
-        const summaryWs = XLSX.utils.json_to_sheet([
+        addJsonSheet(workbook, [
           { Metric: 'Opportunities', Value: summary.opportunities },
           { Metric: 'Won', Value: summary.won },
           { Metric: 'Total (AED)', Value: summary.totalAed },
           { Metric: 'Collected (AED)', Value: summary.collectedAed },
           { Metric: 'Balance (AED)', Value: summary.balanceAed },
-        ]);
-        XLSX.utils.book_append_sheet(wb, summaryWs, 'Summary');
+        ], 'Summary');
       }
 
       const stamp = new Date().toISOString().slice(0, 10);
-      XLSX.writeFile(wb, `sales-report-${stamp}.xlsx`);
+      await downloadWorkbook(workbook, `sales-report-${stamp}.xlsx`);
     } catch (e: any) {
       setError(e.message || 'Failed to export sales report');
     } finally {

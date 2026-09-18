@@ -147,11 +147,8 @@ export default function OpsDashboardPage() {
 
   const exportToExcel = async (rows: Record<string, unknown>[], sheetName: string, filename: string) => {
     if (!rows.length) return;
-    const XLSX = await import('xlsx');
-    const ws = XLSX.utils.json_to_sheet(rows);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, sheetName);
-    XLSX.writeFile(wb, filename);
+    const { downloadJsonAsExcel } = await import('@/lib/excelClientExport');
+    await downloadJsonAsExcel(rows, sheetName, filename);
   };
 
   const exportClients = () => exportToExcel(

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import * as XLSX from 'xlsx';
+import { readWorkbookFromBase64, sheetToJson, parseExcelDateCode } from '@/lib/excelCompat';
 import { HRService } from '@/services/hr-service';
 import { requireAuth, isAuthError } from '@/lib/apiAuth';
 
@@ -21,7 +21,7 @@ const excelDate = (value: unknown) => {
   if (!value) return null;
   if (value instanceof Date && !Number.isNaN(value.getTime())) return value.toISOString().slice(0, 10);
   if (typeof value === 'number') {
-    const parsed = XLSX.SSF.parse_date_code(value);
+    const parsed = parseExcelDateCode(value);
     if (parsed) {
       return `${parsed.y}-${String(parsed.m).padStart(2, '0')}-${String(parsed.d).padStart(2, '0')}`;
     }
@@ -65,9 +65,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Excel file data is required' }, { status: 400 });
     }
 
-    const workbook = XLSX.read(body.fileData, { type: 'base64', cellDates: true });
-    const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-    const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(worksheet, { defval: '' });
+    const workbook = await readWorkbookFromBase64(body.fileData);
+    const worksheet = workbook.worksheets[0];
+    const rows = sheetToJson<Record<string, unknown>>(worksheet, { defval: '' });
 
     const created: Array<{ id?: number; name?: string }> = [];
     const errors: Array<{ row: number; error: string }> = [];

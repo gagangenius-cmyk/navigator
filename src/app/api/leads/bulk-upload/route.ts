@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import * as XLSX from 'xlsx';
+import { jsonToSheetBuffer, readWorkbookFromBase64, sheetToJson, parseExcelDateCode } from '@/lib/excelCompat';
 import { QueryTypes } from 'sequelize';
 import { sequelize, connectDB } from '@/lib/sequelize';
 import { requireAuth, isAuthError } from '@/lib/apiAuth';
@@ -26,12 +26,13 @@ const SAMPLE_ROWS = [
 ];
 
 export async function GET() {
-  const ws = XLSX.utils.json_to_sheet(SAMPLE_ROWS);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Leads');
-  const excelBuffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+  const excelBuffer = await jsonToSheetBuffer(SAMPLE_ROWS, 'Leads');
 
-  return new NextResponse(excelBuffer, {
+  // Buffer<ArrayBufferLike>/Uint8Array<ArrayBufferLike> no longer structurally
+  // satisfy BodyInit under this project's current @types/node + TS lib.dom
+  // (ArrayBufferView<ArrayBuffer> now requires a non-shared backing buffer) -
+  // a confirmed, ecosystem-wide typing gap, not a real runtime concern.
+  return new NextResponse(excelBuffer as unknown as BodyInit, {
     headers: {
       'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       'Content-Disposition': 'attachment; filename="leads-bulk-upload-sample.xlsx"',
@@ -51,7 +52,7 @@ function excelDate(value: unknown): Date | null {
   if (!value) return null;
   if (value instanceof Date && !Number.isNaN(value.getTime())) return value;
   if (typeof value === 'number') {
-    const parsed = XLSX.SSF.parse_date_code(value);
+    const parsed = parseExcelDateCode(value);
     if (parsed) return new Date(parsed.y, parsed.m - 1, parsed.d);
   }
   const date = new Date(String(value));
@@ -87,9 +88,9 @@ export async function POST(request: NextRequest) {
 
     let rows: Array<Record<string, unknown>>;
     try {
-      const workbook = XLSX.read(body.fileData, { type: 'base64', cellDates: true });
-      const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-      rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(worksheet, { defval: '' });
+      const workbook = await readWorkbookFromBase64(body.fileData);
+      const worksheet = workbook.worksheets[0];
+      rows = sheetToJson<Record<string, unknown>>(worksheet, { defval: '' });
     } catch {
       return NextResponse.json({ error: 'Invalid Excel file format' }, { status: 400 });
     }
