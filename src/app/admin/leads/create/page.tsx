@@ -1,9 +1,9 @@
 'use client';
 
 import { SearchableSelect } from '@/components/ui/searchable-select';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Mail, Phone, Globe, Loader2, AlertTriangle, AlertCircle, User, MapPin, UserCircle2, Tag, GraduationCap, UserCog, CalendarClock, SlidersHorizontal, Flag } from 'lucide-react';
+import { Mail, Phone, Globe, Loader2, AlertTriangle, AlertCircle, User, MapPin, UserCircle2, Tag, GraduationCap, UserCog, CalendarClock, SlidersHorizontal, Flag, ScanLine, Sparkles } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { isFoeOrBranchManagerOrCeo } from '@/lib/roleChecks';
 import { ALL_COUNTRIES } from '@/lib/countries';
@@ -87,6 +87,9 @@ export default function AdminCreateLeadPage() {
   const [transferReason, setTransferReason] = useState('');
   const [transferSubmitting, setTransferSubmitting] = useState(false);
   const [transferRequested, setTransferRequested] = useState(false);
+  const [scanningDocument, setScanningDocument] = useState(false);
+  const [scanError, setScanError] = useState('');
+  const documentInputRef = useRef<HTMLInputElement>(null);
   const [formData, setFormData] = useState<LeadFormData>({
     salutation: '',
     firstName: '',
@@ -353,6 +356,53 @@ export default function AdminCreateLeadPage() {
     });
   };
 
+  // Passport/ID OCR auto-fill (src/app/api/leads/extract-document) - fills
+  // only the fields this form actually has (first/last name, DOB, gender).
+  // Always reviewable/editable before save, never auto-submitted - a vision
+  // model can misread a field, so this only ever prefills, it doesn't trust.
+  const handleDocumentScan = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = ''; // allow re-selecting the same file after a retry
+    if (!file) return;
+
+    setScanningDocument(true);
+    setScanError('');
+    try {
+      const body = new FormData();
+      body.append('file', file);
+      const response = await fetch('/api/leads/extract-document', { method: 'POST', body });
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        setScanError(data.error || 'Failed to read the document');
+        return;
+      }
+
+      setFormData(prev => {
+        const next = { ...prev };
+        if (data.firstName) next.firstName = data.firstName;
+        if (data.lastName) next.lastName = data.lastName;
+        if (data.gender) next.genderIdentity = data.gender;
+        if (data.dateOfBirth) {
+          next.dateOfBirth = data.dateOfBirth;
+          next.age = calculateAgeFromDob(data.dateOfBirth);
+        }
+        return next;
+      });
+
+      if (!data.firstName && !data.lastName && !data.dateOfBirth && !data.gender) {
+        setScanError("Couldn't read any fields from that image - check it's a clear photo of a passport or ID, or fill in the details manually.");
+      } else {
+        window.toast.success('Auto-filled from the uploaded document. Review before saving.');
+      }
+    } catch (error) {
+      console.error('Error scanning document:', error);
+      setScanError('Failed to read the document');
+    } finally {
+      setScanningDocument(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const errors = validateLeadForm(formData);
@@ -528,6 +578,33 @@ export default function AdminCreateLeadPage() {
             </div>
           </div>
         )}
+
+        <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-purple-200 bg-purple-50 p-4">
+          <Sparkles className="h-5 w-5 shrink-0 text-purple-500" />
+          <div className="flex-1 min-w-50">
+            <p className="text-sm font-semibold text-purple-900">Auto-fill from a passport or ID photo</p>
+            <p className="text-xs text-purple-700">
+              Reads name, date of birth, and gender - review the fields below before saving, this doesn&apos;t submit anything on its own.
+            </p>
+            {scanError && <p className="mt-1 text-xs font-medium text-red-700">{scanError}</p>}
+          </div>
+          <input
+            ref={documentInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            className="hidden"
+            onChange={handleDocumentScan}
+          />
+          <button
+            type="button"
+            onClick={() => documentInputRef.current?.click()}
+            disabled={scanningDocument}
+            className="inline-flex items-center gap-2 rounded-lg border border-purple-300 bg-white px-6 py-2.5 text-sm font-semibold text-purple-700 transition-colors hover:bg-purple-100 disabled:opacity-50"
+          >
+            {scanningDocument ? <Loader2 className="h-4 w-4 animate-spin" /> : <ScanLine className="h-4 w-4" />}
+            {scanningDocument ? 'Reading document...' : 'Scan document'}
+          </button>
+        </div>
 
         <FormSection icon={User} title="Lead Information" description="Name and how to reach this person">
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
