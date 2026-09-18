@@ -80,6 +80,27 @@ export default function ComplianceApprovalsPage() {
   } | null>(null);
   const [reviewNotes, setReviewNotes] = useState('');
   const [reviewerName, setReviewerName] = useState('');
+  const [aiReview, setAiReview] = useState('');
+  const [aiReviewing, setAiReviewing] = useState(false);
+
+  const handleAiReview = async (approvalId: number) => {
+    setAiReviewing(true);
+    setAiReview('');
+    try {
+      const response = await fetch(`/api/opportunity-compliance-approvals/${approvalId}/ai-review`, { method: 'POST' });
+      const result = await response.json().catch(() => ({}));
+      if (response.ok && result.review) {
+        setAiReview(result.review);
+      } else {
+        setAiReview(result.error || 'Failed to generate a review.');
+      }
+    } catch (error) {
+      console.error('Error running AI compliance review:', error);
+      setAiReview('Failed to generate a review.');
+    } finally {
+      setAiReviewing(false);
+    }
+  };
 
   const fetchApprovals = useCallback(async () => {
     try {
@@ -351,9 +372,9 @@ export default function ComplianceApprovalsPage() {
                     </div>
                   ) : undefined}
                   actions={[
-                    { key: 'approve', icon: CheckCircle, label: 'Approve', onClick: () => { setError(''); setModal({ id: a.id, action: 'approve' }); }, disabled: actionLoading === a.id, colorClass: 'bg-green-50 text-green-700 hover:bg-green-100', hidden: !(isPending && canReview) },
-                    { key: 'review', icon: AlertCircle, label: 'Review', onClick: () => { setError(''); setModal({ id: a.id, action: 'under_review' }); }, disabled: actionLoading === a.id, colorClass: 'bg-blue-50 text-blue-700 hover:bg-blue-100', hidden: !(isPending && canReview && a.status === 'pending') },
-                    { key: 'reject', icon: XCircle, label: 'Reject', onClick: () => { setError(''); setModal({ id: a.id, action: 'reject' }); }, disabled: actionLoading === a.id, colorClass: 'bg-red-50 text-red-700 hover:bg-red-100', hidden: !(isPending && canReview) },
+                    { key: 'approve', icon: CheckCircle, label: 'Approve', onClick: () => { setError(''); setAiReview(''); setModal({ id: a.id, action: 'approve' }); }, disabled: actionLoading === a.id, colorClass: 'bg-green-50 text-green-700 hover:bg-green-100', hidden: !(isPending && canReview) },
+                    { key: 'review', icon: AlertCircle, label: 'Review', onClick: () => { setError(''); setAiReview(''); setModal({ id: a.id, action: 'under_review' }); }, disabled: actionLoading === a.id, colorClass: 'bg-blue-50 text-blue-700 hover:bg-blue-100', hidden: !(isPending && canReview && a.status === 'pending') },
+                    { key: 'reject', icon: XCircle, label: 'Reject', onClick: () => { setError(''); setAiReview(''); setModal({ id: a.id, action: 'reject' }); }, disabled: actionLoading === a.id, colorClass: 'bg-red-50 text-red-700 hover:bg-red-100', hidden: !(isPending && canReview) },
                     { key: 'toggle', icon: isExpanded ? ChevronUp : ChevronDown, label: 'Details', onClick: () => setExpandedId(isExpanded ? null : a.id) },
                   ]}
                 />
@@ -449,6 +470,26 @@ export default function ComplianceApprovalsPage() {
                     </p>
                   ) : (
                     <div className="mt-1 text-red-600 font-medium">Missing</div>
+                  )}
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-600">AI second opinion</span>
+                    <button
+                      type="button"
+                      onClick={() => handleAiReview(activeModalApproval.id)}
+                      disabled={aiReviewing}
+                      className="inline-flex items-center gap-1 rounded-md bg-purple-50 px-2 py-1 text-[11px] font-medium text-purple-700 hover:bg-purple-100 disabled:opacity-50"
+                      title="Cross-check this record for missing fields or inconsistencies (Claude) - does not read the signed document itself"
+                    >
+                      {aiReviewing ? 'Checking...' : 'Run AI Review'}
+                    </button>
+                  </div>
+                  {aiReview && (
+                    <p className="mt-1 whitespace-pre-wrap rounded-md bg-purple-50 border border-purple-200 p-2 text-purple-900 text-xs max-h-32 overflow-y-auto">
+                      {aiReview}
+                    </p>
                   )}
                 </div>
               </div>
