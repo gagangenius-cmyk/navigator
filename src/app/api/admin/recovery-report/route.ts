@@ -31,20 +31,25 @@ export async function GET(request: NextRequest) {
     // whose next-payment dueDate is still in the future (e.g. a scheduled
     // installment a year out) isn't overdue yet and shouldn't appear in this
     // "needs collecting now" report just because payBalance is nonzero.
-    const conds: string[] = ['l.payBalance > 0', '(l.dueDate IS NULL OR l.dueDate <= CURDATE())'];
+    // Sourced from crm_contract_ledger (one row per real contract, or one
+    // synthetic legacy row per lead with none) rather than crm_forum_leads
+    // directly, so a lead with several contracts surfaces each one's own
+    // balance/dueDate/agreement separately instead of a single collapsed
+    // per-lead figure.
+    const conds: string[] = ['cl.payBalance > 0', '(cl.dueDate IS NULL OR cl.dueDate <= CURDATE())'];
     const rep: Record<string, unknown> = {};
 
     if (search) {
       conds.push(`(CONCAT(l.fname,' ',l.lname) LIKE :search OR l.email LIKE :search OR l.mobile LIKE :search OR a.agreementNumber LIKE :search)`);
       rep.search = `%${search}%`;
     }
-    if (branchId) { conds.push('l.branch = :branchId'); rep.branchId = Number(branchId); }
+    if (branchId) { conds.push('cl.branchId = :branchId'); rep.branchId = Number(branchId); }
     if (counselorId) { conds.push('(l.Counsilor = :counselorId OR l.assignTo = :counselorId)'); rep.counselorId = Number(counselorId); }
     if (dateFrom) { conds.push('DATE(a.createdAt) >= :dateFrom'); rep.dateFrom = dateFrom; }
     if (dateTo)   { conds.push('DATE(a.createdAt) <= :dateTo');   rep.dateTo = dateTo; }
-    if (minBalance) { conds.push('l.payBalance >= :minBalance'); rep.minBalance = Number(minBalance); }
+    if (minBalance) { conds.push('cl.payBalance >= :minBalance'); rep.minBalance = Number(minBalance); }
     if (isBranchManagerOrCeo(auth) && !isCeo(auth)) {
-      conds.push('l.branch = :userBranch');
+      conds.push('cl.branchId = :userBranch');
       rep.userBranch = Number(auth.branch || 0);
     } else if (!isCeo(auth) && !(auth.permissions?.includes('all') || auth.permissions?.includes('finance.view') || auth.permissions?.includes('finance.manage'))) {
       // A payments.view-only holder (e.g. a counselor) is not a finance/BM
@@ -56,21 +61,21 @@ export async function GET(request: NextRequest) {
     const where = `WHERE ${conds.join(' AND ')}`;
 
     // crm_opportunity_agreements links to crm_opportunities via opportunityId,
-    // and crm_opportunities links to leads via leadId — so join through the opportunity.
+    // which the ledger already carries per row (real contract or legacy).
     const joinClause = `
-      FROM crm_forum_leads l
-      LEFT JOIN crm_opportunities opp ON opp.leadId = l.id
-      LEFT JOIN crm_opportunity_agreements a ON a.opportunityId = opp.id
+      FROM crm_contract_ledger cl
+      JOIN crm_forum_leads l ON l.id = cl.leadId
+      LEFT JOIN crm_opportunity_agreements a ON a.opportunityId = cl.opportunityId
       LEFT JOIN crm_employee e1 ON l.Counsilor = e1.id
       LEFT JOIN crm_employee e2 ON l.assignTo  = e2.id
-      LEFT JOIN crm_branch b   ON l.branch     = b.id
-      LEFT JOIN crm_country_proces cp ON cp.id = CAST(l.country_interest AS UNSIGNED)
-      LEFT JOIN crm_service s         ON s.id  = CAST(l.service_interest AS UNSIGNED)
-      LEFT JOIN crm_program_type pt   ON pt.id = CAST(l.service_interest AS UNSIGNED)
+      LEFT JOIN crm_branch b   ON cl.branchId  = b.id
+      LEFT JOIN crm_country_proces cp ON cp.id = cl.countryInterest
+      LEFT JOIN crm_service s         ON s.id  = cl.serviceId
+      LEFT JOIN crm_program_type pt   ON pt.id = cl.programTypeId
     `;
 
     const [countRow] = await sequelize.query<{ total: number }>(
-      `SELECT COUNT(DISTINCT l.id) AS total ${joinClause} ${where}`,
+      `SELECT COUNT(*) AS total ${joinClause} ${where}`,
       { replacements: rep, type: QueryTypes.SELECT }
     );
     const total = Number(countRow?.total || 0);
@@ -78,39 +83,40 @@ export async function GET(request: NextRequest) {
     const rows = await sequelize.query<any>(
       `SELECT
          l.id              AS leadId,
+         cl.contractId, cl.contractNumber,
          CONCAT(COALESCE(l.fname,''), ' ', COALESCE(l.lname,'')) AS clientName,
          l.email, l.mobile, l.phone,
          l.nationality,
-         COALESCE(l.payTotal,0)   AS totalFee,
-         COALESCE(l.paidYet,0)    AS amountPaid,
-         COALESCE(l.payBalance,0) AS balanceDue,
-         l.dueDate,
+         COALESCE(cl.payTotal,0)   AS totalFee,
+         COALESCE(cl.paidYet,0)    AS amountPaid,
+         COALESCE(cl.payBalance,0) AS balanceDue,
+         cl.dueDate,
          l.status,
          COALESCE(a.agreementNumber,'—')   AS agreementNumber,
          COALESCE(a.createdAt,'')          AS agreementDate,
-         COALESCE(a.totalAmount,l.payTotal,0) AS agreedFee,
-         COALESCE(l.discount,0)      AS discount,
+         COALESCE(a.totalAmount,cl.payTotal,0) AS agreedFee,
+         COALESCE(cl.discount,0)      AS discount,
          COALESCE(s.name, pt.type, l.service_interest,'') AS serviceInterest,
          COALESCE(cp.name, l.country_interest,'')         AS countryInterest,
          COALESCE(e1.name,'')  AS counselorName,
          COALESCE(e2.name,'')  AS assignedToName,
          COALESCE(b.branch,'') AS branchName,
-         (SELECT MAX(ph.date) FROM crm_pay_history ph WHERE ph.leadId = l.id) AS lastPaymentDate,
-         (SELECT COUNT(*) FROM crm_pay_history ph WHERE ph.leadId = l.id)     AS paymentCount
+         (SELECT MAX(ph.date) FROM crm_pay_history ph WHERE (cl.contractId IS NOT NULL AND ph.contract_id = cl.contractId) OR (cl.contractId IS NULL AND ph.leadId = l.id AND ph.contract_id IS NULL)) AS lastPaymentDate,
+         (SELECT COUNT(*) FROM crm_pay_history ph WHERE (cl.contractId IS NOT NULL AND ph.contract_id = cl.contractId) OR (cl.contractId IS NULL AND ph.leadId = l.id AND ph.contract_id IS NULL)) AS paymentCount
        ${joinClause}
        ${where}
-       GROUP BY l.id, a.id, e1.name, e2.name, b.branch, cp.name, s.name, pt.type
-       ORDER BY l.payBalance DESC
+       GROUP BY cl.leadId, cl.contractId, a.id, e1.name, e2.name, b.branch, cp.name, s.name, pt.type
+       ORDER BY cl.payBalance DESC
        LIMIT :limit OFFSET :offset`,
       { replacements: { ...rep, limit, offset }, type: QueryTypes.SELECT }
     );
 
     const [summary] = await sequelize.query<any>(
       `SELECT
-         COUNT(DISTINCT l.id)        AS totalClients,
-         SUM(COALESCE(l.payTotal,0)) AS totalFees,
-         SUM(COALESCE(l.paidYet,0))  AS totalPaid,
-         SUM(COALESCE(l.payBalance,0)) AS totalBalance
+         COUNT(DISTINCT cl.leadId)      AS totalClients,
+         SUM(COALESCE(cl.payTotal,0))   AS totalFees,
+         SUM(COALESCE(cl.paidYet,0))    AS totalPaid,
+         SUM(COALESCE(cl.payBalance,0)) AS totalBalance
        ${joinClause}
        ${where}`,
       { replacements: rep, type: QueryTypes.SELECT }

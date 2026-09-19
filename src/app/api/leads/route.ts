@@ -5,7 +5,7 @@ import { QueryTypes } from 'sequelize'
 import { jsonToSheetBuffer, readWorkbookFromBase64, sheetToJson } from '@/lib/excelCompat'
 import { verifyToken } from '@/lib/auth'
 import { isCeo, isFoeOrBranchManagerOrCeo, isBranchManagerOrCeo, isCounsellor } from '@/lib/roleChecks'
-import { checkForDuplicate, findExistingLead, recordDuplicateLeadAttempt, normalizePhone, checkForFuzzyDuplicate } from '@/lib/duplicateLeadCheck'
+import { checkForDuplicate, findExistingLead, recordDuplicateLeadAttempt, normalizePhone, checkForFuzzyDuplicate, getContractSummary } from '@/lib/duplicateLeadCheck'
 import { resolveLeadReferenceId, resolveLeadReferences } from '@/lib/leadReferenceResolver'
 import { resolveBranchReference } from '@/lib/branchResolver'
 import { recordLeadAssignment, logLeadRemark } from '@/lib/leadRemarks'
@@ -121,8 +121,8 @@ export async function GET(request: NextRequest) {
     const offset = (page - 1) * limit
 
     // Build WHERE conditions
-    let whereConditions = []
-    let replacements: any[] = []
+    const whereConditions = []
+    const replacements: any[] = []
 
     if (search) {
       whereConditions.push(`(
@@ -863,12 +863,15 @@ export async function POST(request: NextRequest) {
         actorRole: currentUser.roleName || currentUser.type,
       })
       const ownerLabel = existingLead.ownerName || 'an unassigned queue — contact your Branch Manager'
+      const existingContracts = await getContractSummary(existingLead.id)
       return NextResponse.json({
-        error: `A lead with this email or phone already exists (Lead #${existingLead.id}, currently with ${ownerLabel}). Request a transfer instead of creating a duplicate.`,
+        error: `A lead with this email or phone already exists (Lead #${existingLead.id}, currently with ${ownerLabel}). Add a new contract to this lead instead of creating a duplicate.`,
         duplicateLeadId: existingLead.id,
         duplicateLeadOwner: existingLead.ownerName,
         duplicateLeadOwnerId: existingLead.ownerId,
         duplicateLeadStatus: existingLead.status || 'New',
+        existingContracts,
+        canAddContract: true,
       }, { status: 409 })
     }
     const duplicateCheck = await checkForDuplicate({ phone: data.phone, email: data.email })

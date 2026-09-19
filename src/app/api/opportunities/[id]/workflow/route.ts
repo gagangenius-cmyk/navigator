@@ -77,6 +77,15 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     } else if (action === 'compliance_approve' || action === 'compliance_reject') {
       if (!roleAllowed(role, 'compliance')) { await transaction.rollback(); return NextResponse.json({ error: 'Only a CRM Compliance Officer can review this gate.' }, { status: 403 }); }
       if (workflow.finance_status !== 'approved') { await transaction.rollback(); return NextResponse.json({ error: 'Finance approval is required before CRM Compliance review.' }, { status: 409 }); }
+      // Maker-checker: whoever cleared the finance gate on this opportunity
+      // cannot also be the one clearing compliance - a single person holding
+      // both role permissions (or a Director/Super Admin, which
+      // roleAllowed() always passes for both gates) could otherwise sign off
+      // both stages alone, defeating the point of two separate gates.
+      if (userId && Number(workflow.finance_reviewed_by) === userId) {
+        await transaction.rollback();
+        return NextResponse.json({ error: 'You already cleared Finance on this opportunity — a different reviewer must clear Compliance.' }, { status: 403 });
+      }
       if (action === 'compliance_approve') {
         const missing = missingChecks(checklist, COMPLIANCE_CHECKS);
         if (missing.length) { await transaction.rollback(); return NextResponse.json({ error: 'Compliance checklist is incomplete.', missing }, { status: 422 }); }

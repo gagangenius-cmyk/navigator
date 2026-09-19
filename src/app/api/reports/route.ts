@@ -56,7 +56,20 @@ async function computeReportData(
     let reportData: Record<string, unknown> | null = {}
 
     switch (reportType) {
-      case 'leads':
+      case 'leads': {
+        // Same scope as leadBaseWhere above, expressed as raw SQL -
+        // crm_contract_ledger has no Sequelize model, so the money
+        // aggregates below (and the topCountries/topServices/monthlyTrend
+        // aggregates further down, which already used this exact shape)
+        // query it directly instead.
+        const rawConds: string[] = []
+        const rawRep: Record<string, unknown> = {}
+        if (startDate && endDate) { rawConds.push('l.created BETWEEN :startDate AND :endDate'); rawRep.startDate = startDate; rawRep.endDate = endDate }
+        if (resolvedBranch !== null) { rawConds.push('l.branch = :branch'); rawRep.branch = resolvedBranch }
+        if (resolvedRegion !== null) { rawConds.push('l.region = :region'); rawRep.region = resolvedRegion }
+        if (resolvedEmployee !== null) { rawConds.push('l.assignTo = :employee'); rawRep.employee = resolvedEmployee }
+        const rawWhere = rawConds.length ? `WHERE ${rawConds.join(' AND ')}` : ''
+
         const [totalLeads, newLeads, convertedLeads] = await Promise.all([
           CrmcForumLeads.count({
             where: leadBaseWhere
@@ -78,15 +91,25 @@ async function computeReportData(
           })
         ])
 
-        const [activeLeads, totalRevenue, pendingRevenue, recentLeads, countries, services, programTypes] = await Promise.all([
+        const [activeLeads, moneyTotalsRows, recentLeads, countries, services, programTypes] = await Promise.all([
           CrmcForumLeads.count({
             where: {
               ...leadBaseWhere,
               status: { [Op.notIn]: [...newStatuses, ...convertedStatuses] }
             }
           }),
-          CrmcForumLeads.sum('payTotal', { where: leadBaseWhere }),
-          CrmcForumLeads.sum('payBalance', { where: leadBaseWhere }),
+          // crm_contract_ledger instead of CrmcForumLeads.sum('payTotal'/'payBalance')
+          // - one row per real contract (or one synthetic legacy row per lead
+          // with none), so a lead's contracts each contribute their own
+          // amounts instead of only whatever still sits on the lead's own
+          // flat fields.
+          sequelize.query<{ totalRevenue: number; pendingRevenue: number }>(
+            `SELECT COALESCE(SUM(cl.payTotal),0) AS totalRevenue, COALESCE(SUM(cl.payBalance),0) AS pendingRevenue
+             FROM crm_contract_ledger cl
+             JOIN crm_forum_leads l ON l.id = cl.leadId
+             ${rawWhere}`,
+            { replacements: rawRep, type: QueryTypes.SELECT }
+          ),
           CrmcForumLeads.findAll({
             where: leadBaseWhere,
             attributes: ['id', 'fname', 'lname', 'email', 'phone', 'country_interest', 'service_interest', 'status', 'opportunity_status', 'priority', 'regdate', 'payTotal', 'payBalance'],
@@ -120,21 +143,13 @@ async function computeReportData(
           }
         })
 
-        // Same scope as leadBaseWhere above, rebuilt as raw SQL for the
-        // GROUP BY aggregates below - src/app/admin/reports/lead-status
+        // topCountries/topServices/monthlyTrend below reuse the same
+        // rawConds/rawRep/rawWhere already built above (src/app/admin/reports/lead-status
         // used to fetch up to 10,000 full lead rows to the browser
         // (`/api/leads?limit=10000`) just to reduce() these three
         // breakdowns client-side; computed here as real SQL aggregates
-        // instead, and that page now calls this endpoint.
-        const rawConds: string[] = []
-        const rawRep: Record<string, unknown> = {}
-        if (startDate && endDate) { rawConds.push('l.created BETWEEN :startDate AND :endDate'); rawRep.startDate = startDate; rawRep.endDate = endDate }
-        if (resolvedBranch !== null) { rawConds.push('l.branch = :branch'); rawRep.branch = resolvedBranch }
-        if (resolvedRegion !== null) { rawConds.push('l.region = :region'); rawRep.region = resolvedRegion }
-        if (resolvedEmployee !== null) { rawConds.push('l.assignTo = :employee'); rawRep.employee = resolvedEmployee }
-        const rawWhere = rawConds.length ? `WHERE ${rawConds.join(' AND ')}` : ''
-
-        const [topCountriesRows, topServicesRows, monthlyTrendRows] = await Promise.all([
+        // instead, and that page now calls this endpoint).
+        const [topCountriesRows, topServicesRows, monthlyLeadsRows, monthlyRevenueRows] = await Promise.all([
           sequelize.query<{ label: string; count: number }>(
             `SELECT COALESCE(cp.name, l.country_interest, 'Unknown') AS label, COUNT(*) AS count
              FROM crm_forum_leads l
@@ -153,23 +168,41 @@ async function computeReportData(
              ORDER BY count DESC LIMIT 5`,
             { replacements: rawRep, type: QueryTypes.SELECT }
           ),
-          sequelize.query<{ month: string; leads: number; revenue: number }>(
-            `SELECT DATE_FORMAT(l.regdate, '%b %y') AS month, COUNT(*) AS leads, COALESCE(SUM(l.payTotal),0) AS revenue
+          sequelize.query<{ month: string; leads: number }>(
+            `SELECT DATE_FORMAT(l.regdate, '%b %y') AS month, COUNT(*) AS leads
              FROM crm_forum_leads l
              ${rawWhere}
              GROUP BY DATE_FORMAT(l.regdate, '%Y-%m'), DATE_FORMAT(l.regdate, '%b %y')
              ORDER BY DATE_FORMAT(l.regdate, '%Y-%m') DESC LIMIT 6`,
             { replacements: rawRep, type: QueryTypes.SELECT }
           ),
+          // Revenue queried separately from lead counts above - joining
+          // crm_contract_ledger would fan a lead with several contracts out
+          // into several rows, inflating the per-month lead COUNT(*).
+          sequelize.query<{ month: string; revenue: number }>(
+            `SELECT DATE_FORMAT(l.regdate, '%b %y') AS month, COALESCE(SUM(cl.payTotal),0) AS revenue
+             FROM crm_forum_leads l
+             JOIN crm_contract_ledger cl ON cl.leadId = l.id
+             ${rawWhere}
+             GROUP BY DATE_FORMAT(l.regdate, '%Y-%m'), DATE_FORMAT(l.regdate, '%b %y')
+             ORDER BY DATE_FORMAT(l.regdate, '%Y-%m') DESC LIMIT 6`,
+            { replacements: rawRep, type: QueryTypes.SELECT }
+          ),
         ])
+        const revenueByMonth = new Map(monthlyRevenueRows.map((r) => [r.month, numericValue(r.revenue)]))
+        const monthlyTrendRows = monthlyLeadsRows.map((r) => ({
+          month: r.month,
+          leads: numericValue(r.leads),
+          revenue: revenueByMonth.get(r.month) || 0,
+        }))
 
         reportData = {
           totalLeads,
           newLeads,
           convertedLeads,
           activeLeads,
-          totalRevenue: numericValue(totalRevenue),
-          pendingRevenue: numericValue(pendingRevenue),
+          totalRevenue: numericValue(moneyTotalsRows[0]?.totalRevenue),
+          pendingRevenue: numericValue(moneyTotalsRows[0]?.pendingRevenue),
           recentLeads: decoratedRecentLeads,
           conversionRate: totalLeads > 0 ? Number((convertedLeads / totalLeads * 100).toFixed(2)) : 0,
           topCountries: topCountriesRows.map((r) => ({ country: r.label, count: numericValue(r.count) })),
@@ -177,6 +210,7 @@ async function computeReportData(
           monthlyTrends: monthlyTrendRows.map((r) => ({ month: r.month, leads: numericValue(r.leads), revenue: numericValue(r.revenue) })).reverse(),
         }
         break
+      }
 
       // Previously src/app/admin/reports/lead-conversion-funnel fetched
       // `/api/leads?limit=500` and reduce()d these 4 stage counts
@@ -452,7 +486,7 @@ export async function GET(request: NextRequest) {
     // their own branch; everyone else to their own leads - this overrides
     // whatever ?branch=/?employee= was requested rather than defaulting it.
     let resolvedBranch: number | null = branch ? parseInt(branch) : null
-    let resolvedRegion: number | null = region ? parseInt(region) : null
+    const resolvedRegion: number | null = region ? parseInt(region) : null
     let resolvedEmployee: number | null = employee ? parseInt(employee) : null
     let resolvedCounselorId: number | null = null
     let resolvedEmpId: number | null = null

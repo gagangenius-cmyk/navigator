@@ -160,10 +160,15 @@ export async function POST(request: NextRequest) {
     // Duplicate-submission guard: the frontend already guards this well
     // (submittingCompliance state + status checks), but that's not airtight
     // against two near-simultaneous requests - block a second submission
-    // while one for this lead is still pending review.
+    // while one for this lead is still pending review. Scoped by
+    // opportunityId (when supplied) as well as leadId - a lead can now have
+    // multiple contracts, each its own opportunity, and a pending review on
+    // one of them must not block submitting a completely unrelated one.
     const [pendingExisting] = await sequelize.query<{ id: number }>(
-      `SELECT id FROM crm_opportunity_compliance_approvals WHERE leadId = ? AND status = 'pending' LIMIT 1`,
-      { replacements: [body.leadId], type: QueryTypes.SELECT }
+      body.opportunityId
+        ? `SELECT id FROM crm_opportunity_compliance_approvals WHERE leadId = ? AND opportunityId = ? AND status = 'pending' LIMIT 1`
+        : `SELECT id FROM crm_opportunity_compliance_approvals WHERE leadId = ? AND status = 'pending' LIMIT 1`,
+      { replacements: body.opportunityId ? [body.leadId, body.opportunityId] : [body.leadId], type: QueryTypes.SELECT }
     );
     if (pendingExisting) {
       return NextResponse.json(

@@ -292,7 +292,16 @@ async function ensureForeignKey(connection, tableName, constraintName, definitio
   );
 
   if (Number(rows[0].count) === 0) {
-    await connection.query(`ALTER TABLE \`${tableName}\` ADD CONSTRAINT \`${constraintName}\` ${definition}`);
+    // No pre-cleanup of orphaned rows before this - if any exist (a
+    // role_permissions row pointing at an already-deleted role/permission),
+    // this ALTER simply fails to add the constraint rather than deleting
+    // those rows to force it through. Warn and move on: a slightly-stale FK
+    // is far safer than any DELETE in a seed script touching real data.
+    try {
+      await connection.query(`ALTER TABLE \`${tableName}\` ADD CONSTRAINT \`${constraintName}\` ${definition}`);
+    } catch (error) {
+      console.warn(`Skipped adding FK ${constraintName} on ${tableName} (likely pre-existing orphaned rows): ${error.message}`);
+    }
   }
 }
 
@@ -363,8 +372,6 @@ async function seedRolePermissions(connection) {
     }
   }
 
-  await connection.query('DELETE rp FROM crm_role_permissions rp LEFT JOIN crm_role r ON r.id = rp.role_id WHERE r.id IS NULL');
-  await connection.query('DELETE rp FROM crm_role_permissions rp LEFT JOIN crm_permissions p ON p.id = rp.permission_id WHERE p.id IS NULL');
   await ensureIndex(connection, 'crm_role', 'idx_dm_role_id', '`id`');
   await ensureIndex(connection, 'crm_permissions', 'idx_dm_permissions_id', '`id`');
   await ensureForeignKey(

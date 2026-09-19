@@ -18,6 +18,9 @@ export async function register() {
 
     const { startLeadScoreCron } = await import('@/lib/lead-score-cron');
     await startLeadScoreCron();
+
+    const { startContractReconciliationCron } = await import('@/lib/contract-reconciliation-cron');
+    await startContractReconciliationCron();
   }
 }
 

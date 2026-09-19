@@ -169,11 +169,15 @@ async function seedFees(connection) {
   const serviceIdByName = await ensureServices(connection);
   await ensureCountryTypeProgramMappings(connection, serviceIdByName);
 
-  // crm_fee is treated as a fully-managed reference table for these programs:
-  // replace its contents each run so the seed stays the single source of truth.
-  await connection.query('DELETE FROM crm_fee');
-
-  let nextFeeId = 1;
+  // crm_fee is this project's rate card - never wipe it. Each row is
+  // matched by its natural key (service + country + branch + currency,
+  // NULL-safe since countryId can be null) and updated in place; only rows
+  // with no match get a new INSERT (auto-increment id, never a forced one).
+  // A prior version of this seed did `DELETE FROM crm_fee` then reinserted
+  // everything with fixed sequential ids - safe only as long as nothing else
+  // ever added a fee row of its own, which a fee-management UI easily could.
+  let inserted = 0;
+  let updated = 0;
   for (const row of FEE_ROWS) {
     const [, subCategory, countryName, branchKey, currencyId,
       upfront, profUp, m1, m2, m3, profMo, s1, s2, s3, s4, s5, profSt] = row;
@@ -182,18 +186,33 @@ async function seedFees(connection) {
     const countryId = countryName ? COUNTRY[countryName] : null;
     const branchId = branchIds[branchKey];
 
-    await connection.query(
-      `INSERT INTO crm_fee (id, service, country, branch, currency, upfront, prof_fee,
-        firstMonth, secondMonth, thirdMonth, prof_fee_month,
-        firstStage, secondStage, thirdStage, forthStage, fifthStage, prof_fee_stage, status)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1)`,
-      [nextFeeId, serviceId, countryId, branchId, currencyId, upfront, profUp,
-        m1, m2, m3, profMo, s1, s2, s3, s4, s5, profSt]
+    const [existing] = await connection.query(
+      `SELECT id FROM crm_fee WHERE service = ? AND country <=> ? AND branch = ? AND currency = ? LIMIT 1`,
+      [serviceId, countryId, branchId, currencyId]
     );
-    nextFeeId++;
+
+    if (existing.length) {
+      await connection.query(
+        `UPDATE crm_fee SET upfront=?, prof_fee=?, firstMonth=?, secondMonth=?, thirdMonth=?, prof_fee_month=?,
+           firstStage=?, secondStage=?, thirdStage=?, forthStage=?, fifthStage=?, prof_fee_stage=?, status=1
+         WHERE id = ?`,
+        [upfront, profUp, m1, m2, m3, profMo, s1, s2, s3, s4, s5, profSt, existing[0].id]
+      );
+      updated++;
+    } else {
+      await connection.query(
+        `INSERT INTO crm_fee (service, country, branch, currency, upfront, prof_fee,
+          firstMonth, secondMonth, thirdMonth, prof_fee_month,
+          firstStage, secondStage, thirdStage, forthStage, fifthStage, prof_fee_stage, status)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1)`,
+        [serviceId, countryId, branchId, currencyId, upfront, profUp,
+          m1, m2, m3, profMo, s1, s2, s3, s4, s5, profSt]
+      );
+      inserted++;
+    }
   }
 
-  return { fees: FEE_ROWS.length, services: Object.keys(serviceIdByName).length };
+  return { fees: FEE_ROWS.length, inserted, updated, services: Object.keys(serviceIdByName).length };
 }
 
 async function run() {
@@ -201,7 +220,7 @@ async function run() {
   const connection = await mysql.createConnection({ ...baseConfig, database });
   const result = await seedFees(connection);
   await connection.end();
-  console.log(`Seeded ${result.fees} fee rows across ${result.services} services.`);
+  console.log(`Seeded ${result.fees} fee rows (${result.inserted} inserted, ${result.updated} updated) across ${result.services} services.`);
 }
 
 if (require.main === module) {

@@ -64,19 +64,23 @@ async function computeAnalyticsData(isBM: boolean, isCounselor: boolean, userBra
 
   const [
     summaryRows,
+    summaryMoneyRows,
     statusRows,
     monthlyRows,
     sourceRows,
     counselorRows,
+    counselorMoneyRows,
     branchRows,
+    branchMoneyRows,
     appointmentRows,
     paymentTrendRows,
     recentLeadsRows,
   ] = await Promise.all([
-    // ── Summary totals ──────────────────────────────────────────────────────
+    // ── Summary totals (lead counts only — money is queried separately
+    // below since crm_contract_ledger fans a lead with several contracts
+    // out into several rows, which would inflate these COUNT(*)s) ─────────
     sequelize.query<{
       total: number; new_leads: number; active: number; converted: number;
-      revenue: number; paid: number; pending: number;
     }>(
       `SELECT
         COUNT(*) AS total,
@@ -84,11 +88,21 @@ async function computeAnalyticsData(isBM: boolean, isCounselor: boolean, userBra
         SUM(CASE WHEN l.status NOT IN ('New','new','Converted','converted','Retained','retained','Client','client')
              AND (l.opportunity_status IS NULL OR l.opportunity_status <> 'won') THEN 1 ELSE 0 END) AS active,
         SUM(CASE WHEN l.status IN ('Converted','converted','Retained','retained','Client','client')
-             OR l.opportunity_status = 'won' THEN 1 ELSE 0 END) AS converted,
-        COALESCE(SUM(l.payTotal),0) AS revenue,
-        COALESCE(SUM(l.paidYet),0) AS paid,
-        COALESCE(SUM(l.payBalance),0) AS pending
+             OR l.opportunity_status = 'won' THEN 1 ELSE 0 END) AS converted
       FROM crm_forum_leads l
+      WHERE 1=1 ${leadWhere} ${dateFilter}`,
+      { replacements: rep, type: QueryTypes.SELECT }
+    ),
+
+    // ── Summary money (from crm_contract_ledger — one row per real
+    // contract, or one synthetic legacy row per lead with none) ───────────
+    sequelize.query<{ revenue: number; paid: number; pending: number }>(
+      `SELECT
+        COALESCE(SUM(cl.payTotal),0) AS revenue,
+        COALESCE(SUM(cl.paidYet),0) AS paid,
+        COALESCE(SUM(cl.payBalance),0) AS pending
+      FROM crm_contract_ledger cl
+      JOIN crm_forum_leads l ON l.id = cl.leadId
       WHERE 1=1 ${leadWhere} ${dateFilter}`,
       { replacements: rep, type: QueryTypes.SELECT }
     ),
@@ -139,10 +153,11 @@ async function computeAnalyticsData(isBM: boolean, isCounselor: boolean, userBra
       { replacements: rep, type: QueryTypes.SELECT }
     ),
 
-    // ── Counselor performance ───────────────────────────────────────────────
+    // ── Counselor performance (lead counts; money queried separately below
+    // per counselor id, then merged in JS — same fan-out reason as summary) ─
     sequelize.query<{
       id: number; name: string; branch_name: string;
-      total: number; converted: number; revenue: number; paid: number;
+      total: number; converted: number;
     }>(
       `SELECT
         e.id,
@@ -150,9 +165,7 @@ async function computeAnalyticsData(isBM: boolean, isCounselor: boolean, userBra
         COALESCE(b.branch, 'N/A') AS branch_name,
         COUNT(l.id) AS total,
         SUM(CASE WHEN l.status IN ('Converted','converted','Retained','retained','Client','client')
-             OR l.opportunity_status = 'won' THEN 1 ELSE 0 END) AS converted,
-        COALESCE(SUM(l.payTotal),0) AS revenue,
-        COALESCE(SUM(l.paidYet),0) AS paid
+             OR l.opportunity_status = 'won' THEN 1 ELSE 0 END) AS converted
       FROM crm_employee e
       LEFT JOIN crm_forum_leads l ON (l.assignTo = e.id OR l.Counsilor = e.id) ${dateFilter} ${leadWhere}
       LEFT JOIN crm_branch b ON b.id = e.branch
@@ -164,10 +177,26 @@ async function computeAnalyticsData(isBM: boolean, isCounselor: boolean, userBra
       { replacements: rep, type: QueryTypes.SELECT }
     ),
 
-    // ── Branch performance ──────────────────────────────────────────────────
+    // ── Counselor money, from crm_contract_ledger ──────────────────────────
+    sequelize.query<{ id: number; revenue: number; paid: number }>(
+      `SELECT
+        e.id,
+        COALESCE(SUM(cl.payTotal),0) AS revenue,
+        COALESCE(SUM(cl.paidYet),0) AS paid
+      FROM crm_employee e
+      JOIN crm_forum_leads l ON (l.assignTo = e.id OR l.Counsilor = e.id) ${dateFilter} ${leadWhere}
+      JOIN crm_contract_ledger cl ON cl.leadId = l.id
+      WHERE e.status = 1 ${employeeBranchFilter}
+      GROUP BY e.id`,
+      { replacements: rep, type: QueryTypes.SELECT }
+    ),
+
+    // ── Branch performance (lead counts; money queried separately below,
+    // attributed to each CONTRACT's own branch rather than only the lead's
+    // home branch, then merged in JS by branch id) ────────────────────────
     sequelize.query<{
       id: number; name: string; region_name: string;
-      total: number; converted: number; revenue: number; paid: number;
+      total: number; converted: number;
     }>(
       `SELECT
         b.id,
@@ -175,15 +204,28 @@ async function computeAnalyticsData(isBM: boolean, isCounselor: boolean, userBra
         COALESCE(r.name, 'N/A') AS region_name,
         COUNT(l.id) AS total,
         SUM(CASE WHEN l.status IN ('Converted','converted','Retained','retained','Client','client')
-             OR l.opportunity_status = 'won' THEN 1 ELSE 0 END) AS converted,
-        COALESCE(SUM(l.payTotal),0) AS revenue,
-        COALESCE(SUM(l.paidYet),0) AS paid
+             OR l.opportunity_status = 'won' THEN 1 ELSE 0 END) AS converted
       FROM crm_branch b
       LEFT JOIN crm_region r ON r.id = b.region
       LEFT JOIN crm_forum_leads l ON l.branch = b.id ${dateFilter} ${counselorJoinFilter}
       WHERE b.status = 1 ${branchJoinFilter}
       GROUP BY b.id, b.branch, r.name
       ORDER BY total DESC`,
+      { replacements: rep, type: QueryTypes.SELECT }
+    ),
+
+    // ── Branch money, from crm_contract_ledger — attributed to the
+    // contract's own branchId, not the lead's home branch. ────────────────
+    sequelize.query<{ id: number; revenue: number; paid: number }>(
+      `SELECT
+        b.id,
+        COALESCE(SUM(cl.payTotal),0) AS revenue,
+        COALESCE(SUM(cl.paidYet),0) AS paid
+      FROM crm_branch b
+      JOIN crm_contract_ledger cl ON cl.branchId = b.id
+      JOIN crm_forum_leads l ON l.id = cl.leadId ${dateFilter} ${counselorJoinFilter}
+      WHERE b.status = 1 ${branchJoinFilter}
+      GROUP BY b.id`,
       { replacements: rep, type: QueryTypes.SELECT }
     ),
 
@@ -239,6 +281,7 @@ async function computeAnalyticsData(isBM: boolean, isCounselor: boolean, userBra
   ]);
 
   const s = summaryRows[0] || {};
+  const moneyS = summaryMoneyRows[0] || {};
   const totalLeads = n(s.total);
   const converted = n(s.converted);
 
@@ -248,6 +291,9 @@ async function computeAnalyticsData(isBM: boolean, isCounselor: boolean, userBra
     { type: QueryTypes.SELECT }
   );
 
+  const counselorMoneyById = new Map(counselorMoneyRows.map(r => [r.id, r]));
+  const branchMoneyById = new Map(branchMoneyRows.map(r => [r.id, r]));
+
   return {
     summary: {
       totalLeads,
@@ -255,9 +301,9 @@ async function computeAnalyticsData(isBM: boolean, isCounselor: boolean, userBra
       activeLeads: n(s.active),
       convertedLeads: converted,
       conversionRate: totalLeads > 0 ? parseFloat(((converted / totalLeads) * 100).toFixed(1)) : 0,
-      totalRevenue: n(s.revenue),
-      collectedAmount: n(s.paid),
-      pendingAmount: n(s.pending),
+      totalRevenue: n(moneyS.revenue),
+      collectedAmount: n(moneyS.paid),
+      pendingAmount: n(moneyS.pending),
       totalEmployees: n(empCount?.total),
       totalAppointments: n(appointmentRows[0]?.total),
       completedAppointments: n(appointmentRows[0]?.completed),
@@ -270,30 +316,36 @@ async function computeAnalyticsData(isBM: boolean, isCounselor: boolean, userBra
       converted: n(r.converted),
     })),
     leadsBySource: sourceRows.map(r => ({ source: String(r.source), count: n(r.count) })),
-    counselorPerformance: counselorRows.map(r => ({
-      id: r.id,
-      name: r.name,
-      branch: r.branch_name,
-      totalLeads: n(r.total),
-      convertedLeads: n(r.converted),
-      conversionRate: n(r.total) > 0
-        ? parseFloat(((n(r.converted) / n(r.total)) * 100).toFixed(1))
-        : 0,
-      revenue: n(r.revenue),
-      collected: n(r.paid),
-    })),
-    branchPerformance: branchRows.map(r => ({
-      id: r.id,
-      name: r.name,
-      region: r.region_name,
-      totalLeads: n(r.total),
-      convertedLeads: n(r.converted),
-      conversionRate: n(r.total) > 0
-        ? parseFloat(((n(r.converted) / n(r.total)) * 100).toFixed(1))
-        : 0,
-      revenue: n(r.revenue),
-      collected: n(r.paid),
-    })),
+    counselorPerformance: counselorRows.map(r => {
+      const money = counselorMoneyById.get(r.id);
+      return {
+        id: r.id,
+        name: r.name,
+        branch: r.branch_name,
+        totalLeads: n(r.total),
+        convertedLeads: n(r.converted),
+        conversionRate: n(r.total) > 0
+          ? parseFloat(((n(r.converted) / n(r.total)) * 100).toFixed(1))
+          : 0,
+        revenue: n(money?.revenue),
+        collected: n(money?.paid),
+      };
+    }),
+    branchPerformance: branchRows.map(r => {
+      const money = branchMoneyById.get(r.id);
+      return {
+        id: r.id,
+        name: r.name,
+        region: r.region_name,
+        totalLeads: n(r.total),
+        convertedLeads: n(r.converted),
+        conversionRate: n(r.total) > 0
+          ? parseFloat(((n(r.converted) / n(r.total)) * 100).toFixed(1))
+          : 0,
+        revenue: n(money?.revenue),
+        collected: n(money?.paid),
+      };
+    }),
     paymentTrend: paymentTrendRows.map(r => ({
       month: r.month,
       collected: n(r.collected),

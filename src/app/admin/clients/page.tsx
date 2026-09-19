@@ -17,6 +17,12 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 // the receipt can show that client's actual branch instead of always Dubai.
 type ClientWithBranch = CrmClientsAttributes & {
   opportunityId?: number | null;
+  // Present once this "client" row comes from the new multi-contract model
+  // (a lead can now have several of these — one card per contract, not per
+  // lead). Absent for a won opportunity that predates the contract model,
+  // in which case balances still come from the lead's own flat fields.
+  contractId?: number | null;
+  contractNumber?: string | null;
   phone?: string;
   branchName?: string;
   branchAddress?: string;
@@ -31,6 +37,8 @@ type ClientWithBranch = CrmClientsAttributes & {
 interface BalanceRow {
   clientId: number;
   leadId: number;
+  contractId?: number | null;
+  contractNumber?: string | null;
   payTotal: number;
   paidYet: number;
   payBalance: number;
@@ -276,33 +284,51 @@ export default function ClientsManagement() {
 
     setQuickPay(p => p ? { ...p, saving: true, msg: '' } : null);
     try {
-      const res = await fetch('/api/receipts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          leadId: quickPay.client.leadId,
-          opportunityId: null,
-          paymentData: {
-            paymentStructure: 'installment',
-            paymentMethod: quickPay.method,
-            transactionId: quickPay.txnId || undefined,
-            paymentDate: quickPay.date,
-            paidAmount: amount,
-            totalAmount: quickPay.balance?.payTotal || amount,
-            amount,
-          },
-          receiptData: {
-            description: `Balance payment receipt for ${quickPay.client.first_name} ${quickPay.client.last_name}`,
-            receiptType: 'payment',
-            taxAmount: 0,
-            discountAmount: 0,
-            notes: '',
-          },
-        }),
-      });
+      // A client card backed by the new multi-contract model (contractId set)
+      // must record the payment against THAT contract, not the lead's own
+      // flat fields — otherwise the balance shown here (from crm_contracts)
+      // would never move even though a receipt was created. Legacy clients
+      // with no contract yet keep using the original /api/receipts path.
+      const contractId = quickPay.client.contractId;
+      const res = contractId
+        ? await fetch(`/api/contracts/${contractId}/receipts`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              amount,
+              paymentMethod: quickPay.method,
+              transactionId: quickPay.txnId || undefined,
+              paymentDate: quickPay.date,
+              notes: `Balance payment receipt for ${quickPay.client.first_name} ${quickPay.client.last_name}`,
+            }),
+          })
+        : await fetch('/api/receipts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              leadId: quickPay.client.leadId,
+              opportunityId: null,
+              paymentData: {
+                paymentStructure: 'installment',
+                paymentMethod: quickPay.method,
+                transactionId: quickPay.txnId || undefined,
+                paymentDate: quickPay.date,
+                paidAmount: amount,
+                totalAmount: quickPay.balance?.payTotal || amount,
+                amount,
+              },
+              receiptData: {
+                description: `Balance payment receipt for ${quickPay.client.first_name} ${quickPay.client.last_name}`,
+                receiptType: 'payment',
+                taxAmount: 0,
+                discountAmount: 0,
+                notes: '',
+              },
+            }),
+          });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Failed to create receipt');
-      const receipt = json.data?.receipt || json.data || json;
+      const receipt = contractId ? json : (json.data?.receipt || json.data || json);
       setQuickPay(p => p ? { ...p, saving: false, success: true, receipt, msg: `Receipt ${receipt.receiptNumber || ''} created!` } : null);
       // Refresh balances
       const bRes = await fetch('/api/admin/clients/balances');
@@ -398,6 +424,11 @@ export default function ClientsManagement() {
                   titleBadges={
                     <>
                       <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-600">#{client.leadId} · {client.city || '—'}</span>
+                      {client.contractNumber && (
+                        <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-semibold text-indigo-700" title="This lead may have other contracts too — each shows as its own card.">
+                          {client.contractNumber}
+                        </span>
+                      )}
                       <span className={`inline-flex px-2 py-0.5 text-xs font-semibold rounded-full ${getStatusColor(client.status)}`}>
                         {client.status === 1 ? 'Active' : 'Inactive'}
                       </span>

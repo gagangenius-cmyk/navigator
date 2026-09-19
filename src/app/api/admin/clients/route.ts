@@ -28,6 +28,12 @@ type ClientListRow = {
   id: number;
   opportunityId: number | null;
   leadId: number;
+  contractId: number | null;
+  contractNumber: string | null;
+  contractPayTotal: string | number | null;
+  contractPaidYet: string | number | null;
+  contractPayBalance: string | number | null;
+  contractStatus: string | null;
   case_activated_at: Date | string | null;
   fname: string | null;
   lname: string | null;
@@ -56,6 +62,13 @@ type ClientListRow = {
 // table is never populated by any live code path, so GET reads from the
 // workflow review directly instead (POST/PUT/DELETE below are left against
 // crm_clients since nothing in the app currently exercises them).
+//
+// Since a lead can now have multiple contracts (each its own opportunity +
+// workflow review), this deliberately returns ONE ROW PER APPROVED
+// OPPORTUNITY, not one row per lead — a lead with two won+approved contracts
+// shows as two rows here (grouped by leadId on the frontend). opportunity_id
+// is already UNIQUE on crm_opportunity_workflow_reviews, so no MAX(id)/
+// GROUP BY collapse is needed (or correct) any more.
 export async function GET(request: NextRequest) {
   const auth = requireAuth(request, ['clients.view']);
   if (isAuthError(auth)) return auth;
@@ -80,30 +93,29 @@ export async function GET(request: NextRequest) {
     // Branch Manager sees only their own branch's clients here - CEO and
     // every other clients.view holder (operations tier, finance, etc.) are
     // unaffected, matching the exemption pattern used across this app.
+    // Scoped by the CONTRACT's own branch when one exists (a contract added
+    // via the express flow can be at a different branch from the lead's home
+    // branch), falling back to the lead's own branch for legacy won
+    // opportunities that predate the contract model.
     if (isBranchManagerOrCeo(auth) && !isCeo(auth)) {
-      conditions.push(`l.branch = :userBranch`);
+      conditions.push(`COALESCE(ct.branch_id, l.branch) = :userBranch`);
       replacements.userBranch = auth.branch || 0;
     }
 
     const fromAndWhere = `
        FROM crm_opportunity_workflow_reviews w
-       INNER JOIN (
-         SELECT wr.lead_id, MAX(wr.id) AS maxId
-         FROM crm_opportunity_workflow_reviews wr
-         JOIN crm_opportunities owr ON owr.id = wr.opportunity_id
-         WHERE wr.finance_status = 'approved' AND wr.compliance_status = 'approved'
-           AND TRIM(LOWER(COALESCE(owr.status, ''))) IN ('won', 'closed won', 'close won')
-         GROUP BY lead_id
-       ) latest ON latest.maxId = w.id
        JOIN crm_forum_leads l ON l.id = w.lead_id
        JOIN crm_opportunities o ON o.id = w.opportunity_id
-       LEFT JOIN crm_branch b ON l.branch = b.id
+       LEFT JOIN crm_contracts ct ON ct.opportunity_id = w.opportunity_id AND ct.is_deleted = 0
+       LEFT JOIN crm_branch b ON b.id = COALESCE(ct.branch_id, l.branch)
        WHERE ${conditions.join(' AND ')}`;
 
     const [rows, [{ total }]] = await Promise.all([
       sequelize.query<ClientListRow>(
         `SELECT
            w.id, w.opportunity_id AS opportunityId, w.lead_id AS leadId, w.case_activated_at,
+           ct.id AS contractId, ct.contract_number AS contractNumber, ct.pay_total AS contractPayTotal,
+           ct.paid_yet AS contractPaidYet, ct.pay_balance AS contractPayBalance, ct.status AS contractStatus,
            l.fname, l.lname, l.email, l.phone, l.mobile, l.dob, l.address, l.area, l.nationality, l.assignTo,
            b.name AS branchName, b.address AS branchAddress, b.email AS branchEmail,
            b.mobile AS branchMobile, b.license_number AS branchLicenseNumber, b.vat_gst_percent AS branchVatGstPercent,
@@ -141,6 +153,12 @@ export async function GET(request: NextRequest) {
       id: r.id,
       opportunityId: r.opportunityId,
       leadId: r.leadId,
+      contractId: r.contractId,
+      contractNumber: r.contractNumber,
+      contractPayTotal: r.contractPayTotal,
+      contractPaidYet: r.contractPaidYet,
+      contractPayBalance: r.contractPayBalance,
+      contractStatus: r.contractStatus,
       first_name: r.fname || '',
       last_name: r.lname || '',
       email: r.email || '',

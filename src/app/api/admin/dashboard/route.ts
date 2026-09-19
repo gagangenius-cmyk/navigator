@@ -99,6 +99,11 @@ async function computeDashboardData(
   const apptReplacements = { today, uid: userId, branch: userBranch };
 
   // ── Lead Stats ───────────────────────────────────────────────────────────
+  // Lead counts stay scoped to crm_forum_leads (a "lead" is still one row
+  // regardless of how many contracts it has) - only the money figures below
+  // need to come from crm_contract_ledger, which fans a lead with several
+  // contracts out into several rows, so they're queried separately rather
+  // than in this same COUNT(*) aggregate.
   const [leadStats] = await sequelize.query<any>(`
     SELECT
       COUNT(*) AS totalLeads,
@@ -107,23 +112,39 @@ async function computeDashboardData(
       SUM(CASE WHEN DATE(COALESCE(l.created, l.regdate)) >= :monthAgo THEN 1 ELSE 0 END) AS monthLeads,
       SUM(CASE WHEN LOWER(COALESCE(l.status, '')) IN ('converted', 'retained', 'client', 'enrolled')
              OR LOWER(COALESCE(l.opportunity_status, '')) = 'won' THEN 1 ELSE 0 END) AS convertedLeads,
-      SUM(CASE WHEN l.followupstat = 0 AND l.followup IS NOT NULL AND DATE(l.followup) <= :today THEN 1 ELSE 0 END) AS pendingFollowups,
-      COALESCE(SUM(l.payTotal), 0) AS totalRevenue,
-      COALESCE(SUM(l.paidYet), 0) AS totalPaidAmount,
-      COALESCE(SUM(l.payBalance), 0) AS totalBalance
+      SUM(CASE WHEN l.followupstat = 0 AND l.followup IS NOT NULL AND DATE(l.followup) <= :today THEN 1 ELSE 0 END) AS pendingFollowups
     FROM crm_forum_leads l
+    ${leadWhere}
+  `, { replacements: { today, weekAgo, monthAgo, ...leadReplacements }, type: QueryTypes.SELECT });
+
+  // Money figures come from crm_contract_ledger (one row per real contract,
+  // or one synthetic legacy row per lead with zero contracts) instead of
+  // crm_forum_leads directly, so a lead's contracts each contribute their
+  // own payTotal/paidYet/payBalance instead of only whatever still sits on
+  // the lead's own flat fields (which the express "Add Contract" flow never
+  // touches). leadWhere's role/date conditions still apply unchanged since
+  // `l` is still joined in.
+  const [moneyStats] = await sequelize.query<any>(`
+    SELECT
+      COALESCE(SUM(cl.payTotal), 0) AS totalRevenue,
+      COALESCE(SUM(cl.paidYet), 0) AS totalPaidAmount,
+      COALESCE(SUM(cl.payBalance), 0) AS totalBalance
+    FROM crm_contract_ledger cl
+    JOIN crm_forum_leads l ON l.id = cl.leadId
     ${leadWhere}
   `, { replacements: { today, weekAgo, monthAgo, ...leadReplacements }, type: QueryTypes.SELECT });
 
   // "Revenue" for a counselor should be the company's actual earnings, not
   // the VAT collected on the client's behalf and remitted to the
-  // government - so back the branch's tax rate out of each lead's
-  // payTotal (skipping leads flagged novat) rather than summing the raw,
-  // tax-inclusive payment total.
+  // government - so back the branch's tax rate out of each contract's
+  // payTotal (skipping ones flagged novat) rather than summing the raw,
+  // tax-inclusive payment total. Branch comes from the contract's own
+  // branchId (falls back to the lead's home branch for a legacy ledger row).
   const revenueRows = await sequelize.query<any>(`
-    SELECT l.payTotal, l.novat, b.branch AS branchName, b.address AS branchAddress
-    FROM crm_forum_leads l
-    LEFT JOIN crm_branch b ON b.id = l.branch
+    SELECT cl.payTotal, cl.novat, b.branch AS branchName, b.address AS branchAddress
+    FROM crm_contract_ledger cl
+    JOIN crm_forum_leads l ON l.id = cl.leadId
+    LEFT JOIN crm_branch b ON b.id = cl.branchId
     ${leadWhere}
   `, { replacements: leadReplacements, type: QueryTypes.SELECT });
   const totalRevenueExVat = (revenueRows as any[]).reduce((sum, row) => {
@@ -442,9 +463,9 @@ async function computeDashboardData(
     totalClients: n(clientStats?.totalClients),
     // Finance
     totalRevenue: totalRevenueExVat,
-    totalPayments: n(leadStats?.totalPaidAmount),
-    totalPaidAmount: n(leadStats?.totalPaidAmount),
-    totalBalance: n(leadStats?.totalBalance),
+    totalPayments: n(moneyStats?.totalPaidAmount),
+    totalPaidAmount: n(moneyStats?.totalPaidAmount),
+    totalBalance: n(moneyStats?.totalBalance),
     // Opportunities
     totalOperations,
     activeOperations: n(opportunityStats?.activeOperations),

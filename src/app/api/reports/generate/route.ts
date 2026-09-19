@@ -140,6 +140,23 @@ const generateLiveReportData = async (request: ReportRequest, auth: any): Promis
     type: QueryTypes.SELECT
   });
 
+  // Every revenue figure below (per-counselor totals, the revenue export,
+  // daily/monthly trends) reads lead.payTotal directly - override it with
+  // this lead's crm_contract_ledger sum (one row per real contract, or one
+  // synthetic legacy row per lead with none) so a lead's contracts each
+  // contribute their own amount instead of only whatever still sits on the
+  // lead's own flat field.
+  if (leads.length) {
+    const leadMoneyRows = await sequelize.query<{ leadId: number; payTotal: number }>(
+      `SELECT leadId, SUM(payTotal) AS payTotal FROM crm_contract_ledger WHERE leadId IN (?) GROUP BY leadId`,
+      { replacements: [leads.map((l: any) => l.id)], type: QueryTypes.SELECT }
+    );
+    const payTotalByLead = new Map(leadMoneyRows.map((r) => [r.leadId, r.payTotal]));
+    for (const lead of leads) {
+      if (payTotalByLead.has(lead.id)) lead.payTotal = payTotalByLead.get(lead.id);
+    }
+  }
+
   const employees = await sequelize.query<any>(`
     SELECT DISTINCT
       COALESCE(l.assignTo, 0) as counselorId,

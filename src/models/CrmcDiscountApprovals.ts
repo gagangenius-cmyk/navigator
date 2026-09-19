@@ -5,6 +5,10 @@ interface CrmcDiscountApprovalsAttributes {
   id: number;
   leadId: number;
   opportunityId: number | null;
+  // Set when the discount applies to a contract that already exists (e.g. a
+  // top-up/renewal), where re-opening the original won opportunity doesn't
+  // make sense. Nullable: opportunity-level discount requests are unaffected.
+  contractId: number | null;
   discountType: 'percentage' | 'fixed' | 'special';
   discountAmount: number;
   originalAmount: number;
@@ -30,12 +34,13 @@ interface CrmcDiscountApprovalsAttributes {
   supersededBy: number | null;
 }
 
-interface CrmcDiscountApprovalsCreationAttributes extends Optional<CrmcDiscountApprovalsAttributes, 'id' | 'approvedBy' | 'approvedDate' | 'rejectedDate' | 'expiryDate' | 'notes' | 'approvedAt' | 'isDeleted' | 'supersededBy'> {}
+interface CrmcDiscountApprovalsCreationAttributes extends Optional<CrmcDiscountApprovalsAttributes, 'id' | 'contractId' | 'approvedBy' | 'approvedDate' | 'rejectedDate' | 'expiryDate' | 'notes' | 'approvedAt' | 'isDeleted' | 'supersededBy'> {}
 
 class CrmcDiscountApprovals extends Model<CrmcDiscountApprovalsAttributes, CrmcDiscountApprovalsCreationAttributes> implements CrmcDiscountApprovalsAttributes {
   declare id: number;
   declare leadId: number;
   declare opportunityId: number | null;
+  declare contractId: number | null;
   declare discountType: 'percentage' | 'fixed' | 'special';
   declare discountAmount: number;
   declare originalAmount: number;
@@ -60,6 +65,7 @@ class CrmcDiscountApprovals extends Model<CrmcDiscountApprovalsAttributes, CrmcD
   public static associate(models: any) {
     CrmcDiscountApprovals.belongsTo(models.CrmcForumLeads, { foreignKey: 'leadId', targetKey: 'id', as: 'dmcForumLead' });
     CrmcDiscountApprovals.belongsTo(models.CrmcOpportunities, { foreignKey: 'opportunityId', targetKey: 'id', as: 'dmcOpportunity' });
+    CrmcDiscountApprovals.belongsTo(models.CrmContract, { foreignKey: 'contract_id', targetKey: 'id', as: 'contract' });
     CrmcDiscountApprovals.belongsTo(models.CrmEmployee, { foreignKey: 'requestedBy', targetKey: 'id', as: 'requestedEmployee' });
     CrmcDiscountApprovals.belongsTo(models.CrmEmployee, { foreignKey: 'approvedBy', targetKey: 'id', as: 'approvedEmployee' });
     CrmcDiscountApprovals.belongsTo(models.CrmEmployee, { foreignKey: 'createdBy', targetKey: 'id', as: 'createdEmployee' });
@@ -87,6 +93,15 @@ CrmcDiscountApprovals.init(
       allowNull: true,
       references: {
         model: 'crm_opportunities',
+        key: 'id'
+      }
+    },
+    contractId: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      field: 'contract_id',
+      references: {
+        model: 'crm_contracts',
         key: 'id'
       }
     },

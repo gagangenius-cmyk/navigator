@@ -159,6 +159,17 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         }
       }
 
+      // Maker-checker: the person who requested this discount can never be
+      // the one who approves or rejects it, regardless of role/tier - a
+      // Branch Manager or CEO approving their own request would defeat the
+      // point of a second sign-off.
+      if (Number(existingForAuth.requestedBy) === Number(reviewer.id)) {
+        return NextResponse.json(
+          { success: false, error: 'You requested this discount — a different Branch Manager or CEO must approve or reject it.' },
+          { status: 403 },
+        );
+      }
+
       updateData.approvedBy = reviewer.id;
     }
 

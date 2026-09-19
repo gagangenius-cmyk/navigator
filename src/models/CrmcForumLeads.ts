@@ -280,6 +280,9 @@ class CrmcForumLeads extends Model<CrmcForumLeadsAttributes, CrmcForumLeadsCreat
     
     // Opportunities association
     CrmcForumLeads.hasMany(models.CrmcOpportunities, { foreignKey: 'leadId', sourceKey: 'id', as: 'dmcOpportunities' });
+    // Multi-contract model: a lead can have many contracts, each from its own
+    // branch, with its own service/program/payment terms. See CrmContract.ts.
+    CrmcForumLeads.hasMany(models.CrmContract, { foreignKey: 'lead_id', sourceKey: 'id', as: 'dmcContracts' });
     CrmcForumLeads.hasMany(models.CrmOperationStageData, { foreignKey: 'leadId', sourceKey: 'id', as: 'operationStages' });
     CrmcForumLeads.hasMany(models.CrmOpsDocuments, { foreignKey: 'leadId', sourceKey: 'id', as: 'operationsDocuments' });
     CrmcForumLeads.belongsTo(models.CrmRegion, { foreignKey: 'region', targetKey: 'id', as: 'dmRegion' });

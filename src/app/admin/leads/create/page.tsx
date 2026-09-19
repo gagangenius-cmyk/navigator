@@ -83,6 +83,7 @@ export default function AdminCreateLeadPage() {
     ownerId: number | null;
     ownerName: string | null;
     status: string;
+    existingContracts: { id: number; contractNumber: string; branchName: string | null; status: string; currency: string; payTotal: string | number }[];
   } | null>(null);
   const [transferReason, setTransferReason] = useState('');
   const [transferSubmitting, setTransferSubmitting] = useState(false);
@@ -213,6 +214,7 @@ export default function AdminCreateLeadPage() {
             ownerId: json.duplicateLeadOwnerId ?? null,
             ownerName: json.duplicateLeadOwner ?? null,
             status: json.duplicateLeadStatus || 'New',
+            existingContracts: json.existingContracts || [],
           });
         }
       } catch (error) {
@@ -472,6 +474,7 @@ export default function AdminCreateLeadPage() {
             ownerId: error.duplicateLeadOwnerId ?? null,
             ownerName: error.duplicateLeadOwner ?? null,
             status: error.duplicateLeadStatus || 'New',
+            existingContracts: error.existingContracts || [],
           });
           window.scrollTo({ top: 0, behavior: 'smooth' });
         } else {
@@ -552,6 +555,23 @@ export default function AdminCreateLeadPage() {
                 A lead with this email or phone already exists (Lead #{duplicateInfo.leadId})
                 {duplicateInfo.ownerName ? `, currently owned by ${duplicateInfo.ownerName}.` : ', and is currently unassigned.'}
               </p>
+              {duplicateInfo.existingContracts.length > 0 && (
+                <ul className="mt-2 space-y-1 text-amber-800">
+                  {duplicateInfo.existingContracts.map((c) => (
+                    <li key={c.id}>
+                      {c.contractNumber} — {c.branchName || `Branch #${c.id}`} — {c.currency} {Number(c.payTotal).toLocaleString()} ({c.status})
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <div className="mt-3 flex flex-wrap gap-2">
+                <SecondaryButton onClick={() => router.push(`/admin/leads/${duplicateInfo.leadId}/edit`)}>
+                  View Lead
+                </SecondaryButton>
+                <SecondaryButton onClick={() => router.push(`/admin/leads/contract-flow?leadId=${duplicateInfo.leadId}`)}>
+                  Add New Contract
+                </SecondaryButton>
+              </div>
               {duplicateInfo.ownerId ? (
                 transferRequested ? (
                   <p className="mt-2 text-emerald-700">

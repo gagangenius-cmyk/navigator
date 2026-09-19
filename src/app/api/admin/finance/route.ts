@@ -50,6 +50,10 @@ export async function GET(request: NextRequest) {
     ] = await Promise.all([
 
       // ── KPI summary ────────────────────────────────────────────────────────
+      // crm_contracts joined by its unique opportunity_id gives this
+      // opportunity's OWN money (not the lead's aggregate across every
+      // contract it has) - falls back to the lead's flat fields only for
+      // opportunities that predate the contract model and never got one.
       sequelize.query<{
         total_opps: number; won_opps: number;
         total_revenue: number; collected: number; balance: number;
@@ -58,12 +62,13 @@ export async function GET(request: NextRequest) {
         `SELECT
           COUNT(DISTINCT o.id) AS total_opps,
           SUM(CASE WHEN o.status='won' THEN 1 ELSE 0 END) AS won_opps,
-          COALESCE(SUM(l.payTotal),0) AS total_revenue,
-          COALESCE(SUM(l.paidYet),0) AS collected,
-          COALESCE(SUM(l.payBalance),0) AS balance,
+          COALESCE(SUM(COALESCE(ct.pay_total, l.payTotal)),0) AS total_revenue,
+          COALESCE(SUM(COALESCE(ct.paid_yet, l.paidYet)),0) AS collected,
+          COALESCE(SUM(COALESCE(ct.pay_balance, l.payBalance)),0) AS balance,
           COALESCE((SELECT SUM(amount) FROM crm_expense WHERE ${dateCond('date')} ${branchId ? 'AND branch = :branchId' : ''}),0) AS total_expenses
         FROM crm_opportunities o
         LEFT JOIN crm_forum_leads l ON l.id = o.leadId
+        LEFT JOIN crm_contracts ct ON ct.opportunity_id = o.id AND ct.is_deleted = 0
         LEFT JOIN crm_branch b ON b.id = o.branchId
         WHERE ${dateCond('o.createdAt')}
         ${branchId ? 'AND o.branchId = :branchId' : ''}`,
@@ -98,13 +103,14 @@ export async function GET(request: NextRequest) {
           COALESCE(e.name,'Unassigned') AS counselor,
           COALESCE(b.branch,'N/A') AS branch,
           o.status,
-          COALESCE(l.payTotal,0) AS total_fee,
-          COALESCE(l.paidYet,0) AS paid,
-          COALESCE(l.payBalance,0) AS balance,
+          COALESCE(ct.pay_total, l.payTotal, 0) AS total_fee,
+          COALESCE(ct.paid_yet, l.paidYet, 0) AS paid,
+          COALESCE(ct.pay_balance, l.payBalance, 0) AS balance,
           COALESCE(o.serviceRequired,'') AS service,
           DATE_FORMAT(o.createdAt,'%Y-%m-%d') AS created
         FROM crm_opportunities o
         LEFT JOIN crm_forum_leads l ON l.id = o.leadId
+        LEFT JOIN crm_contracts ct ON ct.opportunity_id = o.id AND ct.is_deleted = 0
         LEFT JOIN crm_employee e ON e.id = o.assignedTo
         LEFT JOIN crm_branch b ON b.id = o.branchId
         WHERE ${dateCond('o.createdAt')}
@@ -156,12 +162,13 @@ export async function GET(request: NextRequest) {
       sequelize.query<{ id: number; name: string; revenue: number; collected: number; opps: number }>(
         `SELECT
           b.id, b.branch AS name,
-          COALESCE(SUM(l.payTotal),0) AS revenue,
-          COALESCE(SUM(l.paidYet),0) AS collected,
+          COALESCE(SUM(COALESCE(ct.pay_total, l.payTotal)),0) AS revenue,
+          COALESCE(SUM(COALESCE(ct.paid_yet, l.paidYet)),0) AS collected,
           COUNT(o.id) AS opps
         FROM crm_branch b
         LEFT JOIN crm_opportunities o ON o.branchId=b.id AND o.createdAt >= DATE_SUB(NOW(),INTERVAL :months MONTH)
         LEFT JOIN crm_forum_leads l ON l.id=o.leadId
+        LEFT JOIN crm_contracts ct ON ct.opportunity_id = o.id AND ct.is_deleted = 0
         WHERE b.status=1 ${branchId ? 'AND b.id = :branchId' : ''}
         GROUP BY b.id, b.branch
         ORDER BY collected DESC`,
@@ -174,11 +181,12 @@ export async function GET(request: NextRequest) {
           e.id, e.name,
           COALESCE(b.branch,'N/A') AS branch,
           COUNT(o.id) AS opps,
-          COALESCE(SUM(l.paidYet),0) AS collected
+          COALESCE(SUM(COALESCE(ct.paid_yet, l.paidYet)),0) AS collected
         FROM crm_employee e
         LEFT JOIN crm_branch b ON b.id=e.branch
         LEFT JOIN crm_opportunities o ON o.assignedTo=e.id AND o.createdAt >= DATE_SUB(NOW(),INTERVAL :months MONTH)
         LEFT JOIN crm_forum_leads l ON l.id=o.leadId
+        LEFT JOIN crm_contracts ct ON ct.opportunity_id = o.id AND ct.is_deleted = 0
         WHERE e.status=1 ${branchId ? 'AND e.branch = :branchId' : ''}
         GROUP BY e.id, e.name, b.branch
         HAVING opps > 0 OR collected > 0

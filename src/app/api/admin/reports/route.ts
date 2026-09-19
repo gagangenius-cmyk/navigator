@@ -75,6 +75,35 @@ const decorateLeadLabels = (items: any[], maps: Awaited<ReturnType<typeof getRef
   }))
 );
 
+// Overrides each lead row's payTotal/paidYet/payBalance with its
+// crm_contract_ledger sum (one row per real contract, or one synthetic
+// legacy row per lead with none) so this report's totals reflect a lead's
+// contracts instead of only whatever still sits on its own flat fields,
+// which the express "Add Contract" flow never touches. Note: the initial
+// WHERE filters above (e.g. `paidYet != 0`) still run against the lead's
+// raw flat field before this runs, so a lead whose only payment lives on a
+// contract (flat paidYet still 0) won't be selected in the first place -
+// a residual gap in this specific report's filtering, not its totals.
+async function overrideMoneyFromLedger(items: any[]) {
+  if (!items.length) return items;
+  const ids = items.map((item) => item.id);
+  const ledgerRows = await sequelize.query<{ leadId: number; payTotal: number; paidYet: number; payBalance: number }>(
+    `SELECT leadId, SUM(payTotal) AS payTotal, SUM(paidYet) AS paidYet, SUM(payBalance) AS payBalance
+     FROM crm_contract_ledger WHERE leadId IN (:ids) GROUP BY leadId`,
+    { replacements: { ids }, type: QueryTypes.SELECT }
+  );
+  const byLead = new Map(ledgerRows.map((r) => [r.leadId, r]));
+  for (const item of items) {
+    const money = byLead.get(item.id);
+    if (money) {
+      item.payTotal = money.payTotal;
+      item.paidYet = money.paidYet;
+      item.payBalance = money.payBalance;
+    }
+  }
+  return items;
+}
+
 export async function GET(request: NextRequest) {
   const auth = requireAuth(request, ['reports.view']);
   if (isAuthError(auth)) return auth;
@@ -185,6 +214,7 @@ export async function GET(request: NextRequest) {
         order: [['feeAgreeDate', 'DESC']]
       });
       const leads = decorateLeadLabels(toPlainArray(leadRows), referenceMaps);
+      await overrideMoneyFromLedger(leads);
 
       // Group data if requested
       let groupedData = null;
@@ -223,6 +253,7 @@ export async function GET(request: NextRequest) {
         order: [['feeAgreeDate', 'DESC']]
       });
       const opportunities = decorateLeadLabels(toPlainArray(opportunityRows), referenceMaps);
+      await overrideMoneyFromLedger(opportunities);
 
       return NextResponse.json({
         success: true,
@@ -253,6 +284,7 @@ export async function GET(request: NextRequest) {
         order: [['feeAgreeDate', 'DESC']]
       });
       const payments = toPlainArray(paymentRows);
+      await overrideMoneyFromLedger(payments);
 
       return NextResponse.json({
         success: true,

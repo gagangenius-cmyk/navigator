@@ -39,11 +39,15 @@ export async function GET(request: NextRequest) {
     const offset = (page - 1) * limit;
     const search = searchParams.get('search')?.trim();
 
-    const conditions: string[] = ['l.payBalance > 0'];
+    // crm_contracts joined by its unique opportunity_id gives this
+    // opportunity's OWN balance/branch (not the lead's collapsed flat
+    // fields) - falls back to the lead/opportunity's own fields only for
+    // opportunities that predate the contract model and never got one.
+    const conditions: string[] = ['COALESCE(ct.pay_balance, l.payBalance) > 0'];
     const replacements: Record<string, unknown> = { limit, offset };
 
     if (isBranchScoped) {
-      conditions.push('COALESCE(l.branch, o.branchId) = :userBranch');
+      conditions.push('COALESCE(ct.branch_id, l.branch, o.branchId) = :userBranch');
       replacements.userBranch = currentUser.branch;
     } else if (!canViewAll) {
       conditions.push('(l.Counsilor = :userId OR l.assignTo = :userId OR o.assignedTo = :userId OR o.createdBy = :userId)');
@@ -60,7 +64,8 @@ export async function GET(request: NextRequest) {
     const fromAndWhere = `
        FROM crm_opportunities o
        JOIN crm_forum_leads l ON l.id = o.leadId
-       LEFT JOIN crm_branch b ON b.id = COALESCE(l.branch, o.branchId)
+       LEFT JOIN crm_contracts ct ON ct.opportunity_id = o.id AND ct.is_deleted = 0
+       LEFT JOIN crm_branch b ON b.id = COALESCE(ct.branch_id, l.branch, o.branchId)
        LEFT JOIN crm_employee e ON e.id = o.assignedTo
        LEFT JOIN crm_service s ON s.id = CAST(l.service_interest AS UNSIGNED)
        LEFT JOIN (
@@ -81,14 +86,18 @@ export async function GET(request: NextRequest) {
            o.stage,
            l.id AS leadId,
            l.fname, l.lname, l.email, l.phone,
-           l.payTotal, l.paidYet, l.payBalance, l.dueDate, l.demdRemark,
-           COALESCE(l.branch, o.branchId) AS branchId,
+           COALESCE(ct.pay_total, l.payTotal) AS payTotal,
+           COALESCE(ct.paid_yet, l.paidYet) AS paidYet,
+           COALESCE(ct.pay_balance, l.payBalance) AS payBalance,
+           COALESCE(ct.due_date, l.dueDate) AS dueDate,
+           COALESCE(ct.demd_remark, l.demdRemark) AS demdRemark,
+           COALESCE(ct.branch_id, l.branch, o.branchId) AS branchId,
            b.branch AS branchName,
            e.name AS assignedEmployeeName,
            COALESCE(s.name, l.service_interest) AS serviceName,
            a.agreementNumber
          ${fromAndWhere}
-         ORDER BY l.payBalance DESC
+         ORDER BY COALESCE(ct.pay_balance, l.payBalance) DESC
          LIMIT :limit OFFSET :offset`,
         { replacements, type: QueryTypes.SELECT }
       ),

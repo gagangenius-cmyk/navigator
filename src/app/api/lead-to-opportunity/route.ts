@@ -4,10 +4,12 @@ import { models, sequelize } from '@/models';
 import { verifyToken } from '@/lib/auth';
 import { requireAuth, isAuthError } from '@/lib/apiAuth';
 import { branchCurrencyError, resolveBranchCurrency } from '@/lib/branchCurrency';
+import { resolveBranchExchangeRate } from '@/lib/exchangeRate';
 import { getBranchTaxInfo } from '@/lib/branchTax';
 import { renderAgreementForBranch } from '@/lib/renderAgreementForBranch';
 import { formatDocumentNumber, formatReceiptNumber } from '@/lib/documentNumbering';
 import { notifyRole } from '@/lib/notify';
+import { logAudit } from '@/lib/auditLog';
 import { deriveProductTypeFromLabel } from '@/lib/clientPortalProducts';
 import { getAdminFeeAmount } from '@/lib/receiptTemplate';
 import { ensurePayHistoryAdminFeeColumns } from '@/lib/ensurePayHistoryAdminFeeColumns';
@@ -335,7 +337,7 @@ export async function POST(request: NextRequest) {
     const programValidityMonths = parseInt(programValidity, 10) || 12;
     const productType = deriveProductTypeFromLabel(serviceName);
     const clientName = (lead as any).client_actual_name || `${lead.fname || ''} ${lead.lname || ''}`.trim() || 'Client';
-    let totalAmount = Number(paymentData.totalAmount || agreementData.totalAmount || opportunityData.estimatedValue || lead.payTotal || 0);
+    const totalAmount = Number(paymentData.totalAmount || agreementData.totalAmount || opportunityData.estimatedValue || lead.payTotal || 0);
 
     // Package amount must be sourced from crm_fee for the lead's program, not an
     // arbitrary number — validate (and correct) it against the fee packages on
@@ -1005,7 +1007,177 @@ export async function POST(request: NextRequest) {
       updatedAt: now
     }, { transaction });
 
+    // Step 10: Mirror this conversion into the new multi-contract model —
+    // every lead-to-opportunity conversion represents a specific
+    // branch/service/payment this lead is now committed to, which is
+    // exactly what a Contract row is for. The opportunity/agreement/payment
+    // records created above stay the source of truth for every existing
+    // sales-pipeline read path; this is an additive projection so
+    // multi-contract reporting (crm_contract_ledger), branch-scoped
+    // visibility, and the clients list also see it. See
+    // src/lib/createOpportunityForContract.ts for the reverse case — the
+    // express "Add Contract to Existing Lead" flow, which creates the
+    // opportunity FROM a contract instead of the contract from an opportunity.
+    const contractExchangeRate = await resolveBranchExchangeRate(branchId);
+    const tempMultiContractNumber = `TEMP-CTR-${Date.now()}`;
+    const multiContract = await models.CrmContract.create({
+      leadId: lead.id,
+      opportunityId,
+      contractNumber: tempMultiContractNumber,
+      branchId: branchId || 0,
+      regionId: Number(lead.region) || null,
+      countryInterest: Number(lead.country_interest) || null,
+      serviceId: selectedProgram?.id || null,
+      contractType: 'individual',
+      currency: branchCurrency.currencyCode,
+      exchangeRateToAed: contractExchangeRate.rateToAed,
+      payTotal: totalAmount,
+      discount: requestedDiscount,
+      paidYet: paidAmount,
+      payBalance: remainingBalance,
+      status: isClient ? 'completed' : 'active',
+      statusDate: now,
+      agreeDate: now,
+      feeAgreeDate: now,
+      counselorId: lead.assignTo || null,
+      createdBy,
+    }, { transaction });
+    Object.assign(multiContract, multiContract.get({ plain: true }));
+    let multiContractId = Number(multiContract.id);
+    if (!multiContractId) {
+      // See the opportunity-id read-back above for why this fallback is needed.
+      const [idRows] = await sequelize.query<{ id: number }>(
+        'SELECT id FROM crm_contracts WHERE contract_number = ? ORDER BY id DESC LIMIT 1',
+        { replacements: [tempMultiContractNumber], transaction, type: QueryTypes.SELECT }
+      );
+      multiContractId = Number((idRows as any)?.id ?? idRows);
+    }
+    const multiContractNumber = formatDocumentNumber({
+      prefix: 'CTR',
+      branchName: branchCurrency.branchName,
+      branchAddress: branchCurrency.branchAddress,
+      branchAbbrv: branchCurrency.branchAbbrv,
+      product: serviceName,
+      sequenceId: multiContractId,
+    });
+    await sequelize.query('UPDATE crm_contracts SET contract_number = ? WHERE id = ?', {
+      replacements: [multiContractNumber, multiContractId],
+      transaction,
+    });
+
+    let multiAgreementNumber = `TEMP-AG-${Date.now()}`;
+    const multiAgreement = await models.CrmContractAgreement.create({
+      contractId: multiContractId,
+      agreementNumber: multiAgreementNumber,
+      agreementType: 'service_agreement',
+      agreementTitle: `Service Agreement - ${clientName}`,
+      title: `Service Agreement - ${clientName}`,
+      startDate: agreementData.startDate || now,
+      endDate: agreementData.endDate || new Date(now.getFullYear(), now.getMonth() + programValidityMonths, now.getDate()),
+      amount: totalAmount,
+      totalAmount,
+      currency: branchCurrency.currencyCode,
+      terms: agreementData.terms || agreementData.termsAndConditions || null,
+      termsAndConditions: agreementData.termsAndConditions || agreementData.terms || null,
+      content: agreementContent,
+      status: 'generated',
+      clientName,
+      clientEmail: lead.email || null,
+      clientPhone: lead.mobile || lead.phone || null,
+      companyName: branchCurrency.branchName,
+      companyAddress: branchCurrency.branchAddress,
+      createdBy,
+    }, { transaction });
+    Object.assign(multiAgreement, multiAgreement.get({ plain: true }));
+    let multiAgreementId = Number(multiAgreement.id);
+    if (!multiAgreementId) {
+      const [idRows] = await sequelize.query<{ id: number }>(
+        'SELECT id FROM crm_contract_agreements WHERE agreement_number = ? ORDER BY id DESC LIMIT 1',
+        { replacements: [multiAgreementNumber], transaction, type: QueryTypes.SELECT }
+      );
+      multiAgreementId = Number((idRows as any)?.id ?? idRows);
+    }
+    multiAgreementNumber = formatDocumentNumber({
+      prefix: 'AG',
+      branchName: branchCurrency.branchName,
+      branchAddress: branchCurrency.branchAddress,
+      branchAbbrv: branchCurrency.branchAbbrv,
+      product: serviceName,
+      sequenceId: multiAgreementId,
+    });
+    await sequelize.query('UPDATE crm_contract_agreements SET agreement_number = ? WHERE id = ?', {
+      replacements: [multiAgreementNumber, multiAgreementId],
+      transaction,
+    });
+
+    if (paidAmount > 0) {
+      const multiPaymentNumber = `PAY-${Date.now()}-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
+      const tempMultiReceiptNumber = `TEMP-RC-${Date.now()}`;
+      const multiReceipt = await models.CrmContractReceipt.create({
+        contractId: multiContractId,
+        receiptNumber: tempMultiReceiptNumber,
+        paymentNumber: multiPaymentNumber,
+        paymentStructure: remainingBalance > 0 ? 'installment' : 'full',
+        totalAmount,
+        amount: paidAmount,
+        paidAmount,
+        remainingBalance,
+        balanceAmount: remainingBalance,
+        currency: branchCurrency.currencyCode,
+        exchangeRateToAed: contractExchangeRate.rateToAed,
+        paymentMethod: paymentData.paymentMethod || 'cash',
+        transactionId: paymentData.transactionId || null,
+        paymentDate: paymentData.paymentDate || now,
+        status: 'completed',
+        clientName,
+        clientEmail: lead.email || null,
+        clientPhone: lead.mobile || lead.phone || null,
+        serviceName,
+        branchName: branchCurrency.branchName,
+        discountAmount: requestedDiscount,
+        notes: 'Initial payment recorded during opportunity conversion.',
+        createdBy,
+      }, { transaction });
+      Object.assign(multiReceipt, multiReceipt.get({ plain: true }));
+      let multiReceiptId = Number(multiReceipt.id);
+      if (!multiReceiptId) {
+        const [idRows] = await sequelize.query<{ id: number }>(
+          'SELECT id FROM crm_contract_receipts WHERE receipt_number = ? ORDER BY id DESC LIMIT 1',
+          { replacements: [tempMultiReceiptNumber], transaction, type: QueryTypes.SELECT }
+        );
+        multiReceiptId = Number((idRows as any)?.id ?? idRows);
+      }
+      const multiReceiptNumber = formatReceiptNumber({
+        branchName: branchCurrency.branchName,
+        branchAddress: branchCurrency.branchAddress,
+        branchAbbrv: branchCurrency.branchAbbrv,
+        sequenceId: multiReceiptId,
+      });
+      await sequelize.query('UPDATE crm_contract_receipts SET receipt_number = ? WHERE id = ?', {
+        replacements: [multiReceiptNumber, multiReceiptId],
+        transaction,
+      });
+      // crm_pay_history already carries this exact payment (inserted earlier
+      // in this function) — link it to the new contract row and give it the
+      // real exchange rate rather than inserting a second, duplicate ledger
+      // entry for the same payment.
+      await sequelize.query(
+        'UPDATE crm_pay_history SET contract_id = ?, curValue = ? WHERE leadId = ? AND refNumber = ? ORDER BY id DESC LIMIT 1',
+        { replacements: [multiContractId, contractExchangeRate.rateToAed, lead.id, paymentData.transactionId || paymentNumber], transaction }
+      );
+    }
+
     await transaction.commit();
+
+    await logAudit({
+      entityType: 'contract',
+      entityId: multiContractId,
+      action: 'contract_created',
+      summary: `Contract ${multiContractNumber} created for lead #${lead.id} via opportunity conversion (${serviceName}, ${branchCurrency.currencyCode} ${totalAmount})`,
+      actorId: createdBy,
+      actorRole: (loggedInUser as { roleName?: string; type?: string } | null)?.roleName || (loggedInUser as { type?: string } | null)?.type || null,
+      after: { leadId: lead.id, branchId, opportunityId, totalAmount, discount: requestedDiscount, paidAmount },
+    });
 
     // Let Accounts know a new payment is waiting on their queue (mirrors the
     // notification in /api/receipts — this is the other path that can create

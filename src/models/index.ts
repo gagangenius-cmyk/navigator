@@ -131,6 +131,10 @@ import { CrmOpportunityAccountingVerification } from './CrmOpportunityAccounting
 import { CrmClientUploadPortal } from './CrmClientUploadPortal';
 import { CrmClientUploadChecklistItem } from './CrmClientUploadChecklistItem';
 import { CrmOpportunityPaymentSchedule } from './CrmOpportunityPaymentSchedule';
+import { CrmContract } from './CrmContract';
+import { CrmContractAgreement } from './CrmContractAgreement';
+import { CrmContractReceipt } from './CrmContractReceipt';
+import { CrmContractPaymentSchedule } from './CrmContractPaymentSchedule';
 
 const models = {
   Appointments: Appointments,
@@ -260,6 +264,10 @@ const models = {
   CrmClientUploadChecklistItem,
   CrmOpportunityPaymentSchedule,
   CrmRemarks,
+  CrmContract,
+  CrmContractAgreement,
+  CrmContractReceipt,
+  CrmContractPaymentSchedule,
 };
 
 type ModelWithAssociate = {
@@ -463,3 +471,13 @@ export { CrmOpportunityPaymentSchedule } from './CrmOpportunityPaymentSchedule';
 export type { CrmOpportunityPaymentScheduleAttributes } from './CrmOpportunityPaymentSchedule';
 export { CrmRemarks } from './CrmRemarks';
 export type { CrmRemarksAttributes } from './CrmRemarks';
+
+// Multi-contract lead model
+export { CrmContract } from './CrmContract';
+export type { CrmContractAttributes, CrmContractCreationAttributes } from './CrmContract';
+export { CrmContractAgreement } from './CrmContractAgreement';
+export type { CrmContractAgreementAttributes, CrmContractAgreementCreationAttributes } from './CrmContractAgreement';
+export { CrmContractReceipt } from './CrmContractReceipt';
+export type { CrmContractReceiptAttributes, CrmContractReceiptCreationAttributes } from './CrmContractReceipt';
+export { CrmContractPaymentSchedule } from './CrmContractPaymentSchedule';
+export type { CrmContractPaymentScheduleAttributes, CrmContractPaymentScheduleCreationAttributes } from './CrmContractPaymentSchedule';

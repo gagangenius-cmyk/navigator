@@ -84,6 +84,31 @@ async function computeFinanceData(
     const scopedLeadIds = leads.map((l) => l.id);
     const leadIdScope = scopeKind === 'all' ? {} : { leadId: { [Op.in]: scopedLeadIds.length ? scopedLeadIds : [-1] } };
 
+    // Every money figure below is keyed by leadId via leadMap - override each
+    // lead's payTotal/paidYet/payBalance with its crm_contract_ledger sum
+    // (one row per real contract, or one synthetic legacy row when it has
+    // none) instead of trusting the lead's own flat fields directly, which
+    // the express "Add Contract" flow never touches for a lead that already
+    // has other contracts.
+    const ledgerMoneyRows = scopedLeadIds.length
+      ? await sequelize.query<{ leadId: number; payTotal: number; paidYet: number; payBalance: number }>(
+          `SELECT leadId, SUM(payTotal) AS payTotal, SUM(paidYet) AS paidYet, SUM(payBalance) AS payBalance
+           FROM crm_contract_ledger
+           WHERE leadId IN (:leadIds)
+           GROUP BY leadId`,
+          { replacements: { leadIds: scopedLeadIds }, type: QueryTypes.SELECT }
+        )
+      : [];
+    const ledgerMoneyByLead = new Map(ledgerMoneyRows.map((r) => [r.leadId, r]));
+    for (const lead of leads) {
+      const ledgerMoney = ledgerMoneyByLead.get(lead.id);
+      if (ledgerMoney) {
+        lead.payTotal = ledgerMoney.payTotal;
+        lead.paidYet = ledgerMoney.paidYet;
+        lead.payBalance = ledgerMoney.payBalance;
+      }
+    }
+
     // Fetch contracts with leads data
     const contractRows = await CrmcForumLeadsContracts.findAll({
       where: { ...contractsWhereClause, ...leadIdScope },

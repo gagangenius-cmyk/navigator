@@ -64,7 +64,7 @@ function formatDateDdMmYyyy(date: Date): string {
 // `sequenceId` should be the row's own auto-increment id (assigned after
 // insert) so every number is guaranteed unique without a separate counter.
 export function formatDocumentNumber(params: {
-  prefix: 'AG' | 'RC';
+  prefix: 'AG' | 'RC' | 'CTR';
   branchName: string | null | undefined;
   branchAddress?: string | null | undefined;
   branchAbbrv?: string | null | undefined;

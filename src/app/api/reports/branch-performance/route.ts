@@ -125,6 +125,38 @@ async function computeBranchPerformanceData(
     });
     const leadData = toPlainArray(leads);
 
+    // Revenue/paid must be attributed to each CONTRACT's own branch, not the
+    // lead's home branch - a contract added via the express "Add Contract"
+    // flow can be serviced by a different branch than the one that first
+    // brought the lead in, and this report is specifically a cross-branch
+    // performance comparison. Built from the same effective scope as
+    // leadsWhereClause above (role scoping overrides ?branchId= for non-CEO
+    // callers, matching the comment on that block), translated to raw SQL
+    // since crm_contract_ledger has no Sequelize model to filter via `Op`.
+    const branchMoneyConditions: string[] = ['l.regdate >= :startDate'];
+    const branchMoneyReplacements: Record<string, unknown> = { startDate };
+    if (isCeoFlag) {
+      if (branchIdParam) {
+        branchMoneyConditions.push('l.branch = :branchIdParam');
+        branchMoneyReplacements.branchIdParam = parseInt(branchIdParam);
+      }
+    } else if (leadScopeKind === 'branch') {
+      branchMoneyConditions.push('l.branch = :userBranch');
+      branchMoneyReplacements.userBranch = userBranch;
+    } else {
+      branchMoneyConditions.push('(l.assignTo = :userId OR l.Counsilor = :userId)');
+      branchMoneyReplacements.userId = userId;
+    }
+    const branchMoneyRows = await sequelize.query<{ branchId: number; revenue: number; paid: number }>(
+      `SELECT cl.branchId AS branchId, SUM(cl.payTotal) AS revenue, SUM(cl.paidYet) AS paid
+       FROM crm_contract_ledger cl
+       JOIN crm_forum_leads l ON l.id = cl.leadId
+       WHERE ${branchMoneyConditions.join(' AND ')}
+       GROUP BY cl.branchId`,
+      { replacements: branchMoneyReplacements, type: QueryTypes.SELECT }
+    );
+    const branchMoneyMap = new Map(branchMoneyRows.map((r) => [r.branchId, r]));
+
     // Fetch all employees with their roles for counselor counts
     const employeeRows = await CrmEmployee.findAll({
       where: {
@@ -199,8 +231,9 @@ async function computeBranchPerformanceData(
       }).length;
       const conversionRate = totalLeads > 0 ? (convertedLeads / totalLeads) * 100 : 0;
       
-      const totalRevenue = branchLeads.reduce((sum, lead) => sum + amount(lead.payTotal), 0);
-      const paidAmount = branchLeads.reduce((sum, lead) => sum + amount(lead.paidYet), 0);
+      const branchMoney = branchMoneyMap.get(branch.id);
+      const totalRevenue = amount(branchMoney?.revenue);
+      const paidAmount = amount(branchMoney?.paid);
       const pendingRevenue = totalRevenue - paidAmount;
       
       // Real target set via /admin/branch-target (BranchTarget model) for

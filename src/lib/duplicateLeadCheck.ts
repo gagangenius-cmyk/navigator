@@ -186,6 +186,32 @@ export async function recordDuplicateLeadAttempt({
   }
 }
 
+export interface ExistingContractSummary {
+  id: number;
+  contractNumber: string;
+  branchId: number;
+  branchName: string | null;
+  status: string;
+  currency: string;
+  payTotal: string | number;
+}
+
+// Lets the duplicate-lead redirect (409 on create, and the as-you-type check)
+// show "this lead already has N contract(s)" instead of just a bare lead id —
+// the whole point of the redirect is to offer "add a new contract" instead of
+// blocking outright, so the caller needs to know what's already there.
+export async function getContractSummary(leadId: number): Promise<ExistingContractSummary[]> {
+  return sequelize.query<ExistingContractSummary>(
+    `SELECT c.id, c.contract_number AS contractNumber, c.branch_id AS branchId,
+            b.name AS branchName, c.status, c.currency, c.pay_total AS payTotal
+     FROM crm_contracts c
+     LEFT JOIN crm_branch b ON b.id = c.branch_id
+     WHERE c.lead_id = :leadId AND c.is_deleted = 0
+     ORDER BY c.id DESC`,
+    { replacements: { leadId }, type: QueryTypes.SELECT }
+  );
+}
+
 export interface FuzzyDuplicateMatch {
   id: number;
   fname: string | null;

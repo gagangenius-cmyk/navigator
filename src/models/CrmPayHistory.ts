@@ -3,6 +3,10 @@ import { sequelize } from '../lib/sequelize';
 interface CrmPayHistoryAttributes {
   id: number;
   leadId: number;
+  // Set when this payment belongs to a specific contract (the new
+  // multi-contract model). Nullable: legacy leads with no crm_contracts rows
+  // keep writing here exactly as before, with contractId left null.
+  contractId: number | null;
   amount: number;
   counselor_receipt: string;
   tabby: number;
@@ -22,6 +26,9 @@ interface CrmPayHistoryAttributes {
   dmAmt: number;
   dmTax: number;
   dmRefundAmt: number;
+  // Exchange rate to AED snapshotted at payment time. Was hardcoded to the
+  // literal 0 by every writer historically; now correctly populated by new
+  // contract-aware payment paths (see CrmContractReceipt.exchangeRateToAed).
   curValue: number;
   refNumber: string;
   created_by: number;
@@ -32,11 +39,12 @@ interface CrmPayHistoryAttributes {
   admin_fee_amount: number;
 }
 
-interface CrmPayHistoryCreationAttributes extends Optional<CrmPayHistoryAttributes, 'amount' | 'date' | 'payMethod' | 'tax' | 'payCategory' | 'status' | 'remark' | 'canDate' | 'proof_url' | 'admin_fee_included' | 'admin_fee_amount'> {}
+interface CrmPayHistoryCreationAttributes extends Optional<CrmPayHistoryAttributes, 'contractId' | 'amount' | 'date' | 'payMethod' | 'tax' | 'payCategory' | 'status' | 'remark' | 'canDate' | 'proof_url' | 'admin_fee_included' | 'admin_fee_amount'> {}
 
 class CrmPayHistory extends Model<CrmPayHistoryAttributes, CrmPayHistoryCreationAttributes> implements CrmPayHistoryAttributes {
   declare id: number;
   declare leadId: number;
+  declare contractId: number | null;
   declare amount: number;
   declare counselor_receipt: string;
   declare tabby: number;
@@ -67,6 +75,7 @@ class CrmPayHistory extends Model<CrmPayHistoryAttributes, CrmPayHistoryCreation
 
   public static associate(models: any) {
     CrmPayHistory.belongsTo(models.CrmcForumLeads, { foreignKey: 'leadId', targetKey: 'id', as: 'dmcForumLeads' });
+    CrmPayHistory.belongsTo(models.CrmContract, { foreignKey: 'contract_id', targetKey: 'id', as: 'contract' });
   }
 }
 
@@ -81,6 +90,11 @@ CrmPayHistory.init(
     leadId: {
       type: DataTypes.INTEGER,
       allowNull: false
+    },
+    contractId: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      field: 'contract_id'
     },
     amount: {
       type: DataTypes.DECIMAL(10,2),
@@ -162,8 +176,9 @@ CrmPayHistory.init(
       allowNull: false
     },
     curValue: {
-      type: DataTypes.INTEGER,
-      allowNull: false
+      type: DataTypes.DECIMAL(12, 6),
+      allowNull: false,
+      defaultValue: 1
     },
     refNumber: {
       type: DataTypes.STRING(255),

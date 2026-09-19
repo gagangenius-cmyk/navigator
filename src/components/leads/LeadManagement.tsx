@@ -11,7 +11,7 @@ import {
   Eye, CheckCircle, Clock,
   Target, X, Save, LayoutList, LayoutGrid, Briefcase, MessageSquare, Settings,
   Receipt, AlertCircle, Printer, Loader2, ChevronsLeft, ChevronsRight, ChevronLeft, ChevronRight, RotateCcw, ExternalLink, XCircle,
-  ClipboardCheck, Table2, Send, Sparkles, Flame
+  ClipboardCheck, Table2, Send, Sparkles, Flame, FilePlus2
 } from 'lucide-react';
 import LeadKanbanSimple from './LeadKanbanSimple';
 import ConversationHistoryModal from '@/components/shared/ConversationHistoryModal';
@@ -2471,6 +2471,11 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
                               <Briefcase className="h-4 w-4" />
                             </button>
                           )}
+                          {activeTab === 'clients' && isClientLead(lead) && (
+                            <Link href={`/admin/leads/contract-flow?leadId=${lead.id}`} className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-indigo-50 text-indigo-700 hover:bg-indigo-100" title="Add another contract for this client">
+                              <FilePlus2 className="h-4 w-4" />
+                            </Link>
+                          )}
                           {activeTab === 'opportunities' && (
                             <Link href={`/admin/leads/opportunity-flow?leadId=${lead.id}`} className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-amber-50 text-amber-700 hover:bg-amber-100" title="Edit opportunity flow">
                               <Settings className="h-4 w-4" />
@@ -2683,6 +2688,15 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
                           >
                             <Briefcase className="w-4 h-4" />
                           </button>
+                        )}
+                        {activeTab === 'clients' && isClientLead(lead) && (
+                          <Link
+                            href={`/admin/leads/contract-flow?leadId=${lead.id}`}
+                            className="text-indigo-600 hover:text-indigo-900"
+                            title="Add another contract for this client"
+                          >
+                            <FilePlus2 className="w-4 h-4" />
+                          </Link>
                         )}
                         {activeTab === 'opportunities' && (
                           <Link
@@ -2918,6 +2932,12 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
                 <p><span className="font-medium">Paid:</span> {Number(currentLead.paidYet || 0).toLocaleString()}</p>
                 <p><span className="font-medium">Balance:</span> {Number(currentLead.payBalance || 0).toLocaleString()}</p>
                 <p><span className="font-medium">Appointment:</span> {currentLead.appointment ? new Date(currentLead.appointment).toLocaleDateString() : 'N/A'}</p>
+                <Link
+                  href={`/admin/leads/contract-flow?leadId=${currentLead.id}`}
+                  className="mt-3 inline-flex items-center gap-1.5 rounded-md bg-indigo-50 px-2.5 py-1.5 text-xs font-medium text-indigo-700 hover:bg-indigo-100"
+                >
+                  <FilePlus2 className="h-3.5 w-3.5" /> Add Contract
+                </Link>
               </div>
             </div>
 

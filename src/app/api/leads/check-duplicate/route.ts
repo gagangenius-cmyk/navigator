@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, isAuthError } from '@/lib/apiAuth';
-import { findExistingLead, recordDuplicateLeadAttempt } from '@/lib/duplicateLeadCheck';
+import { findExistingLead, recordDuplicateLeadAttempt, getContractSummary } from '@/lib/duplicateLeadCheck';
 
 // Lets the Add Lead form check an email/phone against existing leads as the
 // user types, instead of only finding out about the duplicate on submit.
@@ -27,11 +27,15 @@ export async function GET(request: NextRequest) {
     actorRole: auth.roleName || auth.type,
   });
 
+  const existingContracts = await getContractSummary(existingLead.id);
+
   return NextResponse.json({
     duplicate: true,
     duplicateLeadId: existingLead.id,
     duplicateLeadOwner: existingLead.ownerName,
     duplicateLeadOwnerId: existingLead.ownerId,
     duplicateLeadStatus: existingLead.status || 'New',
+    existingContracts,
+    canAddContract: true,
   });
 }
