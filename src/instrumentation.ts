@@ -21,6 +21,9 @@ export async function register() {
 
     const { startContractReconciliationCron } = await import('@/lib/contract-reconciliation-cron');
     await startContractReconciliationCron();
+
+    const { startMetaLeadsRetryCron } = await import('@/lib/meta-leads-retry-cron');
+    await startMetaLeadsRetryCron();
   }
 }
 

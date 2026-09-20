@@ -129,6 +129,7 @@ interface CrmcForumLeadsAttributes {
   decision_maker_contact: string | null;
   next_followup_date: Date | null;
   opportunity_notes: string | null;
+  opportunity_draft_data: Record<string, unknown> | null;
   tags: string | null;
 }
 
@@ -261,6 +262,7 @@ class CrmcForumLeads extends Model<CrmcForumLeadsAttributes, CrmcForumLeadsCreat
   declare decision_maker_contact: string | null;
   declare next_followup_date: Date | null;
   declare opportunity_notes: string | null;
+  declare opportunity_draft_data: Record<string, unknown> | null;
   declare tags: string | null;
 
   // Associations
@@ -830,6 +832,10 @@ CrmcForumLeads.init(
     },
     opportunity_notes: {
       type: DataTypes.TEXT,
+      allowNull: true
+    },
+    opportunity_draft_data: {
+      type: DataTypes.JSON,
       allowNull: true
     },
     tags: {

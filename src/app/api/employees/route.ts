@@ -47,6 +47,11 @@ export async function GET(request: NextRequest) {
     const [employees, total] = await Promise.all([
       CrmEmployee.findAll({
         where,
+        // Included so callers (e.g. the Leads page's counselor filter) can
+        // tell an actual Sales/Counsellor from a Branch Manager/Accounts/HR/IT
+        // employee without a second round trip - the role FK alone (a bare
+        // number) isn't enough to filter on client-side.
+        include: [{ association: 'dmRole', attributes: ['id', 'name', 'type'] }],
         offset: skip,
         limit: limit,
         order: [['name', 'ASC']]

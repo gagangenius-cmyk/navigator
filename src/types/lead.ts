@@ -43,6 +43,7 @@ export interface Lead {
   lead_quality: string;
   campaign?: string;
   latest_remark?: string;
+  latest_remark_id?: number;
   agreementNumber?: string;
   dmEmployeeByASSIGNTo?: { id: number; name: string };
   dmEmployeeByCoUNSILOR?: { id: number; name: string };

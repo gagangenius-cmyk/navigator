@@ -69,7 +69,7 @@ export async function POST(request: NextRequest) {
           amount: parseFloat(payment.amount),
           Tax: 0,
           payMethod: payment.method,
-          emp_id: 1,
+          emp_id: Number(auth.id),
           receipt_date: new Date(payment.date),
           cc_number: payment.reference || '',
           receipt: receiptNumber,
@@ -95,8 +95,12 @@ export async function POST(request: NextRequest) {
         await CrmcForumLeadsFee.create(feeData, { transaction: t });
       }
 
+      // Derived from the rows actually just inserted, not the client-supplied
+      // totalAmount - a stale/tampered/rounded total there would otherwise
+      // permanently desync paidYet/payBalance from the real payment history.
+      const insertedTotal = createdPayments.reduce((sum, p) => sum + parseFloat(p.amount as any), 0);
       const currentPaid = parseFloat(lead.paidYet as any || 0);
-      const newPaid = currentPaid + totalAmount;
+      const newPaid = currentPaid + insertedTotal;
       const newBalance = Math.max(0, lead.payTotal - newPaid);
 
       await lead.update(

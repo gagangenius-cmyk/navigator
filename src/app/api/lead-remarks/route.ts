@@ -118,6 +118,77 @@ export async function POST(request: NextRequest) {
   }
 }
 
+export async function PATCH(request: NextRequest) {
+  const auth = requireAuth(request, ['leads.update']);
+  if (isAuthError(auth)) return auth;
+  try {
+    await ensureDBConnection();
+
+    const body = await request.json();
+    const id = Number(body.id);
+    const remark = String(body.remark ?? body.notes ?? '').trim();
+
+    if (!id) {
+      return NextResponse.json({ error: 'id is required' }, { status: 400 });
+    }
+    if (!remark) {
+      return NextResponse.json({ error: 'remark is required' }, { status: 400 });
+    }
+
+    const [existing] = await sequelize.query<{ lead: number }>(
+      'SELECT `lead` FROM crm_forum_leads_remarks WHERE id = ? LIMIT 1',
+      { replacements: [id], type: QueryTypes.SELECT }
+    );
+    if (!existing) {
+      return NextResponse.json({ error: 'Remark not found' }, { status: 404 });
+    }
+
+    await sequelize.query(
+      'UPDATE crm_forum_leads_remarks SET remark = ? WHERE id = ?',
+      { replacements: [remark, id], type: QueryTypes.UPDATE }
+    );
+
+    // Keep the lead's denormalized "latest remark" column in sync, but only
+    // when the edited row is still the most recent one for this lead - an
+    // edit to an older remark must not overwrite a newer remark's text.
+    const [latest] = await sequelize.query<{ id: number }>(
+      'SELECT id FROM crm_forum_leads_remarks WHERE `lead` = ? ORDER BY id DESC LIMIT 1',
+      { replacements: [existing.lead], type: QueryTypes.SELECT }
+    );
+    if (latest && Number(latest.id) === id) {
+      const now = new Date();
+      await sequelize.query(
+        `UPDATE crm_forum_leads
+         SET lead_remark = ?, last_updated = ?, last_updtd_time = ?
+         WHERE id = ?`,
+        {
+          replacements: [remark, now.toISOString().split('T')[0], now.toTimeString().split(' ')[0], existing.lead],
+          type: QueryTypes.UPDATE
+        }
+      );
+    }
+
+    const employeeId = Number(body.employeeId ?? body.emp ?? body.userId ?? auth.id ?? 1);
+    await logLeadRemark({
+      leadId: existing.lead,
+      action: 'remark_edited',
+      remark: `Remark updated: ${remark}`,
+      actorId: employeeId,
+    });
+
+    return NextResponse.json({
+      success: true,
+      remark: { id, leadId: existing.lead, remark },
+    });
+  } catch (error) {
+    console.error('Error updating lead remark:', error);
+    return NextResponse.json(
+      { error: 'Failed to update lead remark' },
+      { status: 500 }
+    );
+  }
+}
+
 async function getTableColumns(table: string): Promise<Set<string>> {
   const rows = await sequelize.query<{ Field?: string }>(
     `SHOW COLUMNS FROM ${table}`,

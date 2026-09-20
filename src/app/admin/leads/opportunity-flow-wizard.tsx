@@ -444,6 +444,20 @@ export default function OpportunityFlowWizard({ leadId, initialStage, initialOpp
               reviewDate: latestCompliance.reviewedAt ? latestCompliance.reviewedAt.split('T')[0] : prev.reviewDate,
             }));
             applyComplianceStatusToStages(status);
+
+            // The Signed Agreement stage's own fields (signature, signature
+            // date, uploaded document) are submitted straight into this same
+            // compliance-approval record and never read back from anywhere
+            // else - without this, reopening the wizard always showed a blank
+            // upload box and empty signature fields even after a genuinely
+            // successful submission.
+            setSignedAgreementData(prev => ({
+              ...prev,
+              clientSignature: prev.clientSignature || latestCompliance.clientSignature || '',
+              signatureDate: prev.signatureDate || (latestCompliance.signatureDate ? String(latestCompliance.signatureDate).split('T')[0] : ''),
+              documentUrl: prev.documentUrl || latestCompliance.signedAgreementUrl || '',
+              uploadedTocrm: prev.uploadedTocrm || Boolean(latestCompliance.signedAgreementUrl),
+            }));
           }
         }
 
@@ -641,31 +655,52 @@ export default function OpportunityFlowWizard({ leadId, initialStage, initialOpp
     const endDate = computeAgreementEndDate(today, leadData.program_validity);
     const branchDetails = getLeadBranchDetails(leadData);
 
+    // The lead's own opportunity_draft_data JSON snapshot (see
+    // src/app/api/admin/opportunities/save/route.ts's mergeDraftData) is what
+    // the counselor actually typed at these stages before any real
+    // crm_opportunities row existed - preferred over the generic
+    // name/amount/service-derived reconstruction below, which is only a
+    // placeholder guess for a lead that was never actually taken this far.
+    const rawDraft = (leadData as Record<string, unknown>).opportunity_draft_data;
+    let draft: { prospect?: Record<string, unknown>; quotation?: Record<string, unknown> } = {};
+    if (rawDraft) {
+      try {
+        draft = typeof rawDraft === 'string' ? JSON.parse(rawDraft) : (rawDraft as typeof draft);
+      } catch {
+        draft = {};
+      }
+    }
+    const draftProspect = draft.prospect || {};
+    const draftQuotation = draft.quotation || {};
+
     setProspectData(prev => ({
       ...prev,
-      opportunityName: prev.opportunityName || opportunityName,
-      estimatedValue: prev.estimatedValue || String(totalAmount || ''),
-      priority: normalizePriorityForWizard(prev.priority || leadData.priority),
-      description: prev.description || leadData.lead_remark || `Opportunity for ${clientName}`,
-      serviceRequired: prev.serviceRequired || service,
-      serviceId: prev.serviceId || String((leadData as Record<string, unknown>).service_interest || ''),
+      opportunityName: prev.opportunityName || String(draftProspect.opportunityName || '') || opportunityName,
+      opportunityType: prev.opportunityType || String(draftProspect.opportunityType || '') || prev.opportunityType,
+      estimatedValue: prev.estimatedValue || String(draftProspect.estimatedValue || '') || String(totalAmount || ''),
+      priority: normalizePriorityForWizard(prev.priority || String(draftProspect.priority || '') || leadData.priority),
+      description: prev.description || String(draftProspect.description || '') || leadData.lead_remark || `Opportunity for ${clientName}`,
+      serviceRequired: prev.serviceRequired || String(draftProspect.serviceRequired || '') || service,
+      serviceId: prev.serviceId || String(draftProspect.serviceId || '') || String((leadData as Record<string, unknown>).service_interest || ''),
     }));
 
     setQuotationData(prev => {
       const hasExistingItem = prev.items.some(item => item.description || Number(item.unitPrice) > 0);
+      const draftItems = Array.isArray(draftQuotation.items) ? draftQuotation.items as QuotationData['items'] : null;
       return {
         ...prev,
-        validUntil: prev.validUntil || validUntil,
-        items: hasExistingItem ? prev.items : [{
+        validUntil: prev.validUntil || String(draftQuotation.validUntil || '') || validUntil,
+        items: hasExistingItem ? prev.items : (draftItems && draftItems.length > 0 ? draftItems : [{
           description: service || 'Consulting Service',
           quantity: 1,
           unitPrice: String(totalAmount || ''),
           total: String(totalAmount || ''),
-        }],
-        subtotal: prev.subtotal || totalAmount,
-        tax: prev.tax || 0,
-        total: prev.total || totalAmount,
-        terms: prev.terms || 'Payment as per agreed service package.',
+        }]),
+        subtotal: prev.subtotal || Number(draftQuotation.subtotal || 0) || totalAmount,
+        discount: prev.discount || Number(draftQuotation.discount || 0),
+        tax: prev.tax || Number(draftQuotation.tax || 0),
+        total: prev.total || Number(draftQuotation.total || 0) || totalAmount,
+        terms: prev.terms || String(draftQuotation.terms || '') || 'Payment as per agreed service package.',
       };
     });
 
@@ -761,8 +796,10 @@ export default function OpportunityFlowWizard({ leadId, initialStage, initialOpp
 
     const currentIndex = stages.findIndex(s => s.id === activeStage);
     if (currentIndex < stages.length - 1) {
-      // Save current stage data
-      await saveStageData(activeStage);
+      // Save current stage data - do not advance past a stage whose data
+      // failed to persist (saveStageData already surfaced a toast).
+      const saved = await saveStageData(activeStage);
+      if (!saved) return;
 
       // Mark current as completed
       const newStages = [...stages];
@@ -791,10 +828,14 @@ export default function OpportunityFlowWizard({ leadId, initialStage, initialOpp
     }
   };
 
-  const saveStageData = async (stageId: string) => {
+  // Returns whether the save actually succeeded - callers (moveToNextStage in
+  // particular) must not advance the wizard past a stage whose data failed to
+  // persist, or the counselor loses that stage's data with no indication
+  // anything went wrong beyond a toast that's easy to miss.
+  const saveStageData = async (stageId: string): Promise<boolean> => {
     if (isReadOnly) {
       window.toast.info('This won client opportunity flow is view-only for your role.');
-      return;
+      return false;
     }
 
     try {
@@ -829,9 +870,11 @@ export default function OpportunityFlowWizard({ leadId, initialStage, initialOpp
 
       const result = await response.json();
       console.log('Stage data saved successfully:', result);
+      return true;
     } catch (error) {
       console.error('Error saving stage data:', error);
       window.toast.error('Failed to save data. Please try again.');
+      return false;
     }
   };
 
@@ -2489,7 +2532,6 @@ function ProspectStage({ lead, data, setData, onLeadUpdated, onSaveProspect, onN
 
 function QuotationStage({ lead, data, setData, feeData, feeLoading, retentionData, requestingDiscount, onRequestDiscount, onRefreshDiscount, onDiscountChanged, onNext, onPrevious, paymentType, setPaymentType }: any) {
   const { user } = useAuth();
-  const [saving, setSaving] = useState(false);
   const [appliedFeeKey, setAppliedFeeKey] = useState<string | null>(null);
   // Correcting a wrong amount / wrongly-approved-or-rejected discount -
   // temporarily unlocks the amount field even though a request already
@@ -2565,20 +2607,6 @@ function QuotationStage({ lead, data, setData, feeData, feeLoading, retentionDat
     setData({ ...data, items, ...totals });
     setAppliedFeeKey(key);
   }, [feeData, paymentType]);
-
-  const handleSave = async () => {
-    setSaving(true);
-    try {
-      console.log('Saving quotation data:', data);
-      await new Promise(resolve => setTimeout(resolve, 500));
-      window.toast.success('Quotation saved successfully!');
-    } catch (error) {
-      console.error('Error saving:', error);
-      window.toast.error('Failed to save data');
-    } finally {
-      setSaving(false);
-    }
-  };
 
   const addItem = () => {
     setData({
@@ -2884,14 +2912,6 @@ function QuotationStage({ lead, data, setData, feeData, feeLoading, retentionDat
           Back to Prospect
         </button>
         <div className="flex gap-3">
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="px-6 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 disabled:bg-gray-400 flex items-center font-medium"
-          >
-            <Save className="mr-2" size={20} />
-            {saving ? 'Saving...' : 'Save Draft'}
-          </button>
           <button
             onClick={onNext}
             disabled={!discountApproved}
@@ -3989,14 +4009,20 @@ function AgreementStage({ lead, data, setData, quotationData, paidAmount, progra
     }
   };
 
-  const handleSave = async () => {
+  // Continue used to call onNext directly, so a counselor could click
+  // straight through to Signed Agreement without the separate (optional)
+  // "Save Draft" button ever being clicked - leaving no row in
+  // crm_opportunity_agreements at all. Continue now always saves the
+  // agreement first and only advances on success, which makes a standalone
+  // Save Draft button redundant (removed below).
+  const handleContinue = async () => {
     setSaving(true);
     try {
       await onSaveAgreement();
-      window.toast.success('Agreement saved successfully.');
+      onNext();
     } catch (error) {
-      console.error('Error saving:', error);
-      window.toast.error('Failed to save data');
+      console.error('Error saving agreement:', error);
+      window.toast.error('Failed to save the agreement. Please try again.');
     } finally {
       setSaving(false);
     }
@@ -4282,14 +4308,6 @@ function AgreementStage({ lead, data, setData, quotationData, paidAmount, progra
           Back to Documents
         </button>
         <div className="flex gap-3">
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="px-6 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 disabled:bg-gray-400 flex items-center font-medium"
-          >
-            <Save className="mr-2" size={20} />
-            {saving ? 'Saving...' : 'Save Draft'}
-          </button>
           {data.agreementId && canDelete && (
             <button
               onClick={handleDelete}
@@ -4301,10 +4319,11 @@ function AgreementStage({ lead, data, setData, quotationData, paidAmount, progra
             </button>
           )}
           <button
-            onClick={onNext}
-            className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center font-medium"
+            onClick={handleContinue}
+            disabled={saving}
+            className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 flex items-center font-medium"
           >
-            Continue to Signed Agreement
+            {saving ? 'Saving...' : 'Continue to Signed Agreement'}
             <ChevronRight className="ml-2" size={20} />
           </button>
         </div>

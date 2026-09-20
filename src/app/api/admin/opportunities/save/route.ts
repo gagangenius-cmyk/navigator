@@ -11,7 +11,30 @@ const ALLOWED_LEAD_UPDATE_COLS = new Set([
   'service_interest', 'payTotal', 'priority', 'stepComplete',
   'demandAmt', 'dueDate', 'paidYet', 'payBalance', 'feeAgreeDate',
   'agreeDate', 'status', 'last_updated', 'last_updtd_time',
+  'discount', 'opportunity_notes', 'opportunity_draft_data',
 ]);
+
+// The Prospect/Quotation stages' own fields (name/type/description, line
+// items, tax/terms) have no durable home of their own until the Payment
+// stage creates the real crm_opportunities row - closing the browser before
+// then loses all of it. Moving opportunity creation earlier isn't safe
+// (POST /api/lead-to-opportunity's duplicate guard only covers a 60-second
+// window, not "this lead already has an opportunity" permanently), so this
+// snapshots each stage's own fields into one JSON column instead, merged
+// per-stage (read-modify-write) so a later stage's save can never clobber an
+// earlier stage's already-saved data.
+function mergeDraftData(lead: any, stageKey: string, stageData: unknown): string {
+  const raw = lead.opportunity_draft_data;
+  let existing: Record<string, unknown> = {};
+  if (raw) {
+    try {
+      existing = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    } catch {
+      existing = {};
+    }
+  }
+  return JSON.stringify({ ...existing, [stageKey]: stageData });
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -69,6 +92,15 @@ export async function POST(request: NextRequest) {
         updateData.service_interest = lead.service_interest;
       }
       updateData.priority = data.priority || lead.priority;
+      updateData.opportunity_draft_data = mergeDraftData(lead, 'prospect', {
+        opportunityName: data.opportunityName,
+        opportunityType: data.opportunityType,
+        estimatedValue: data.estimatedValue,
+        priority: data.priority,
+        description: data.description,
+        serviceRequired: data.serviceRequired,
+        serviceId: data.serviceId,
+      });
       updateData.stepComplete = 1;
     } else if (stage === 'quotation') {
       // payTotal starts as a rough Prospect-stage estimate, but from here on
@@ -85,6 +117,20 @@ export async function POST(request: NextRequest) {
       }
       updateData.demandAmt = data.total || lead.demandAmt;
       updateData.dueDate = data.validUntil ? new Date(data.validUntil) : lead.dueDate;
+      // Captured on this stage's UI (the "Apply Discount" field) but never
+      // actually written here before - crm_forum_leads.discount existed and
+      // sat unused while the discount only ever fed the quotation's own total.
+      updateData.discount = data.discount ?? lead.discount;
+      updateData.opportunity_draft_data = mergeDraftData(lead, 'quotation', {
+        quotationNumber: data.quotationNumber,
+        validUntil: data.validUntil,
+        items: data.items,
+        subtotal: data.subtotal,
+        discount: data.discount,
+        tax: data.tax,
+        total: data.total,
+        terms: data.terms,
+      });
       updateData.stepComplete = 1;
     } else if (stage === 'payment') {
       updateData.paidYet = data.paidAmount || lead.paidYet;
@@ -92,6 +138,10 @@ export async function POST(request: NextRequest) {
       if (data.paymentDate) updateData.feeAgreeDate = new Date(data.paymentDate);
       updateData.stepComplete = 2;
     } else if (stage === 'documents') {
+      // The "Additional Information" textarea was captured in component state
+      // and never sent anywhere - crm_forum_leads.opportunity_notes already
+      // existed for exactly this and sat unused.
+      updateData.opportunity_notes = data.additionalInfo ?? lead.opportunity_notes;
       updateData.stepComplete = 2;
     } else if (stage === 'agreement') {
       updateData.agreeDate = data.startDate ? new Date(data.startDate) : lead.agreeDate;

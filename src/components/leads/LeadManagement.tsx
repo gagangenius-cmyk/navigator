@@ -265,6 +265,48 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
   const [quickPayLead, setQuickPayLead] = useState<QuickPayLeadState | null>(null);
   const [whatsappTemplate, setWhatsappTemplate] = useState('');
 
+  // ── Edit-remark modal (table view "Remarks" cell) ──
+  // Clicking the existing remark used to only open the generic "add a new
+  // remark" modal with a blank textarea - the remark actually shown was never
+  // editable in place. This is a separate, lightweight modal specifically for
+  // editing the lead's most recent remark row, pre-filled with its text.
+  const [editRemarkTarget, setEditRemarkTarget] = useState<{ leadId: number; remarkId: number; text: string } | null>(null);
+  const [editRemarkSaving, setEditRemarkSaving] = useState(false);
+
+  const openEditRemarkModal = (lead: Lead) => {
+    if (!lead.latest_remark_id) {
+      // No existing remark row to edit yet - fall back to the normal "add a
+      // remark" flow.
+      openLeadActionModal(lead, 'remark');
+      return;
+    }
+    setEditRemarkTarget({ leadId: lead.id, remarkId: lead.latest_remark_id, text: lead.latest_remark || '' });
+  };
+
+  const submitEditRemark = async () => {
+    if (!editRemarkTarget || !editRemarkTarget.text.trim()) return;
+    setEditRemarkSaving(true);
+    try {
+      const response = await fetch('/api/lead-remarks', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: editRemarkTarget.remarkId, remark: editRemarkTarget.text }),
+      });
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.error || 'Failed to update remark');
+      }
+      setLeads(prev => prev.map(l => (l.id === editRemarkTarget.leadId ? { ...l, latest_remark: editRemarkTarget.text } : l)));
+      window.toast.success('Remark updated.');
+      setEditRemarkTarget(null);
+    } catch (error) {
+      console.error('Error updating remark:', error);
+      window.toast.error(error instanceof Error ? error.message : 'Failed to update remark');
+    } finally {
+      setEditRemarkSaving(false);
+    }
+  };
+
   // ── Assignment modal state ──
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [assignLead, setAssignLead] = useState<Lead | null>(null);
@@ -303,8 +345,16 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
         const res = await fetch(`/api/employees?${params.toString()}`);
         if (!res.ok) return;
         const data = await res.json();
-        const employees: Array<{ id: number; name: string }> = data.employees || [];
-        setCounselorFilterOptions(employees.map((e) => ({ id: e.id, name: e.name })));
+        // /api/employees returns every active employee in scope regardless of
+        // role (Branch Managers, Accounts, HR, IT...) - this dropdown should
+        // only ever offer actual Sales/Counsellor staff, so filter with the
+        // same role-check used everywhere else in this file.
+        const employees: Array<{ id: number; name: string; dmRole?: { name?: string; type?: string } | null }> = data.employees || [];
+        setCounselorFilterOptions(
+          employees
+            .filter((e) => isCounsellor({ roleName: e.dmRole?.name, type: e.dmRole?.type }))
+            .map((e) => ({ id: e.id, name: e.name }))
+        );
       } catch (err) {
         console.error('Error loading counselor filter options:', err);
       }
@@ -1965,6 +2015,16 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
                 Refreshing...
               </span>
             )}
+            <button
+              type="button"
+              onClick={() => fetchLeads()}
+              disabled={loading}
+              title="Reload from the server without losing your current filters"
+              className="inline-flex h-10 shrink-0 items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <RotateCcw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+              Reload
+            </button>
           </div>
 
           {showActions && (
@@ -2535,6 +2595,7 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
                   <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
                   <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Phone</th>
                   <SortableTh label="Status" sortKey="status" activeKey={leadSortKey} direction={leadSortDirection} onSort={toggleLeadSort} />
+                  <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Campaign</th>
                   <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Remarks</th>
                   <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                 </tr>
@@ -2603,7 +2664,14 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
                         )}
                       </div>
                     </td>
-                    <td className="px-4 py-2.5 max-w-[220px] truncate text-xs text-gray-600" title={lead.latest_remark || undefined}>
+                    <td className="px-4 py-2.5 whitespace-nowrap max-w-[140px] truncate text-sm text-gray-600" title={lead.campaign || undefined}>
+                      {lead.campaign || <span className="text-gray-400">—</span>}
+                    </td>
+                    <td
+                      className="px-4 py-2.5 max-w-[220px] truncate text-xs text-gray-600 cursor-pointer hover:text-blue-700 hover:underline"
+                      title={lead.latest_remark ? `${lead.latest_remark} (click to edit)` : 'Click to add a remark'}
+                      onClick={() => openEditRemarkModal(lead)}
+                    >
                       {lead.latest_remark || <span className="text-gray-400">No remarks</span>}
                     </td>
                     <td className="px-4 py-2.5 whitespace-nowrap text-sm font-medium">
@@ -3118,6 +3186,42 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
               >
                 Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Remark Modal */}
+      {editRemarkTarget && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-11/12 md:w-1/2 lg:w-1/3 shadow-lg rounded-lg bg-white">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-medium text-gray-900">Edit Remark</h3>
+              <button onClick={() => setEditRemarkTarget(null)} className="text-gray-400 hover:text-gray-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <textarea
+              rows={4}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              value={editRemarkTarget.text}
+              onChange={(e) => setEditRemarkTarget({ ...editRemarkTarget, text: e.target.value })}
+              placeholder="Remark"
+            />
+            <div className="flex justify-end gap-3 mt-4">
+              <button
+                onClick={() => setEditRemarkTarget(null)}
+                className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={submitEditRemark}
+                disabled={editRemarkSaving || !editRemarkTarget.text.trim()}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 font-medium"
+              >
+                {editRemarkSaving ? 'Saving...' : 'Save'}
               </button>
             </div>
           </div>

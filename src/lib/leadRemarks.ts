@@ -9,6 +9,7 @@ export type LeadRemarkAction =
   | 'lead_assigned'
   | 'status_changed'
   | 'remark_added'
+  | 'remark_edited'
   | 'appointment_booked'
   | 'followup_added'
   | 'whatsapp_sent'
