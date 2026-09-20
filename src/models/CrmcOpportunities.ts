@@ -44,9 +44,12 @@ interface CrmcOpportunitiesAttributes {
   agreementSigned: boolean;
   paymentReceived: boolean;
   documentsVerified: boolean;
+  isDeleted: boolean;
+  deletedAt: Date | null;
+  deletedBy: number | null;
 }
 
-interface CrmcOpportunitiesCreationAttributes extends Optional<CrmcOpportunitiesAttributes, 'id' | 'opportunityType' | 'serviceType' | 'productType' | 'actualValue' | 'actualCloseDate' | 'source' | 'campaign' | 'leadSource' | 'branchId' | 'lostReason' | 'competitor' | 'nextActionDate' | 'conversionDate' | 'retentionAmount' | 'retentionStatus' | 'retentionDate' | 'agreementId'> {}
+interface CrmcOpportunitiesCreationAttributes extends Optional<CrmcOpportunitiesAttributes, 'id' | 'opportunityType' | 'serviceType' | 'productType' | 'actualValue' | 'actualCloseDate' | 'source' | 'campaign' | 'leadSource' | 'branchId' | 'lostReason' | 'competitor' | 'nextActionDate' | 'conversionDate' | 'retentionAmount' | 'retentionStatus' | 'retentionDate' | 'agreementId' | 'isDeleted' | 'deletedAt' | 'deletedBy'> {}
 
 class CrmcOpportunities extends Model<CrmcOpportunitiesAttributes, CrmcOpportunitiesCreationAttributes> implements CrmcOpportunitiesAttributes {
   declare id: number;
@@ -91,6 +94,9 @@ class CrmcOpportunities extends Model<CrmcOpportunitiesAttributes, CrmcOpportuni
   declare agreementSigned: boolean;
   declare paymentReceived: boolean;
   declare documentsVerified: boolean;
+  declare isDeleted: boolean;
+  declare deletedAt: Date | null;
+  declare deletedBy: number | null;
 
   public static associate(models: any) {
     CrmcOpportunities.belongsTo(models.CrmcForumLeads, { foreignKey: 'leadId', targetKey: 'id', as: 'dmcForumLead' });
@@ -314,7 +320,23 @@ CrmcOpportunities.init(
       type: DataTypes.BOOLEAN,
       allowNull: false,
       defaultValue: false
-    }
+    },
+    isDeleted: {
+      type: DataTypes.TINYINT,
+      allowNull: false,
+      defaultValue: 0,
+      field: 'is_deleted',
+    },
+    deletedAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      field: 'deleted_at',
+    },
+    deletedBy: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      field: 'deleted_by',
+    },
   },
   {
     sequelize,

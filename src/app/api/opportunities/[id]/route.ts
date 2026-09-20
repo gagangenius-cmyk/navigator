@@ -118,8 +118,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     // Get opportunity agreements
     const [agreementsResult] = await sequelize.query(`
-      SELECT * FROM crm_opportunity_agreements 
-      WHERE opportunityId = ? 
+      SELECT * FROM crm_opportunity_agreements
+      WHERE opportunityId = ? AND is_deleted = 0
       ORDER BY createdAt DESC
     `, {
       replacements: [opportunityId]
@@ -323,7 +323,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
 
     // Check if opportunity exists
     const [existingResult] = await sequelize.query(`
-      SELECT id, leadId, status FROM crm_opportunities WHERE id = ?
+      SELECT id, leadId, status FROM crm_opportunities WHERE id = ? AND is_deleted = 0
     `, {
       replacements: [opportunityId]
     });
@@ -368,26 +368,20 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
       );
     }
 
-    // Delete every child record this draft opportunity could have picked up
-    // on its way through the flow (payment, agreement, uploaded documents,
-    // activity log, discount/compliance approval requests, counselor
-    // handover notes) so nothing is left orphaned once the opportunity row
-    // itself is gone. All in one transaction so a failure partway through
-    // doesn't leave the opportunity half-deleted.
+    // Soft delete only - the opportunity is hidden (is_deleted=1), not
+    // removed, so every child record it picked up on its way through the
+    // flow (payment, agreement, uploaded documents, activity log, discount/
+    // compliance approval requests, counselor handover notes) simply stays
+    // attached to it rather than needing its own cleanup. This used to
+    // hard-delete all 9 child tables then the opportunity itself in one
+    // transaction; none of that is needed once nothing is ever physically
+    // removed.
     const transaction = await sequelize.transaction();
     try {
-      await sequelize.query(`DELETE FROM crm_opportunity_payments WHERE opportunityId = ?`, { replacements: [opportunityId], transaction });
-      await sequelize.query(`DELETE FROM crm_opportunity_agreements WHERE opportunityId = ?`, { replacements: [opportunityId], transaction });
-      await sequelize.query(`DELETE FROM crm_opportunity_documents WHERE opportunityId = ?`, { replacements: [opportunityId], transaction });
-      await sequelize.query(`DELETE FROM crm_opportunity_activities WHERE opportunityId = ?`, { replacements: [opportunityId], transaction });
-      await sequelize.query(`DELETE FROM crm_opportunity_workflow_reviews WHERE opportunity_id = ?`, { replacements: [opportunityId], transaction });
-      await sequelize.query(`DELETE FROM crm_opportunity_compliance_approvals WHERE opportunityId = ?`, { replacements: [opportunityId], transaction });
-      await sequelize.query(`DELETE FROM crm_discount_approvals WHERE opportunityId = ?`, { replacements: [opportunityId], transaction });
-      await sequelize.query(`DELETE FROM crm_opportunity_handover_notes WHERE opportunity_id = ?`, { replacements: [opportunityId], transaction });
-      await sequelize.query(`DELETE FROM crm_opportunity_quotations WHERE opportunityId = ?`, { replacements: [opportunityId], transaction });
-
-      // Delete the opportunity
-      await sequelize.query(`DELETE FROM crm_opportunities WHERE id = ?`, { replacements: [opportunityId], transaction });
+      await sequelize.query(
+        `UPDATE crm_opportunities SET is_deleted = 1, deleted_at = NOW(), deleted_by = ? WHERE id = ?`,
+        { replacements: [currentUser.id, opportunityId], transaction }
+      );
 
       // Revert the lead back to a plain, unconverted lead.
       await sequelize.query(`

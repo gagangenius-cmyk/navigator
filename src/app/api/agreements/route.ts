@@ -48,8 +48,8 @@ export async function GET(request: NextRequest) {
       }
 
       const where = Number.isFinite(Number(id))
-        ? { id: Number(id) }
-        : { agreementNumber: id };
+        ? { id: Number(id), isDeleted: 0 }
+        : { agreementNumber: id, isDeleted: 0 };
       const agreement = await models.CrmcOpportunityAgreements.findOne({ where });
 
       if (!agreement) {
@@ -69,7 +69,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: true, agreement: normalized });
     }
 
-    const where = status ? { status } : undefined;
+    const where = status ? { status, isDeleted: 0 } : { isDeleted: 0 };
     const { rows, count } = await models.CrmcOpportunityAgreements.findAndCountAll({
       where,
       order: [['createdAt', 'DESC']],
@@ -107,7 +107,10 @@ export async function POST(request: NextRequest) {
       if (!id) {
         return NextResponse.json({ error: 'Agreement ID is required' }, { status: 400 });
       }
-      const deleted = await models.CrmcOpportunityAgreements.destroy({ where: { id: Number(id) } });
+      const [deleted] = await models.CrmcOpportunityAgreements.update(
+        { isDeleted: true, deletedAt: new Date(), deletedBy: auth.id },
+        { where: { id: Number(id), isDeleted: 0 } }
+      );
       return NextResponse.json({ success: deleted > 0, deleted });
     }
 

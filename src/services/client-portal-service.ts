@@ -121,14 +121,14 @@ export class ClientPortalService {
         INNER JOIN (
           SELECT lead_id, MAX(w2.id) AS maxId
           FROM crm_opportunity_workflow_reviews w2
-          JOIN crm_opportunities o2 ON o2.id = w2.opportunity_id
+          JOIN crm_opportunities o2 ON o2.id = w2.opportunity_id AND o2.is_deleted = 0
           WHERE w2.finance_status = 'approved'
             AND w2.compliance_status = 'approved'
             AND TRIM(LOWER(COALESCE(o2.status, ''))) IN ('won', 'closed won', 'close won')
           GROUP BY lead_id
         ) latest ON latest.maxId = w.id
         JOIN crm_forum_leads l ON l.id = w.lead_id
-        JOIN crm_opportunities o ON o.id = w.opportunity_id
+        JOIN crm_opportunities o ON o.id = w.opportunity_id AND o.is_deleted = 0
         WHERE w.lead_id = :leadId
           AND w.finance_status = 'approved'
           AND w.compliance_status = 'approved'
@@ -162,6 +162,7 @@ export class ClientPortalService {
           GROUP BY opportunity_id
         ) latest ON latest.maxId = w.id
         WHERE w.lead_id = :leadId
+          AND o.is_deleted = 0
           AND w.finance_status = 'approved'
           AND w.compliance_status = 'approved'
           AND TRIM(LOWER(COALESCE(o.status, ''))) IN ('won', 'closed won', 'close won')

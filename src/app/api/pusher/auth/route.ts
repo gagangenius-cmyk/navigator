@@ -33,7 +33,7 @@ async function isClientAllowed(request: NextRequest, opportunityId: number): Pro
   if (isClientAuthError(client)) return false;
 
   const [row] = await sequelize.query<{ id: number }>(
-    `SELECT id FROM crm_opportunities WHERE id = :opportunityId AND leadId = :leadId LIMIT 1`,
+    `SELECT id FROM crm_opportunities WHERE id = :opportunityId AND leadId = :leadId AND is_deleted = 0 LIMIT 1`,
     { replacements: { opportunityId, leadId: client.leadId }, type: QueryTypes.SELECT },
   );
   return Boolean(row);

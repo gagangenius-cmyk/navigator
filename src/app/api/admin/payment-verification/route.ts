@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
   const limit    = Math.min(100, parseInt(searchParams.get('limit') || '25'));
   const offset   = (page - 1) * limit;
 
-  const conditions: string[] = [];
+  const conditions: string[] = ['COALESCE(o.is_deleted, 0) = 0'];
   const replacements: Record<string, unknown> = {};
 
   if (status) {

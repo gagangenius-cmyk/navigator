@@ -36,6 +36,14 @@ type CrudConfig = {
    * so it never collides with buildWhere's own Op.or (search) key.
    */
   listScope?: (auth: any) => Record<string | symbol, unknown> | null | undefined | Promise<Record<string | symbol, unknown> | null | undefined>;
+  /**
+   * When set, DELETE sets this boolean/flag column to 1 instead of
+   * physically removing the row (a soft delete). Only set this for a model
+   * that already has the column - GET's own where clause must also exclude
+   * it (e.g. via a fixed `{ [softDeleteField]: 0 }` in filters/listScope)
+   * for the record to actually disappear from the list.
+   */
+  softDeleteField?: string;
 };
 
 const toPositiveInt = (value: string | null, fallback: number) => {
@@ -208,6 +216,18 @@ export const createCrudHandlers = (config: CrudConfig) => ({
 
       if (!id) {
         return NextResponse.json({ error: 'Valid ID is required' }, { status: 400 });
+      }
+
+      if (config.softDeleteField) {
+        const record = await config.model.findByPk(id);
+        if (!record) {
+          return NextResponse.json(
+            { error: `${config.entityName} not found` },
+            { status: 404 }
+          );
+        }
+        await record.update({ [config.softDeleteField]: 1 });
+        return NextResponse.json({ message: `${config.entityName} deleted successfully` });
       }
 
       const deleted = await config.model.destroy({ where: { id } });

@@ -209,7 +209,7 @@ async function computeDashboardData(
       SUM(CASE WHEN LOWER(COALESCE(status, '')) IN ('qualified','proposal','negotiation','in_progress') THEN 1 ELSE 0 END) AS activeOperations,
       SUM(CASE WHEN LOWER(COALESCE(status, '')) = 'won' THEN 1 ELSE 0 END) AS completedOperations
     FROM crm_opportunities
-    WHERE 1=1 ${opportunityBranchFilter}
+    WHERE is_deleted = 0 ${opportunityBranchFilter}
   `, { replacements: { branch: userBranch }, type: QueryTypes.SELECT });
 
   // ── Total Clients ──────────────────────────────────────────────────────────
@@ -237,7 +237,7 @@ async function computeDashboardData(
     INNER JOIN (
       SELECT wr.lead_id, MAX(wr.id) AS maxId
       FROM crm_opportunity_workflow_reviews wr
-      JOIN crm_opportunities owr ON owr.id = wr.opportunity_id
+      JOIN crm_opportunities owr ON owr.id = wr.opportunity_id AND owr.is_deleted = 0
       WHERE wr.finance_status = 'approved' AND wr.compliance_status = 'approved'
         AND TRIM(LOWER(COALESCE(owr.status, ''))) IN ('won', 'closed won', 'close won')
       GROUP BY lead_id

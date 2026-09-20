@@ -250,7 +250,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       await sequelize.query(
         `UPDATE crm_opportunities
          SET estimatedValue = ?, actualValue = COALESCE(actualValue, ?), updatedAt = ?
-         WHERE id = ?`,
+         WHERE id = ? AND is_deleted = 0`,
         {
           replacements: [
             existingApproval.discountedAmount,
@@ -306,7 +306,10 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
       );
     }
 
-    await sequelize.query(`DELETE FROM crm_discount_approvals WHERE id = ?`, {
+    // Soft delete - crm_discount_approvals already carries is_deleted (used
+    // by the "counselor re-applies to correct a wrong amount" flow above),
+    // so this reuses the same column instead of physically removing the row.
+    await sequelize.query(`UPDATE crm_discount_approvals SET is_deleted = 1 WHERE id = ?`, {
       replacements: [discountId]
     });
 

@@ -65,7 +65,7 @@ export async function GET(request: NextRequest) {
     const joinClause = `
       FROM crm_contract_ledger cl
       JOIN crm_forum_leads l ON l.id = cl.leadId
-      LEFT JOIN crm_opportunity_agreements a ON a.opportunityId = cl.opportunityId
+      LEFT JOIN crm_opportunity_agreements a ON a.opportunityId = cl.opportunityId AND a.is_deleted = 0
       LEFT JOIN crm_employee e1 ON l.Counsilor = e1.id
       LEFT JOIN crm_employee e2 ON l.assignTo  = e2.id
       LEFT JOIN crm_branch b   ON cl.branchId  = b.id

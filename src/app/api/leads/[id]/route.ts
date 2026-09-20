@@ -252,8 +252,8 @@ const fetchLead = async (id: string) => {
       s.validity as program_validity,
       COALESCE(cp.name, l.country_interest) as country_interest_label,
       (SELECT a.agreementNumber FROM crm_opportunity_agreements a
-       JOIN crm_opportunities o ON a.opportunityId = o.id
-       WHERE o.leadId = l.id ORDER BY a.createdAt DESC LIMIT 1) AS agreement_number
+       JOIN crm_opportunities o ON a.opportunityId = o.id AND o.is_deleted = 0
+       WHERE o.leadId = l.id AND a.is_deleted = 0 ORDER BY a.createdAt DESC LIMIT 1) AS agreement_number
     FROM crm_forum_leads l
     LEFT JOIN crm_employee e1 ON l.assignTo = e1.id
     LEFT JOIN crm_employee e2 ON l.Counsilor = e2.id
@@ -394,7 +394,7 @@ export async function PUT(
     const requestsWonOpportunity = typeof data.opportunity_status === 'string' && data.opportunity_status.toLowerCase() === 'won';
     if (requestsClientStatus || requestsWonOpportunity) {
       const [linkedOpportunity] = await sequelize.query<{ id: number }>(
-        'SELECT id FROM crm_opportunities WHERE leadId = :leadId ORDER BY id DESC LIMIT 1',
+        'SELECT id FROM crm_opportunities WHERE leadId = :leadId AND is_deleted = 0 ORDER BY id DESC LIMIT 1',
         { replacements: { leadId: id }, type: QueryTypes.SELECT },
       );
       const approved = await isFinanceAndComplianceApproved(linkedOpportunity?.id);

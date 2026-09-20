@@ -69,6 +69,7 @@ export async function GET(request: NextRequest) {
         : [];
 
     const where: string[] = [
+      'o.is_deleted = 0',
       "(LOWER(COALESCE(o.status, '')) = 'won' OR LOWER(COALESCE(o.retentionStatus, '')) = 'approved' OR LOWER(COALESCE(l.status, '')) IN ('retained', 'client', 'converted'))",
     ];
     const replacements: Record<string, unknown> = { limit };
@@ -201,7 +202,7 @@ export async function GET(request: NextRequest) {
         (
           SELECT a2.id
           FROM crm_opportunity_agreements a2
-          WHERE a2.opportunityId = o.id
+          WHERE a2.opportunityId = o.id AND a2.is_deleted = 0
           ORDER BY a2.createdAt DESC
           LIMIT 1
         )

@@ -94,7 +94,7 @@ export async function POST(request: NextRequest) {
     let opportunity = null;
     if (opportunityId) {
       opportunity = await models.CrmcOpportunities.findByPk(opportunityId);
-      if (!opportunity) {
+      if (!opportunity || opportunity.isDeleted) {
         await transaction.rollback();
         return NextResponse.json(
           { error: 'Opportunity not found' },
@@ -179,7 +179,7 @@ export async function POST(request: NextRequest) {
     // receipt response can carry its agreement number even when this request
     // isn't the one generating the agreement.
     const [agRows] = await sequelize.query(
-      `SELECT agreementNumber FROM crm_opportunity_agreements WHERE opportunityId = ? ORDER BY createdAt DESC LIMIT 1`,
+      `SELECT agreementNumber FROM crm_opportunity_agreements WHERE opportunityId = ? AND is_deleted = 0 ORDER BY createdAt DESC LIMIT 1`,
       { replacements: [opportunityId || null] }
     );
     const existingAgreementNumber = (agRows as any[])[0]?.agreementNumber || '';
@@ -544,7 +544,7 @@ export async function GET(request: NextRequest) {
     const page = Math.max(1, Number.parseInt(searchParams.get('page') || '1', 10));
     const limit = Math.max(1, Number.parseInt(searchParams.get('limit') || '20', 10));
 
-    let whereClause: any = {};
+    const whereClause: any = {};
 
     if (leadId) {
       // Get receipts for a specific lead

@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
     const page = Math.max(1, Number.parseInt(searchParams.get('page') || '1', 10));
     const limit = Math.max(1, Number.parseInt(searchParams.get('limit') || '20', 10));
 
-    let whereClause: any = {};
+    const whereClause: any = { isDeleted: 0 };
 
     if (opportunityId) {
       whereClause.opportunityId = opportunityId;
@@ -100,7 +100,7 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
     const opportunity = await CrmcOpportunities.findByPk(body.opportunityId);
-    if (!opportunity) return NextResponse.json({ error: 'Opportunity not found' }, { status: 404 });
+    if (!opportunity || opportunity.isDeleted) return NextResponse.json({ error: 'Opportunity not found' }, { status: 404 });
 
     // Resolved once, up front, and reused both for the branch-scope check
     // below and for document-numbering further down - the lead's own branch
@@ -123,7 +123,7 @@ export async function POST(request: NextRequest) {
     // Duplicate-submission guard: the frontend already checks for an
     // existing agreement before calling this (GET-then-POST), but that's not
     // atomic - block a second agreement for the same opportunity here too.
-    const existingAgreement = await CrmcOpportunityAgreements.findOne({ where: { opportunityId: body.opportunityId } });
+    const existingAgreement = await CrmcOpportunityAgreements.findOne({ where: { opportunityId: body.opportunityId, isDeleted: 0 } });
     if (existingAgreement) {
       return NextResponse.json({ error: 'An agreement already exists for this opportunity.', agreementId: existingAgreement.id }, { status: 409 });
     }
@@ -181,7 +181,7 @@ export async function PUT(request: NextRequest) {
     if (!id) return NextResponse.json({ error: 'Agreement ID is required' }, { status: 400 });
 
     const agreement = await CrmcOpportunityAgreements.findByPk(id);
-    if (!agreement) return NextResponse.json({ error: 'Agreement not found' }, { status: 404 });
+    if (!agreement || agreement.isDeleted) return NextResponse.json({ error: 'Agreement not found' }, { status: 404 });
 
     // Branch Manager may only edit an agreement belonging to their own
     // branch's opportunity; CEO is unrestricted. Raw SQL rather than the
@@ -278,12 +278,12 @@ export async function DELETE(request: NextRequest) {
     if (!id) return NextResponse.json({ error: 'Agreement ID is required' }, { status: 400 });
 
     const agreement = await CrmcOpportunityAgreements.findByPk(id);
-    if (!agreement) return NextResponse.json({ error: 'Agreement not found' }, { status: 404 });
+    if (!agreement || agreement.isDeleted) return NextResponse.json({ error: 'Agreement not found' }, { status: 404 });
 
     const opportunityId = agreement.opportunityId;
-    await agreement.destroy();
+    await agreement.update({ isDeleted: true, deletedAt: new Date(), deletedBy: currentUser.id });
     const latestAgreement = await CrmcOpportunityAgreements.findOne({
-      where: { opportunityId },
+      where: { opportunityId, isDeleted: 0 },
       order: [['createdAt', 'DESC']],
     });
 

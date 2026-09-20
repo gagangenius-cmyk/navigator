@@ -161,7 +161,7 @@ export async function refreshLeadScores(): Promise<{ scored: number; skipped: nu
      FROM crm_forum_leads l
      WHERE (l.opportunity_id IS NULL OR l.opportunity_id = 0)
        AND COALESCE(l.opportunity_status, '') <> 'draft'
-       AND NOT EXISTS (SELECT 1 FROM crm_opportunities o WHERE o.leadId = l.id)`,
+       AND NOT EXISTS (SELECT 1 FROM crm_opportunities o WHERE o.leadId = l.id AND o.is_deleted = 0)`,
     { type: QueryTypes.SELECT }
   );
 

@@ -18,9 +18,12 @@ interface CrmcLeadReassignmentsAttributes {
   createdBy: number;
   createdAt: Date;
   updatedAt: Date;
+  isDeleted: boolean;
+  deletedAt: Date | null;
+  deletedBy: number | null;
 }
 
-interface CrmcLeadReassignmentsCreationAttributes extends Optional<CrmcLeadReassignmentsAttributes, 'id' | 'approvedBy' | 'approvedAt'> {}
+interface CrmcLeadReassignmentsCreationAttributes extends Optional<CrmcLeadReassignmentsAttributes, 'id' | 'approvedBy' | 'approvedAt' | 'isDeleted' | 'deletedAt' | 'deletedBy'> {}
 
 class CrmcLeadReassignments extends Model<CrmcLeadReassignmentsAttributes, CrmcLeadReassignmentsCreationAttributes> implements CrmcLeadReassignmentsAttributes {
   declare id: number;
@@ -39,6 +42,9 @@ class CrmcLeadReassignments extends Model<CrmcLeadReassignmentsAttributes, CrmcL
   declare createdBy: number;
   declare createdAt: Date;
   declare updatedAt: Date;
+  declare isDeleted: boolean;
+  declare deletedAt: Date | null;
+  declare deletedBy: number | null;
 
   public static associate(models: any) {
     CrmcLeadReassignments.belongsTo(models.CrmcForumLeads, { foreignKey: 'leadId', targetKey: 'id', as: 'dmcForumLead' });
@@ -141,7 +147,23 @@ CrmcLeadReassignments.init(
       type: DataTypes.DATE,
       allowNull: false,
       defaultValue: DataTypes.NOW
-    }
+    },
+    isDeleted: {
+      type: DataTypes.TINYINT,
+      allowNull: false,
+      defaultValue: 0,
+      field: 'is_deleted',
+    },
+    deletedAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      field: 'deleted_at',
+    },
+    deletedBy: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      field: 'deleted_by',
+    },
   },
   {
     sequelize,

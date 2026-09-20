@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
             o.operations_status_updated_at AS operationsStatusUpdatedAt, e.name AS operationsStatusUpdatedByName
      FROM crm_opportunities o
      LEFT JOIN crm_employee e ON e.id = o.operations_status_updated_by
-     WHERE o.leadId = :leadId
+     WHERE o.leadId = :leadId AND o.is_deleted = 0
      ORDER BY o.id DESC`,
     { replacements: { leadId }, type: QueryTypes.SELECT }
   );
@@ -48,7 +48,7 @@ export async function PUT(request: NextRequest) {
   }
 
   const [opportunity] = await sequelize.query<{ leadId: number; operations_status: string; opportunityName: string }>(
-    `SELECT leadId, operations_status, opportunityName FROM crm_opportunities WHERE id = :opportunityId LIMIT 1`,
+    `SELECT leadId, operations_status, opportunityName FROM crm_opportunities WHERE id = :opportunityId AND is_deleted = 0 LIMIT 1`,
     { replacements: { opportunityId }, type: QueryTypes.SELECT }
   );
   if (!opportunity) return NextResponse.json({ error: 'Case (opportunity) not found' }, { status: 404 });

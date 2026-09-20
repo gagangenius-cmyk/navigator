@@ -221,13 +221,13 @@ export async function GET(request: NextRequest) {
     // Scoped to the lead's current/latest opportunity only, not any historical
     // one, so a lead that was rejected once and later succeeded via a fresh
     // opportunity still correctly counts as a client.
-    const CURRENT_OPP_ID_SQL = `COALESCE(l.opportunity_id, (SELECT MAX(ocur.id) FROM crm_opportunities ocur WHERE ocur.leadId = l.id))`
-    const CLIENT_STATUS_SQL = `((COALESCE(l.status,'') IN ('Retained','Client','converted','retained','client') OR COALESCE(l.opportunity_status,'') = 'won' OR EXISTS (SELECT 1 FROM crm_opportunities oc WHERE oc.leadId = l.id AND oc.status = 'won') OR EXISTS (SELECT 1 FROM crm_opportunities occ JOIN crm_opportunity_workflow_reviews wrc ON wrc.opportunity_id = occ.id WHERE occ.leadId = l.id AND wrc.finance_status = 'approved' AND wrc.compliance_status = 'approved')) AND NOT EXISTS (SELECT 1 FROM crm_opportunity_workflow_reviews wrcur WHERE wrcur.opportunity_id = ${CURRENT_OPP_ID_SQL} AND (wrcur.finance_status = 'rejected' OR wrcur.compliance_status = 'rejected')))`
+    const CURRENT_OPP_ID_SQL = `COALESCE(l.opportunity_id, (SELECT MAX(ocur.id) FROM crm_opportunities ocur WHERE ocur.leadId = l.id AND ocur.is_deleted = 0))`
+    const CLIENT_STATUS_SQL = `((COALESCE(l.status,'') IN ('Retained','Client','converted','retained','client') OR COALESCE(l.opportunity_status,'') = 'won' OR EXISTS (SELECT 1 FROM crm_opportunities oc WHERE oc.leadId = l.id AND oc.is_deleted = 0 AND oc.status = 'won') OR EXISTS (SELECT 1 FROM crm_opportunities occ JOIN crm_opportunity_workflow_reviews wrc ON wrc.opportunity_id = occ.id WHERE occ.leadId = l.id AND occ.is_deleted = 0 AND wrc.finance_status = 'approved' AND wrc.compliance_status = 'approved')) AND NOT EXISTS (SELECT 1 FROM crm_opportunity_workflow_reviews wrcur WHERE wrcur.opportunity_id = ${CURRENT_OPP_ID_SQL} AND (wrcur.finance_status = 'rejected' OR wrcur.compliance_status = 'rejected')))`
     // opportunity_status = 'draft' is set the instant a counselor starts the
     // Opportunity Flow wizard (LeadManagement.tsx handleBulkConvertToOpportunity),
     // before any crm_opportunities row exists - see that function for why the
     // row itself isn't created until the wizard's Payment stage.
-    const HAS_OPP_SQL = `((l.opportunity_id IS NOT NULL AND l.opportunity_id <> 0) OR COALESCE(l.opportunity_status,'') = 'draft' OR EXISTS (SELECT 1 FROM crm_opportunities o WHERE o.leadId = l.id))`
+    const HAS_OPP_SQL = `((l.opportunity_id IS NOT NULL AND l.opportunity_id <> 0) OR COALESCE(l.opportunity_status,'') = 'draft' OR EXISTS (SELECT 1 FROM crm_opportunities o WHERE o.leadId = l.id AND o.is_deleted = 0))`
     // Any of the three gates an opportunity must clear (Accounts/finance,
     // CRM Compliance, or a requested Discount) being rejected puts it here -
     // see src/app/api/admin/opportunity-payments/verify/route.ts,
@@ -235,7 +235,7 @@ export async function GET(request: NextRequest) {
     // src/app/api/discount-approvals/[id]/route.ts for the three places that
     // write 'rejected' onto these rows.
     const REJECTED_STATUS_SQL = `(
-      EXISTS (SELECT 1 FROM crm_opportunities orj JOIN crm_opportunity_workflow_reviews wrj ON wrj.opportunity_id = orj.id WHERE orj.leadId = l.id AND (wrj.finance_status = 'rejected' OR wrj.compliance_status = 'rejected'))
+      EXISTS (SELECT 1 FROM crm_opportunities orj JOIN crm_opportunity_workflow_reviews wrj ON wrj.opportunity_id = orj.id WHERE orj.leadId = l.id AND orj.is_deleted = 0 AND (wrj.finance_status = 'rejected' OR wrj.compliance_status = 'rejected'))
       OR EXISTS (SELECT 1 FROM crm_discount_approvals da WHERE da.leadId = l.id AND da.status = 'rejected')
     )`
     // "Today's Activity": a remark, follow-up, or appointment logged today -
@@ -261,7 +261,7 @@ export async function GET(request: NextRequest) {
         whereConditions.push('l.region = ?')
         replacements.push(currentUser.region)
       } else if (!canViewAll) {
-        whereConditions.push(`(l.Counsilor = ? OR l.assignTo = ? OR EXISTS (SELECT 1 FROM crm_opportunities o WHERE o.leadId = l.id AND (o.assignedTo = ? OR o.createdBy = ?)))`)
+        whereConditions.push(`(l.Counsilor = ? OR l.assignTo = ? OR EXISTS (SELECT 1 FROM crm_opportunities o WHERE o.leadId = l.id AND o.is_deleted = 0 AND (o.assignedTo = ? OR o.createdBy = ?)))`)
         replacements.push(currentUser.id, currentUser.id, currentUser.id, currentUser.id)
       }
     } else if (opportunityView === 'opportunities') {
@@ -278,10 +278,10 @@ export async function GET(request: NextRequest) {
           l.Counsilor = ? OR l.assignTo = ?
           OR EXISTS (
             SELECT 1 FROM crm_opportunities o
-            WHERE o.leadId = l.id AND (o.assignedTo = ? OR o.createdBy = ?)
+            WHERE o.leadId = l.id AND o.is_deleted = 0 AND (o.assignedTo = ? OR o.createdBy = ?)
           )
           OR (l.Counsilor IS NULL AND l.assignTo IS NULL
-              AND NOT EXISTS (SELECT 1 FROM crm_opportunities o2 WHERE o2.leadId = l.id AND o2.assignedTo IS NOT NULL))
+              AND NOT EXISTS (SELECT 1 FROM crm_opportunities o2 WHERE o2.leadId = l.id AND o2.is_deleted = 0 AND o2.assignedTo IS NOT NULL))
         )`)
         replacements.push(currentUser.id, currentUser.id, currentUser.id, currentUser.id)
       }
@@ -304,7 +304,7 @@ export async function GET(request: NextRequest) {
           l.Counsilor = ? OR l.assignTo = ?
           OR EXISTS (
             SELECT 1 FROM crm_opportunities o
-            WHERE o.leadId = l.id AND (o.assignedTo = ? OR o.createdBy = ?)
+            WHERE o.leadId = l.id AND o.is_deleted = 0 AND (o.assignedTo = ? OR o.createdBy = ?)
           )
         )`)
         replacements.push(currentUser.id, currentUser.id, currentUser.id, currentUser.id)
@@ -392,7 +392,7 @@ export async function GET(request: NextRequest) {
           COALESCE(cp.name, l.country_interest) as country_interest_label,
           COALESCE(s.name, pt.type, l.service_interest) as service_interest_label,
           COALESCE(ms.name, l.market_source) as market_source_label,
-          COALESCE(l.opportunity_id, (SELECT MAX(o.id) FROM crm_opportunities o WHERE o.leadId = l.id)) as resolved_opportunity_id,
+          COALESCE(l.opportunity_id, (SELECT MAX(o.id) FROM crm_opportunities o WHERE o.leadId = l.id AND o.is_deleted = 0)) as resolved_opportunity_id,
           e1.name as assigned_to_name, b.branch as branch_name
         FROM crm_forum_leads l
         LEFT JOIN crm_employee e1 ON l.assignTo = e1.id
@@ -475,14 +475,14 @@ export async function GET(request: NextRequest) {
         COALESCE(cp.name, l.country_interest) as country_interest_label,
         COALESCE(s.name, pt.type, l.service_interest) as service_interest_label,
         COALESCE(ms.name, l.market_source) as market_source_label,
-        COALESCE(l.opportunity_id, (SELECT MAX(o.id) FROM crm_opportunities o WHERE o.leadId = l.id)) as resolved_opportunity_id,
+        COALESCE(l.opportunity_id, (SELECT MAX(o.id) FROM crm_opportunities o WHERE o.leadId = l.id AND o.is_deleted = 0)) as resolved_opportunity_id,
         e1.name as assigned_to_name, b.branch as branch_name, b.name as branch_legal_name,
         b.ar_name as branch_name_ar, b.address as branch_address, b.email as branch_email,
         b.mobile as branch_mobile, b.license_number as branch_license_number,
         b.vat_gst_percent as branch_vat_gst_percent, b.abbrv as branch_abbrv,
         o.status AS opp_status, o.stage AS opp_stage,
         o.paymentReceived, o.agreementGenerated, o.agreementSigned, o.retentionStatus,
-        (SELECT agr.agreementNumber FROM crm_opportunity_agreements agr WHERE agr.opportunityId = o.id ORDER BY agr.id DESC LIMIT 1) as agreementNumber,
+        (SELECT agr.agreementNumber FROM crm_opportunity_agreements agr WHERE agr.opportunityId = o.id AND agr.is_deleted = 0 ORDER BY agr.id DESC LIMIT 1) as agreementNumber,
         (SELECT COALESCE(p.receiptNumber, p.paymentNumber) FROM crm_opportunity_payments p WHERE p.opportunityId = o.id ORDER BY p.id DESC LIMIT 1) as receiptNumber,
         (SELECT p.status FROM crm_opportunity_payments p WHERE p.opportunityId = o.id ORDER BY p.id DESC LIMIT 1) as paymentStatus${withWorkflow ? `,
         wr.workflow_status, wr.finance_status, wr.compliance_status, wr.formal_client_id,
@@ -496,7 +496,7 @@ export async function GET(request: NextRequest) {
       LEFT JOIN crm_program_type pt ON pt.id = CAST(l.service_interest AS UNSIGNED)
       LEFT JOIN crm_source ms ON ms.id = CAST(l.market_source AS UNSIGNED)
       LEFT JOIN crm_lead_scores lsc ON lsc.lead_id = l.id
-      LEFT JOIN crm_opportunities o ON o.id = COALESCE(l.opportunity_id, (SELECT MAX(o2.id) FROM crm_opportunities o2 WHERE o2.leadId = l.id))${withWorkflow ? `
+      LEFT JOIN crm_opportunities o ON o.id = COALESCE(l.opportunity_id, (SELECT MAX(o2.id) FROM crm_opportunities o2 WHERE o2.leadId = l.id AND o2.is_deleted = 0)) AND o.is_deleted = 0${withWorkflow ? `
       LEFT JOIN crm_opportunity_workflow_reviews wr ON wr.opportunity_id = o.id` : ''}
       ${whereClause}
       ORDER BY l.created DESC

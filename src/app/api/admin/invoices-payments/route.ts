@@ -166,7 +166,7 @@ async function getPayments(search: string, status: string, dateFrom: string, dat
       b.vat_gst_percent AS dmBranchVatGstPercent,
       b.abbrv AS dmBranchAbbrv,
       (SELECT a.agreementNumber FROM crm_opportunity_agreements a
-       WHERE a.opportunityId = p.opportunityId
+       WHERE a.opportunityId = p.opportunityId AND a.is_deleted = 0
        ORDER BY a.createdAt DESC LIMIT 1) AS agreementNumber
     FROM crm_opportunity_payments p
     LEFT JOIN crm_forum_leads l ON p.leadId = l.id

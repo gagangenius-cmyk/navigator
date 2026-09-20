@@ -30,7 +30,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
       `SELECT w.*, o.opportunityNumber, o.opportunityName, o.stage, o.status, o.branchId,
               l.fname, l.lname, l.email, l.mobile, l.phone, l.nationality
        FROM crm_opportunity_workflow_reviews w
-       JOIN crm_opportunities o ON o.id = w.opportunity_id
+       JOIN crm_opportunities o ON o.id = w.opportunity_id AND o.is_deleted = 0
        JOIN crm_forum_leads l ON l.id = w.lead_id
        WHERE w.opportunity_id = ?`, { replacements: [Number(id)] }
     );
@@ -58,6 +58,8 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     const [records] = await sequelize.query('SELECT * FROM crm_opportunity_workflow_reviews WHERE opportunity_id = ? FOR UPDATE', { replacements: [opportunityId], transaction });
     const workflow = (records as any[])[0];
     if (!workflow) { await transaction.rollback(); return NextResponse.json({ error: 'Workflow record not found.' }, { status: 404 }); }
+    const [oppRows] = await sequelize.query('SELECT is_deleted FROM crm_opportunities WHERE id = ?', { replacements: [opportunityId], transaction });
+    if (!(oppRows as any[])[0] || (oppRows as any[])[0].is_deleted) { await transaction.rollback(); return NextResponse.json({ error: 'Opportunity not found.' }, { status: 404 }); }
     const now = new Date();
     const role = String((user as any).role || (user as any).roleName || '');
     const userId = Number((user as any).id || 0) || null;

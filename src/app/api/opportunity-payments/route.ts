@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
     const limit = Math.max(1, Number.parseInt(searchParams.get('limit') || '20', 10));
     const search = searchParams.get('search')?.trim();
 
-    let whereClause: any = {};
+    const whereClause: any = {};
 
     if (opportunityId) {
       whereClause.opportunityId = opportunityId;
@@ -149,7 +149,7 @@ export async function GET(request: NextRequest) {
          INNER JOIN (
            SELECT opportunityId, MAX(id) AS latestId
            FROM crm_opportunity_agreements
-           WHERE opportunityId IN (:opportunityIds)
+           WHERE opportunityId IN (:opportunityIds) AND is_deleted = 0
            GROUP BY opportunityId
          ) latest ON latest.latestId = a.id
         `,

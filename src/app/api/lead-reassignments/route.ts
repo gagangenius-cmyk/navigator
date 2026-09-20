@@ -13,8 +13,8 @@ export async function GET(request: NextRequest) {
     const reassignmentType = searchParams.get('reassignmentType');
 
     // Build WHERE conditions
-    let whereConditions = [];
-    let replacements = [];
+    const whereConditions = ['lr.is_deleted = 0'];
+    const replacements = [];
 
     if (leadId) {
       whereConditions.push('lr.leadId = ?');

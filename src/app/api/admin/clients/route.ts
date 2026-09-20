@@ -22,6 +22,10 @@ const handlers = createCrudHandlers({
     token_validity:
       body.token_validity || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
   }),
+  // crm_clients already has is_deleted (unused by any live read path today -
+  // see the GET override below) - soft delete instead of physically
+  // removing the row.
+  softDeleteField: 'is_deleted',
 });
 
 type ClientListRow = {
@@ -81,6 +85,7 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get('search') || '';
 
     const conditions = [
+      `o.is_deleted = 0`,
       `w.finance_status = 'approved'`,
       `w.compliance_status = 'approved'`,
       `TRIM(LOWER(COALESCE(o.status, ''))) IN ('won', 'closed won', 'close won')`,

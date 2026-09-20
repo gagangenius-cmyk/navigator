@@ -29,11 +29,11 @@ export async function GET(request: NextRequest) {
     const reassignmentType = searchParams.get('reassignmentType');
 
     // Build WHERE clause
-    let whereClause = '';
+    let whereClause = ' WHERE r.is_deleted = 0';
     const replacements: any[] = [];
 
     if (leadId) {
-      whereClause += ' WHERE r.leadId = ?';
+      whereClause += ' AND r.leadId = ?';
       replacements.push(leadId);
     }
 
@@ -156,7 +156,7 @@ export async function POST(request: NextRequest) {
     // for this lead created in the last minute.
     const [recentDuplicate] = await sequelize.query<{ id: number }>(
       `SELECT id FROM crm_lead_reassignments
-       WHERE leadId = ? AND fromEmployeeId = ? AND toEmployeeId = ?
+       WHERE leadId = ? AND fromEmployeeId = ? AND toEmployeeId = ? AND is_deleted = 0
          AND createdAt >= (NOW() - INTERVAL 60 SECOND)
        LIMIT 1`,
       { replacements: [body.leadId, body.fromEmployeeId, body.toEmployeeId], type: QueryTypes.SELECT }
@@ -273,7 +273,7 @@ export async function PUT(request: NextRequest) {
 
     // Check if reassignment exists
     const [existingReassignment] = await sequelize.query(`
-      SELECT * FROM crm_lead_reassignments WHERE id = ?
+      SELECT * FROM crm_lead_reassignments WHERE id = ? AND is_deleted = 0
     `, {
       replacements: [id]
     });
@@ -398,7 +398,7 @@ export async function DELETE(request: NextRequest) {
 
     // Check if reassignment exists
     const [existingReassignment] = await sequelize.query(`
-      SELECT * FROM crm_lead_reassignments WHERE id = ?
+      SELECT * FROM crm_lead_reassignments WHERE id = ? AND is_deleted = 0
     `, {
       replacements: [id]
     });
@@ -410,11 +410,11 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    // Delete reassignment
+    // Soft delete - reassignment history is an audit trail, never physically removed.
     await sequelize.query(`
-      DELETE FROM crm_lead_reassignments WHERE id = ?
+      UPDATE crm_lead_reassignments SET is_deleted = 1, deleted_at = NOW(), deleted_by = ? WHERE id = ?
     `, {
-      replacements: [id]
+      replacements: [auth.id, id]
     });
 
     return NextResponse.json({

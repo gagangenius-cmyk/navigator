@@ -54,6 +54,7 @@ export async function GET(request: NextRequest) {
     const isBranchScoped = !canViewAll && !isProcessCoordinator && ['branch_manager', 'bm', 'foe'].includes(currentUserRole);
 
     const clientWhere: string[] = [
+      'o.is_deleted = 0',
       "(LOWER(COALESCE(o.status, '')) = 'won' OR LOWER(COALESCE(o.retentionStatus, '')) = 'approved' OR LOWER(COALESCE(l.status, '')) IN ('retained', 'client', 'converted'))",
     ];
     const replacements: Record<string, unknown> = {};

@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
       LEFT JOIN crm_service s ON s.id = CAST(l.service_interest AS UNSIGNED)
       LEFT JOIN crm_employee fe ON o.assignedTo = fe.id
       LEFT JOIN crm_branch be ON be.id = COALESCE(l.branch, o.branchId)
-      WHERE o.id = ?
+      WHERE o.id = ? AND o.is_deleted = 0
     `, {
       replacements: [opportunityId]
     });
@@ -224,7 +224,7 @@ export async function GET(request: NextRequest) {
       LEFT JOIN crm_opportunities o ON a.opportunityId = o.id
       LEFT JOIN crm_forum_leads l ON o.leadId = l.id
       LEFT JOIN crm_employee fe ON o.assignedTo = fe.id
-      WHERE a.opportunityId = ?
+      WHERE a.opportunityId = ? AND a.is_deleted = 0
       ORDER BY a.createdAt DESC
     `, {
       replacements: [opportunityId]

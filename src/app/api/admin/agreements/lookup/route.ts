@@ -40,10 +40,10 @@ export async function GET(request: NextRequest) {
   // knows the opportunityId).
   const isNumeric = /^\d+$/.test(agreementNumber);
   const whereClause = opportunityId && !agreementNumber
-    ? 'a.opportunityId = :val ORDER BY a.id DESC'
+    ? 'a.opportunityId = :val AND a.is_deleted = 0 ORDER BY a.id DESC'
     : isNumeric
-      ? 'a.id = :val'
-      : 'a.agreementNumber = :val';
+      ? 'a.id = :val AND a.is_deleted = 0'
+      : 'a.agreementNumber = :val AND a.is_deleted = 0';
   const lookupValue = opportunityId && !agreementNumber ? opportunityId : agreementNumber;
 
   try { await sequelize.authenticate(); } catch (dbErr: any) {
@@ -118,7 +118,7 @@ export async function GET(request: NextRequest) {
        COALESCE(b.license_number,'')                  AS branchLicenseNumber,
        COALESCE(b.abbrv,'')                           AS branchAbbrv
      FROM crm_opportunity_agreements a
-     LEFT JOIN crm_opportunities     o ON o.id = a.opportunityId
+     LEFT JOIN crm_opportunities     o ON o.id = a.opportunityId AND o.is_deleted = 0
      LEFT JOIN crm_forum_leads       l ON l.id = o.leadId
      LEFT JOIN crm_service            s ON s.id = l.service_interest
      LEFT JOIN crm_country_proces     c ON c.id = l.country_interest

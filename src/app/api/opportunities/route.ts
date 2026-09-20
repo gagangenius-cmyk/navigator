@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
     const page = Math.max(1, Number.parseInt(searchParams.get('page') || '1', 10));
     const limit = Math.max(1, Number.parseInt(searchParams.get('limit') || '20', 10));
 
-    let whereClause: any = {};
+    const whereClause: any = {};
     
     if (leadId) {
       whereClause.leadId = leadId;
@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
       whereClause.assignedTo = assignedTo;
     }
 
-    const whereParts: string[] = [];
+    const whereParts: string[] = ['o.is_deleted = 0'];
     const replacements: Record<string, string> = {};
 
     if (whereClause.leadId) {
@@ -216,7 +216,7 @@ export async function PUT(request: NextRequest) {
 
     const opportunity = await CrmcOpportunities.findByPk(id);
 
-    if (!opportunity) {
+    if (!opportunity || opportunity.isDeleted) {
       return NextResponse.json(
         { error: 'Opportunity not found' },
         { status: 404 }

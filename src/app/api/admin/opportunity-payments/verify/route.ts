@@ -49,6 +49,17 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Status must be verified or rejected' }, { status: 400 });
     }
 
+    const [linkedOpportunity] = await sequelize.query<{ isDeleted: number }>(
+      `SELECT o.is_deleted AS isDeleted
+       FROM crm_opportunity_payments p
+       LEFT JOIN crm_opportunities o ON o.id = p.opportunityId
+       WHERE p.id = :paymentId LIMIT 1`,
+      { replacements: { paymentId }, type: QueryTypes.SELECT }
+    );
+    if (linkedOpportunity?.isDeleted) {
+      return NextResponse.json({ error: 'This payment belongs to an opportunity that no longer exists.' }, { status: 409 });
+    }
+
     // Update payment status
     await sequelize.query(
       `UPDATE crm_opportunity_payments
@@ -141,7 +152,7 @@ export async function PUT(request: NextRequest) {
       if (payment?.opportunityId) {
         // Check if an agreement already exists for this opportunity
         const [existing] = await sequelize.query<{ id: number; agreementNumber: string }>(
-          `SELECT id, agreementNumber FROM crm_opportunity_agreements WHERE opportunityId = :oppId LIMIT 1`,
+          `SELECT id, agreementNumber FROM crm_opportunity_agreements WHERE opportunityId = :oppId AND is_deleted = 0 LIMIT 1`,
           { replacements: { oppId: payment.opportunityId }, type: QueryTypes.SELECT }
         );
 

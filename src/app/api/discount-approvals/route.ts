@@ -280,7 +280,7 @@ export async function POST(request: NextRequest) {
         await sequelize.query(
           `UPDATE crm_opportunities
            SET estimatedValue = ?, actualValue = COALESCE(actualValue, ?), updatedAt = ?
-           WHERE id = ?`,
+           WHERE id = ? AND is_deleted = 0`,
           { replacements: [discountedAmount, discountedAmount, now, body.opportunityId] }
         );
       }
@@ -421,7 +421,7 @@ export async function PUT(request: NextRequest) {
           await sequelize.query(
             `UPDATE crm_opportunities
              SET estimatedValue = ?, actualValue = COALESCE(actualValue, ?), updatedAt = ?
-             WHERE id = ?`,
+             WHERE id = ? AND is_deleted = 0`,
             {
               replacements: [
                 approval.discountedAmount,

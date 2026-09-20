@@ -70,7 +70,7 @@ export async function GET(request: NextRequest) {
         LEFT JOIN crm_forum_leads l ON l.id = o.leadId
         LEFT JOIN crm_contracts ct ON ct.opportunity_id = o.id AND ct.is_deleted = 0
         LEFT JOIN crm_branch b ON b.id = o.branchId
-        WHERE ${dateCond('o.createdAt')}
+        WHERE o.is_deleted = 0 AND ${dateCond('o.createdAt')}
         ${branchId ? 'AND o.branchId = :branchId' : ''}`,
         { replacements: { months, ...rangeReplacements, ...(branchId ? { branchId } : {}) }, type: QueryTypes.SELECT }
       ),
@@ -113,7 +113,7 @@ export async function GET(request: NextRequest) {
         LEFT JOIN crm_contracts ct ON ct.opportunity_id = o.id AND ct.is_deleted = 0
         LEFT JOIN crm_employee e ON e.id = o.assignedTo
         LEFT JOIN crm_branch b ON b.id = o.branchId
-        WHERE ${dateCond('o.createdAt')}
+        WHERE o.is_deleted = 0 AND ${dateCond('o.createdAt')}
         ${branchId ? 'AND o.branchId = :branchId' : ''}
         ORDER BY o.id DESC
         LIMIT 100`,
@@ -166,7 +166,7 @@ export async function GET(request: NextRequest) {
           COALESCE(SUM(COALESCE(ct.paid_yet, l.paidYet)),0) AS collected,
           COUNT(o.id) AS opps
         FROM crm_branch b
-        LEFT JOIN crm_opportunities o ON o.branchId=b.id AND o.createdAt >= DATE_SUB(NOW(),INTERVAL :months MONTH)
+        LEFT JOIN crm_opportunities o ON o.branchId=b.id AND o.is_deleted = 0 AND o.createdAt >= DATE_SUB(NOW(),INTERVAL :months MONTH)
         LEFT JOIN crm_forum_leads l ON l.id=o.leadId
         LEFT JOIN crm_contracts ct ON ct.opportunity_id = o.id AND ct.is_deleted = 0
         WHERE b.status=1 ${branchId ? 'AND b.id = :branchId' : ''}
@@ -184,7 +184,7 @@ export async function GET(request: NextRequest) {
           COALESCE(SUM(COALESCE(ct.paid_yet, l.paidYet)),0) AS collected
         FROM crm_employee e
         LEFT JOIN crm_branch b ON b.id=e.branch
-        LEFT JOIN crm_opportunities o ON o.assignedTo=e.id AND o.createdAt >= DATE_SUB(NOW(),INTERVAL :months MONTH)
+        LEFT JOIN crm_opportunities o ON o.assignedTo=e.id AND o.is_deleted = 0 AND o.createdAt >= DATE_SUB(NOW(),INTERVAL :months MONTH)
         LEFT JOIN crm_forum_leads l ON l.id=o.leadId
         LEFT JOIN crm_contracts ct ON ct.opportunity_id = o.id AND ct.is_deleted = 0
         WHERE e.status=1 ${branchId ? 'AND e.branch = :branchId' : ''}

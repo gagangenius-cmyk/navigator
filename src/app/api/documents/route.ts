@@ -73,13 +73,13 @@ export async function GET(request: NextRequest) {
         d.uploadDate AS created, NULL AS status, CONVERT(a.agreementNumber USING utf8mb4) ${C} AS agreementNumber,
         CONVERT(COALESCE(NULLIF(TRIM(CONCAT(COALESCE(l.fname,''), ' ', COALESCE(l.lname,''))), ''), l.email, l.phone) USING utf8mb4) ${C} AS client
       FROM crm_opportunity_documents d
-      LEFT JOIN crm_opportunities o ON o.id = d.opportunityId
+      LEFT JOIN crm_opportunities o ON o.id = d.opportunityId AND o.is_deleted = 0
       LEFT JOIN crm_forum_leads l ON l.id = o.leadId
       LEFT JOIN (
         SELECT da1.opportunityId, da1.agreementNumber
         FROM crm_opportunity_agreements da1
         INNER JOIN (
-          SELECT opportunityId, MAX(id) AS maxId FROM crm_opportunity_agreements GROUP BY opportunityId
+          SELECT opportunityId, MAX(id) AS maxId FROM crm_opportunity_agreements WHERE is_deleted = 0 GROUP BY opportunityId
         ) da2 ON da2.opportunityId = da1.opportunityId AND da2.maxId = da1.id
       ) a ON a.opportunityId = d.opportunityId
       WHERE 1=1 ${oppLeadFilter} ${oppSearchFilter}

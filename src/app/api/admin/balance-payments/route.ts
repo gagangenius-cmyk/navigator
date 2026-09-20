@@ -43,7 +43,7 @@ export async function GET(request: NextRequest) {
     // opportunity's OWN balance/branch (not the lead's collapsed flat
     // fields) - falls back to the lead/opportunity's own fields only for
     // opportunities that predate the contract model and never got one.
-    const conditions: string[] = ['COALESCE(ct.pay_balance, l.payBalance) > 0'];
+    const conditions: string[] = ['o.is_deleted = 0', 'COALESCE(ct.pay_balance, l.payBalance) > 0'];
     const replacements: Record<string, unknown> = { limit, offset };
 
     if (isBranchScoped) {
@@ -72,7 +72,7 @@ export async function GET(request: NextRequest) {
          SELECT da1.opportunityId, da1.agreementNumber
          FROM crm_opportunity_agreements da1
          INNER JOIN (
-           SELECT opportunityId, MAX(id) AS maxId FROM crm_opportunity_agreements GROUP BY opportunityId
+           SELECT opportunityId, MAX(id) AS maxId FROM crm_opportunity_agreements WHERE is_deleted = 0 GROUP BY opportunityId
          ) da2 ON da2.opportunityId = da1.opportunityId AND da2.maxId = da1.id
        ) a ON a.opportunityId = o.id
        WHERE ${conditions.join(' AND ')}`;

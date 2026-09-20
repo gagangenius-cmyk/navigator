@@ -1528,7 +1528,7 @@ export async function GET(request: NextRequest) {
     }
 
     const opportunityIds = (await models.CrmcOpportunities.findAll({
-      where: { leadId },
+      where: { leadId, isDeleted: 0 },
       attributes: ['id'],
       raw: true
     })).map((opp: { id: number | string }) => Number(opp.id)).filter(Boolean);
@@ -1553,7 +1553,7 @@ export async function GET(request: NextRequest) {
         ]
       }),
       models.CrmcOpportunities.findAll({
-        where: { leadId },
+        where: { leadId, isDeleted: 0 },
         attributes: opportunityAttributes,
         include: [
           { association: 'assignedEmployee', attributes: ['id', 'name'] }
@@ -1569,7 +1569,7 @@ export async function GET(request: NextRequest) {
         order: [['createdAt', 'DESC']]
       }),
       models.CrmcOpportunityAgreements.findAll({
-        where: { opportunityId: opportunityIds },
+        where: { opportunityId: opportunityIds, isDeleted: 0 },
         attributes: agreementAttributes,
         include: [
           { association: 'dmcOpportunity', attributes: ['id', 'opportunityName'] }

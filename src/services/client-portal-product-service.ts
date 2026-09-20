@@ -49,7 +49,7 @@ export class ClientPortalProductService {
         FROM crm_opportunities o
         JOIN crm_opportunity_workflow_reviews w ON w.opportunity_id = o.id
         LEFT JOIN crm_employee e ON e.id = o.assignedTo
-        WHERE o.id = :opportunityId AND o.leadId = :leadId
+        WHERE o.id = :opportunityId AND o.leadId = :leadId AND o.is_deleted = 0
           AND w.finance_status = 'approved' AND w.compliance_status = 'approved'
           AND TRIM(LOWER(COALESCE(o.status, ''))) IN ('won', 'closed won', 'close won')
         LIMIT 1
@@ -192,7 +192,7 @@ export class ClientPortalProductService {
            GROUP BY opportunityId
          ) latest_doc ON latest_doc.opportunityId = d1.opportunityId AND latest_doc.latestId = d1.id
        ) signed_doc ON signed_doc.opportunityId = a.opportunityId
-       WHERE a.opportunityId = :opportunityId
+       WHERE a.opportunityId = :opportunityId AND a.is_deleted = 0
        ORDER BY
          CASE WHEN COALESCE(NULLIF(a.documentUrl, ''), signed_doc.filePath) IS NOT NULL THEN 0 ELSE 1 END,
          a.createdAt DESC

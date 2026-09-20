@@ -20,6 +20,7 @@ async function loadWorkflowData() {
               estimatedValue, actualValue, priority, description, serviceRequired,
               status, stage, assignedTo, createdAt, updatedAt, conversionDate
        FROM crm_opportunities
+       WHERE is_deleted = 0
        ORDER BY createdAt DESC
        LIMIT 100`,
       { type: QueryTypes.SELECT }
@@ -93,7 +94,7 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: 'Opportunity ID is required' }, { status: 400 });
       }
       const rows = await sequelize.query<any>(
-        `SELECT serviceRequired, serviceType FROM crm_opportunities WHERE id = ? LIMIT 1`,
+        `SELECT serviceRequired, serviceType FROM crm_opportunities WHERE id = ? AND is_deleted = 0 LIMIT 1`,
         { replacements: [opportunityId], type: QueryTypes.SELECT }
       );
       const service = String(rows[0]?.serviceRequired || rows[0]?.serviceType || '').toLowerCase();
@@ -153,7 +154,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Opportunity ID and Case Officer ID are required' }, { status: 400 });
       }
       await sequelize.query(
-        `UPDATE crm_opportunities SET assignedTo = ?, updatedAt = ? WHERE id = ?`,
+        `UPDATE crm_opportunities SET assignedTo = ?, updatedAt = ? WHERE id = ? AND is_deleted = 0`,
         { replacements: [caseOfficerId, new Date(), opportunityId] }
       );
       return NextResponse.json({ success: true, message: 'Case officer assigned successfully' });

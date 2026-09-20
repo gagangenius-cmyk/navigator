@@ -128,7 +128,7 @@ export async function POST(request: NextRequest) {
       let retentionApproved = data.retentionStatus === 'approved';
       if (retentionApproved) {
         const [linkedOpportunity] = await sequelize.query<{ id: number }>(
-          'SELECT id FROM crm_opportunities WHERE leadId = :leadId ORDER BY id DESC LIMIT 1',
+          'SELECT id FROM crm_opportunities WHERE leadId = :leadId AND is_deleted = 0 ORDER BY id DESC LIMIT 1',
           { replacements: { leadId }, type: QueryTypes.SELECT },
         );
         retentionApproved = await isFinanceAndComplianceApproved(linkedOpportunity?.id);
