@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { sequelize } from '@/lib/sequelize';
 import { resolveLeadAutoAssignment } from '@/lib/leadAutoAssignment';
+import { recordLeadAssignment } from '@/lib/leadRemarks';
 import { verifyToken } from '@/lib/auth';
 import { QueryTypes } from 'sequelize';
 import { checkForDuplicate, findExistingLead } from '@/lib/duplicateLeadCheck';
@@ -150,6 +151,19 @@ export async function POST(request: NextRequest) {
         0, // campaign_id
         0, // old_branch
       ]
+    });
+
+    // This INSERT sets assignTo directly but doesn't stamp the
+    // transfer_date/transfered "assigned since" audit fields every other
+    // assignment path relies on (recordLeadAssignment - see
+    // src/lib/leadRemarks.ts) - without this, a quick-add lead looked
+    // untouched/unassigned everywhere else in the app reads those fields.
+    await recordLeadAssignment({
+      leadId,
+      oldAssignTo: null,
+      newAssignTo: assignment.assignedEmployeeId,
+      actorId: currentUser.id,
+      actorRole: currentUser.roleName || currentUser.type,
     });
 
     // Get the created lead

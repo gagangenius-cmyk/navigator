@@ -16,9 +16,10 @@
 import { type CreationAttributes } from 'sequelize';
 import { CrmcForumLeads } from '@/models/CrmcForumLeads';
 import { checkForDuplicate } from '@/lib/duplicateLeadCheck';
-import { logLeadRemark } from '@/lib/leadRemarks';
+import { logLeadRemark, recordLeadAssignment } from '@/lib/leadRemarks';
 import { resolveLeadReferenceId } from '@/lib/leadReferenceResolver';
 import { resolveBranchReference } from '@/lib/branchResolver';
+import { resolveLeadAssignment } from '@/lib/assignmentRuleEngine';
 
 export interface WebToLeadsIngestResult {
   success: boolean;
@@ -123,6 +124,40 @@ export async function ingestWebToLead(
 
   const duplicateCheck = await checkForDuplicate({ phone, email });
 
+  // Meta Lead Ads always sends roundrobin: 'true' (see the synthetic
+  // '__roundrobin'/'roundrobin' fields in src/lib/meta/mapping-engine.ts and
+  // the required `roundrobin` field on CrmPayload in src/lib/meta/types.ts) -
+  // this was previously read nowhere, so every Meta lead silently landed in
+  // the unassigned queue no matter how the assignment rules were configured.
+  // Other senders (marketing site forms, Salesforce, Contact Form 7) don't
+  // send the field at all, so default to attempting assignment unless a
+  // caller explicitly opts out with roundrobin: 'false'.
+  const roundRobinFlag = readField(data, ['roundrobin', '__roundrobin'], 'true').toLowerCase();
+  const wantsRoundRobin = !['false', '0', 'no'].includes(roundRobinFlag);
+
+  let assignToId: number | null = null;
+  let counselorId: number | null = null;
+  if (wantsRoundRobin) {
+    try {
+      const assignment = await resolveLeadAssignment({
+        branchId: branch.id,
+        forceAutoAssign: true,
+        roundRobin: true,
+        sourceId: marketSourceId,
+        priority: 'Medium',
+        countryInterestId,
+        serviceInterestId,
+      });
+      assignToId = assignment.assignedEmployeeId;
+      counselorId = assignment.counselorId;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '';
+      if (!message.includes('No active employees are available')) throw error;
+      // Leave the lead in the branch's unassigned queue rather than
+      // rejecting an inbound customer lead because the office is empty.
+    }
+  }
+
   const leadPayload = {
     fname: fname || fullName,
     mname: '',
@@ -155,10 +190,12 @@ export async function ingestWebToLead(
     last_updtd_time: time,
     stepComplete: 1,
     payType: null,
-    // New leads enter unassigned; a FOE/Branch Manager/CEO assigns them afterward.
-    assignTo: null,
-    case_officer: null,
-    Counsilor: null,
+    // Auto-assigned via the assignment-rule engine/round robin above unless
+    // opted out or no one was eligible; otherwise a FOE/Branch Manager/CEO
+    // assigns it afterward.
+    assignTo: assignToId,
+    case_officer: assignToId,
+    Counsilor: counselorId,
     branch: branch.id,
     region: branch.region || 1,
     payTotal: 0,
@@ -173,9 +210,10 @@ export async function ingestWebToLead(
     renDate: null,
     renExpiryDate: null,
     renew_type: null,
-    // Always unassigned (assignTo: null above) — 'untouched' so it's
-    // findable separately from a 'New' lead someone already owns.
-    status: 'untouched',
+    // Unassigned leads start 'untouched' so they're findable separately
+    // from a 'New' lead someone already owns; recordLeadAssignment below
+    // clears it to 'New' the moment the lead actually gets assigned.
+    status: assignToId ? 'New' : 'untouched',
     status_date: now,
     notf: 0,
     type: 'lead',
@@ -249,6 +287,21 @@ export async function ingestWebToLead(
 
   const lead = await (CrmcForumLeads as any).create(leadPayload);
 
+  // Stamps transfer_date/transfer_time/transfered/transfered_by (the
+  // "assigned since" audit fields every other assignment path relies on),
+  // logs a lead_assigned remark, and notifies the new owner - without this,
+  // a round-robin-assigned web lead looked untouched/unassigned everywhere
+  // else in the app reads those fields.
+  if (assignToId) {
+    await recordLeadAssignment({
+      leadId: lead.id,
+      oldAssignTo: null,
+      newAssignTo: assignToId,
+      actorId: null,
+      actorRole: 'System (web-to-leads round robin)',
+    });
+  }
+
   // The Opportunity Flow's "Service Requirements" panel reads from
   // crm_remarks (not the lead row's own lead_remark column), so without this
   // a web-to-lead lead always showed up there with no activity at all.
@@ -270,7 +323,7 @@ export async function ingestWebToLead(
     success: true,
     status: 201,
     leadId: lead.id,
-    assignedTo: null,
+    assignedTo: assignToId,
     branchId: branch.id,
   };
 }
