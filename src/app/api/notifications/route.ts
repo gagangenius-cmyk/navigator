@@ -193,11 +193,15 @@ export async function PUT(request: NextRequest) {
         updateData = { is_read: false };
         break;
       case 'delete':
+        // Scoped to the caller: without user_id any authenticated user could
+        // delete (or below, mark read/unread) another employee's notifications
+        // just by guessing ids.
         await CrmcNotifications.destroy({
           where: {
             id: {
               [Op.in]: notificationIds
-            }
+            },
+            user_id: auth.id
           }
         });
         return NextResponse.json({
@@ -215,7 +219,8 @@ export async function PUT(request: NextRequest) {
       where: {
         id: {
           [Op.in]: notificationIds
-        }
+        },
+        user_id: auth.id
       }
     });
 

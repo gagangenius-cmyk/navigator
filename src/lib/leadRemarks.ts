@@ -1,7 +1,7 @@
 import { Transaction, QueryTypes } from 'sequelize';
 import { CrmRemarks } from '@/models/CrmRemarks';
 import { sequelize } from '@/lib/sequelize';
-import { notifyUser } from '@/lib/notify';
+import { notifyLeadAssigned } from '@/lib/notify';
 import { CACHE_TAGS, invalidateReportCaches } from '@/lib/reportCache';
 
 export type LeadRemarkAction =
@@ -143,24 +143,7 @@ export async function recordLeadAssignment({
     // (manual, round robin, rule engine, inactivity reassignment) already
     // calls, so it's the one place a "lead assigned to you" alert can live
     // without wiring notifications into each individual call site.
-    if (newAssignTo && newAssignTo !== actorId) {
-      const [leadRow] = await sequelize.query<{ fname: string; lname: string }>(
-        'SELECT fname, lname FROM crm_forum_leads WHERE id = :id LIMIT 1',
-        { replacements: { id: leadId }, type: QueryTypes.SELECT, transaction }
-      );
-      const leadName = `${leadRow?.fname || ''} ${leadRow?.lname || ''}`.trim() || `Lead #${leadId}`;
-      const byWhom = actorId ? ` by ${actorLabel}` : '';
-      await notifyUser({
-        userId: newAssignTo,
-        type: 'lead_assigned',
-        title: 'New lead assigned to you',
-        message: `${leadName} has been assigned to you${byWhom}.`,
-        priority: 'high',
-        relatedId: leadId,
-        relatedType: 'lead',
-        link: `/admin/leads/${leadId}`,
-      });
-    }
+    await notifyLeadAssigned({ leadId, newAssignTo, actorId, actorLabel, transaction });
 
     // Every reassignment path (manual, lead pool claim/release, bulk
     // transfer, round-robin, SLA sweep) funnels through this one function -

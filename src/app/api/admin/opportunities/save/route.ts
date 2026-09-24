@@ -5,6 +5,7 @@ import { requireAuth, isAuthError } from '@/lib/apiAuth';
 import { resolveBranchCurrency } from '@/lib/branchCurrency';
 import { formatDocumentNumber } from '@/lib/documentNumbering';
 import { isFinanceAndComplianceApproved, APPROVAL_REQUIRED_ERROR } from '@/lib/opportunityApprovalGate';
+import { notifyCeo } from '@/lib/notify';
 
 // Only these columns are allowed in the dynamic UPDATE to prevent accidental overwrites.
 const ALLOWED_LEAD_UPDATE_COLS = new Set([
@@ -365,6 +366,19 @@ async function handleCompleteFlow(leadId: number, data: any, lead: any) {
     );
 
     await t.commit();
+
+    // This path inserts a payment row as 'pending' for Accounts verification
+    // but, unlike /api/receipts and /api/lead-to-opportunity, never alerted
+    // anyone. Failure is swallowed inside notifyCeo (the flow already committed).
+    await notifyCeo({
+      type: 'payment_submission',
+      title: 'Payment submitted for verification',
+      message: `A payment for ${`${lead.fname || ''} ${lead.lname || ''}`.trim() || `lead #${leadId}`} is awaiting accounts verification.`,
+      priority: 'medium',
+      link: `/admin/leads/${leadId}/edit`,
+      relatedId: leadId,
+      relatedType: 'lead',
+    });
 
     return NextResponse.json({
       success: true,

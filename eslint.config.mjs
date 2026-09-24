@@ -26,6 +26,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // The React Native app is its own project (own tsconfig/eslint/deps).
+    "mobile/**",
   ]),
 ]);
 
