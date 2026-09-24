@@ -82,6 +82,10 @@ utils/  constants/
   EXPO_PUBLIC_API_URL=http://192.168.0.10:3000
   ```
 - **Builds:** set it per profile in [`eas.json`](eas.json). Production builds refuse a non-`https` URL.
+- **Without rebuilding:** internal builds (`development`, `preview`) show a **Server** button on the login screen.
+  Enter `http://<your-pc-ip>:3000`, a preview URL or the production URL and the same APK talks to it. It is only
+  reachable while signed out, so a session can never straddle two servers. **Production builds have no such setting and
+  ignore any stored value.**
 
 The first mobile login creates two tables (`crm_mobile_sessions`, `crm_mobile_devices`) in the backend's
 database. See the backend section of the docs before pointing at a shared database.
@@ -170,3 +174,62 @@ certificate rotation.
   crisp tray icon: `expo-notifications` plugin `icon` option).
 - Push delivery, action buttons and the biometric flows have been verified by unit tests and build checks
   only. They need a real device build with Firebase/APNs credentials to exercise end to end.
+
+## 8. Building an APK locally on Windows
+
+For when you would rather not use EAS cloud builds. Nothing is uploaded anywhere. Budget about 10 GB of disk (put
+everything on a drive with room) and 30-60 minutes for the first build.
+
+**One-off tooling** (Android Studio is not required):
+
+1. JDK 17 (Temurin), e.g. `D:\android-build\jdk-17`.
+2. Android command-line tools unpacked to `D:\android-build\sdk\cmdline-tools\latest`.
+3. Accept the SDK licenses, then install exactly what React Native 0.86 asks for (see
+   `node_modules/react-native/gradle/libs.versions.toml`):
+   ```bash
+   sdkmanager --sdk_root=D:\android-build\sdk --licenses
+   sdkmanager --sdk_root=D:\android-build\sdk platform-tools "platforms;android-36" "build-tools;36.0.0" "cmake;3.22.1" "ndk;27.1.12297006"
+   ```
+   In PowerShell/cmd `--licenses` may not receive its `y` answers; run it from Git Bash as `yes | sdkmanager.bat ...`.
+   The NDK is ~750 MB and `sdkmanager` restarts it from zero on every dropped connection. On a flaky network download
+   `android-ndk-r27b-windows.zip` with a resumable `curl -C -` and unzip it to `sdk\ndk\27.1.12297006`. Check that
+   `source.properties`, `toolchains\llvm\prebuilt\windows-x86_64\bin\clang.exe` and
+   `build\cmake\android.toolchain.cmake` exist: an empty folder means the download failed.
+
+**Short paths.** Windows' 260-character limit breaks native builds inside deep `node_modules` paths. Map a short drive
+one level *above* the project and work from `R:\mobile`:
+
+```bat
+subst R: D:\path\to\navigator-next
+```
+
+Mapping the drive straight onto `mobile\` does not work: Expo's autolinking cannot find `package.json` at a drive root.
+
+**Build:**
+
+```bat
+set JAVA_HOME=D:\android-build\jdk-17
+set ANDROID_HOME=D:\android-build\sdk
+set GRADLE_USER_HOME=D:\android-build\gradle-home
+set NODE_ENV=production
+set APP_ENV=preview
+set EXPO_PUBLIC_APP_ENV=preview
+set EXPO_PUBLIC_API_URL=http://<your-pc-ip>:3000
+
+cd R:\mobile
+npx expo prebuild --platform android --no-install --clean
+cd android
+gradlew.bat assembleRelease -PreactNativeArchitectures=arm64-v8a --no-daemon --max-workers=2
+```
+
+The APK is `android\app\build\outputs\apk\release\app-release.apk`. Install it with `adb install -r app-release.apk`, or
+copy it to the phone and open it (allow installs from that source). Then use the **Server** button on the login screen
+to point it at the backend.
+
+- `arm64-v8a` covers virtually every phone since 2017 and keeps the build short and small. Use `x86_64` for an emulator.
+- `--no-daemon --max-workers=2` keep memory use low on an 8 GB machine.
+- The first build downloads Gradle and every dependency. A dropped connection can fail it with "Plugin ... was not
+  found": just re-run.
+- It is signed with the generated **debug keystore**: fine for internal testing, **not** for the Play Store.
+- `android/` is generated and git-ignored; delete it (and `subst R: /D`) when done.
+- Push will not work in this APK unless `google-services.json` was present at prebuild time (section 4).
