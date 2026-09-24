@@ -196,16 +196,19 @@ everything on a drive with room) and 30-60 minutes for the first build.
    `source.properties`, `toolchains\llvm\prebuilt\windows-x86_64\bin\clang.exe` and
    `build\cmake\android.toolchain.cmake` exist: an empty folder means the download failed.
 
-**Short paths.** Windows' 260-character limit breaks native builds inside deep `node_modules` paths. Map a short drive
-one level *above* the project and work from `R:\mobile`:
+**Short paths.** Windows' 260-character limit breaks native builds inside deep `node_modules` paths, so build from a
+copy at a short *real* path such as `D:\m`:
 
 ```bat
-subst R: D:\path\to\navigator-next
+robocopy D:\path\to\navigator-next\mobile D:\m /MIR /XD D:\path\to\navigator-next\mobile\android D:\path\to\navigator-next\mobile\.expo /MT:8
 ```
 
-Mapping the drive straight onto `mobile\` does not work: Expo's autolinking cannot find `package.json` at a drive root.
+Give `/XD` **full paths**: a bare `android` would also skip every `node_modules\*\android` folder and break the build.
+Do not use `subst` or a junction instead: Node's autolinking reports the real path while Gradle sees the substituted
+one, and the React Native Gradle plugin fails codegen with "this and base files have different roots". A drive root
+(`subst R: mobile`) also breaks autolinking outright.
 
-**Build:**
+**Build** (from the copy):
 
 ```bat
 set JAVA_HOME=D:\android-build\jdk-17
@@ -216,7 +219,7 @@ set APP_ENV=preview
 set EXPO_PUBLIC_APP_ENV=preview
 set EXPO_PUBLIC_API_URL=http://<your-pc-ip>:3000
 
-cd R:\mobile
+cd D:\m
 npx expo prebuild --platform android --no-install --clean
 cd android
 gradlew.bat assembleRelease -PreactNativeArchitectures=arm64-v8a --no-daemon --max-workers=2
@@ -231,5 +234,5 @@ to point it at the backend.
 - The first build downloads Gradle and every dependency. A dropped connection can fail it with "Plugin ... was not
   found": just re-run.
 - It is signed with the generated **debug keystore**: fine for internal testing, **not** for the Play Store.
-- `android/` is generated and git-ignored; delete it (and `subst R: /D`) when done.
+- `android/` is generated and git-ignored; delete the `D:\m` copy when done.
 - Push will not work in this APK unless `google-services.json` was present at prebuild time (section 4).
