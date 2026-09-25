@@ -9,6 +9,7 @@
     "lint": "eslint",
     "db:setup": "node scripts/setup-database.js",
     "db:migrate": "node scripts/setup-database.js",
+    "db:reset": "node scripts/reset-database.js",
     "db:seed:roles": "node scripts/seed-roles-permissions.js",
     "db:seed:sources": "node scripts/seed-sources.js",
     "db:seed:fees": "node scripts/seed-fees.js",

@@ -12,6 +12,8 @@
 
 # testing
 /coverage
+/mobile/.expo
+/mobile/node_modules
 
 # next.js
 /.next/

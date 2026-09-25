@@ -8,7 +8,7 @@ export async function GET(request: NextRequest) {
   if (isAuthError(auth)) return auth;
 
   try {
-    const [programs, countries, programTypes, branches] = await Promise.all([
+    const [programs, countries, programTypes, branches, currencies] = await Promise.all([
       sequelize.query<{ id: number; name: string }>(
         `SELECT id, name FROM crm_service WHERE status = 1 ORDER BY name ASC`,
         { type: QueryTypes.SELECT }
@@ -25,9 +25,13 @@ export async function GET(request: NextRequest) {
         `SELECT id, branch AS name FROM crm_branch WHERE status = 1 ORDER BY branch ASC`,
         { type: QueryTypes.SELECT }
       ),
+      sequelize.query<{ id: number; name: string }>(
+        `SELECT id, CONCAT(currency_code, ' - ', country) AS name FROM crm_currency WHERE status = 1 ORDER BY currency_code ASC`,
+        { type: QueryTypes.SELECT }
+      ),
     ]);
 
-    return NextResponse.json({ programs, countries, programTypes, branches });
+    return NextResponse.json({ programs, countries, programTypes, branches, currencies });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     return NextResponse.json({ error: 'Failed to fetch lookup data', details: msg }, { status: 500 });

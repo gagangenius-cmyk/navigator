@@ -3,8 +3,25 @@ import { requireAuth, isAuthError } from '@/lib/apiAuth';
 import { isCeo } from '@/lib/roleChecks';
 import { CrmFee } from '@/models/CrmFee';
 import type { CrmFeeAttributes } from '@/models/CrmFee';
-import { Op } from 'sequelize';
-import { ensureCountryProgramMapping } from '@/lib/countryProgramMapping';
+import { ForeignKeyConstraintError, Op } from 'sequelize';
+import { sequelize } from '@/lib/sequelize';
+import { ensureCountryProgramMapping, programTypeIsActive } from '@/lib/countryProgramMapping';
+
+// crm_fee has foreign keys to service, country, branch and currency; a stale form
+// (something was deleted in another tab) should read as a fixable input problem.
+function feeWriteError(error: unknown, action: 'create' | 'update') {
+  if (error instanceof ForeignKeyConstraintError) {
+    return NextResponse.json(
+      { error: 'The selected program, country, branch or currency no longer exists. Refresh the page and choose again.' },
+      { status: 400 }
+    );
+  }
+  console.error(`Error trying to ${action} fee:`, error);
+  return NextResponse.json({ error: `Failed to ${action} fee` }, { status: 500 });
+}
+
+const PROGRAM_TYPE_REQUIRED = 'Program type is required when a program and a country are selected.';
+const PROGRAM_TYPE_UNKNOWN = 'The selected program type does not exist or is inactive.';
 
 export async function GET(request: NextRequest) {
   const auth = requireAuth(request, ['fees.manage']);
@@ -82,22 +99,35 @@ export async function POST(request: NextRequest) {
     // against a country/program pair that has no corresponding mapping row.
     const { programType, ...feeFields } = await request.json();
 
-    const newFee = await CrmFee.create({
-      ...feeFields,
-      status: 1,
-    });
-
-    if (feeFields.service && feeFields.country && programType) {
-      await ensureCountryProgramMapping(Number(feeFields.country), Number(programType), Number(feeFields.service), Number(auth.id));
+    // A fee for a program + country always gets its country/type/program mapping. (A fee with no
+    // country has nothing to map: the mapping table requires one.)
+    const needsMapping = Boolean(feeFields.service && feeFields.country);
+    if (needsMapping) {
+      if (!programType) return NextResponse.json({ error: PROGRAM_TYPE_REQUIRED }, { status: 400 });
+      if (!(await programTypeIsActive(Number(programType)))) {
+        return NextResponse.json({ error: PROGRAM_TYPE_UNKNOWN }, { status: 400 });
+      }
     }
+
+    // The fee and its mapping commit together or not at all, so a failure can never leave a fee
+    // without its relation (or make the user retry into a duplicate fee).
+    const newFee = await sequelize.transaction(async (transaction) => {
+      const created = await CrmFee.create({ ...feeFields, status: 1 }, { transaction });
+      if (needsMapping) {
+        await ensureCountryProgramMapping(
+          Number(feeFields.country),
+          Number(programType),
+          Number(feeFields.service),
+          Number(auth.id),
+          transaction
+        );
+      }
+      return created;
+    });
 
     return NextResponse.json(newFee.get({ plain: true }), { status: 201 });
   } catch (error) {
-    console.error('Error creating fee:', error);
-    return NextResponse.json(
-      { error: 'Failed to create fee' },
-      { status: 500 }
-    );
+    return feeWriteError(error, 'create');
   }
 }
 
@@ -116,21 +146,25 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    await fee.update(updateData);
-
+    // programType is optional on update (a status toggle sends only { id, status }); when the form
+    // does send it, the fee's country/type/program mapping is ensured just like on create.
     const service = updateData.service ?? fee.service;
     const country = updateData.country ?? fee.country;
-    if (service && country && programType) {
-      await ensureCountryProgramMapping(Number(country), Number(programType), Number(service), Number(auth.id));
+    const mapPair = Boolean(service && country && programType);
+    if (mapPair && !(await programTypeIsActive(Number(programType)))) {
+      return NextResponse.json({ error: PROGRAM_TYPE_UNKNOWN }, { status: 400 });
     }
+
+    await sequelize.transaction(async (transaction) => {
+      await fee.update(updateData, { transaction });
+      if (mapPair) {
+        await ensureCountryProgramMapping(Number(country), Number(programType), Number(service), Number(auth.id), transaction);
+      }
+    });
 
     return NextResponse.json(fee.get({ plain: true }));
   } catch (error) {
-    console.error('Error updating fee:', error);
-    return NextResponse.json(
-      { error: 'Failed to update fee' },
-      { status: 500 }
-    );
+    return feeWriteError(error, 'update');
   }
 }
 

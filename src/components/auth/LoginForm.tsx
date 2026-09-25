@@ -1,13 +1,15 @@
 'use client'
 
-import { useState, useRef, useCallback } from 'react'
+import { useState } from 'react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { motion, useReducedMotion } from 'framer-motion'
-import { Button } from '@/components/ui/button'
-import { Eye, EyeOff, AlertCircle, ArrowRight, Shield, Globe, User, Lock, CheckCircle2, Compass, Plane } from 'lucide-react'
+import { AlertCircle, ArrowLeft, ArrowRight, Compass, Eye, EyeOff, Globe, Lock, ShieldCheck, User, Users } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { getDefaultAdminPathForUser } from '@/lib/roleAccess'
+import { isCompleteVerificationCode, normalizeVerificationCode } from '@/lib/mfaCodeInput'
+import { RouteMap } from './RouteMap'
 
 interface LoginFormData {
   username: string
@@ -34,122 +36,73 @@ interface LoginResponse {
   }
 }
 
-// Waypoint markers scattered over the compass panel — each one a fixed
-// (top%, left%) plus an animation delay so they pulse out of sync.
-const WAYPOINTS = [
-  { top: '18%', left: '78%', delay: 0 },
-  { top: '68%', left: '20%', delay: 0.7 },
-  { top: '38%', left: '90%', delay: 1.4 },
-  { top: '82%', left: '62%', delay: 2.1 },
+const PILLARS: { icon: LucideIcon; label: string }[] = [
+  { icon: Users, label: 'Role-based access' },
+  { icon: ShieldCheck, label: 'Protected client records' },
+  { icon: Globe, label: 'Multi-country programs' },
 ]
 
-// The route the plane flies, and the compass-panel SVG line drawn under it,
-// share this same 0-100 coordinate space so the marker visually rides the
-// dashed path instead of drifting near it.
-const ROUTE_POINTS = [
-  { x: 8, y: 86 },
-  { x: 26, y: 62 },
-  { x: 46, y: 68 },
-  { x: 66, y: 42 },
-  { x: 92, y: 18 },
-]
-const ROUTE_PATH = 'M8,86 C 22,70 32,78 46,68 C 58,60 56,48 66,42 C 76,36 82,26 92,18'
+// Field outline: #9C8370 is 3.5:1 on white (WCAG 1.4.11 asks for 3:1); focus swaps it for a
+// 2px navy ring and an error for a red one, so state never depends on colour alone being subtle.
+const FIELD_BASE =
+  'h-12 w-full rounded-xl border bg-white pl-11 text-[15px] text-[#2C353F] outline-none transition-[border-color,box-shadow] duration-150 placeholder:text-[#75675C] read-only:bg-[#F6EDE6] read-only:text-[#75675C]'
+const FIELD_IDLE = 'border-[#9C8370] hover:border-[#6F5B4B] focus:border-[#1F3B63] focus:ring-[3px] focus:ring-[#1F3B63]/20'
+const FIELD_INVALID = 'border-[#D9331E] focus:border-[#D9331E] focus:ring-[3px] focus:ring-[#D9331E]/25'
 
-// The brand mark's needle, made interactive: it tracks the pointer while
-// hovered and idles into a slow drift otherwise. Ties the one genuinely
-// distinctive piece of the Global Navigator identity — the compass — into
-// the login page itself instead of using it as flat wordmark artwork.
-function NavigatorCompass({ reduceMotion }: { reduceMotion: boolean }) {
-  const panelRef = useRef<HTMLDivElement>(null)
-  const [angle, setAngle] = useState(-35)
-  const [hovering, setHovering] = useState(false)
-
-  const handleMove = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
-    const rect = panelRef.current?.getBoundingClientRect()
-    if (!rect) return
-    const centerX = rect.left + rect.width / 2
-    const centerY = rect.top + rect.height / 2
-    const degrees = (Math.atan2(event.clientY - centerY, event.clientX - centerX) * 180) / Math.PI + 90
-    setAngle(degrees)
-  }, [])
-
-  return (
-    <div
-      ref={panelRef}
-      onMouseMove={reduceMotion ? undefined : handleMove}
-      onMouseEnter={() => setHovering(true)}
-      onMouseLeave={() => setHovering(false)}
-      className="absolute inset-0"
-      aria-hidden="true"
-    >
-      <motion.div
-        className="absolute left-1/2 top-1/2 h-[26rem] w-[26rem] -translate-x-1/2 -translate-y-1/2 opacity-[0.16]"
-        animate={
-          reduceMotion ? undefined : hovering ? { rotate: angle } : { rotate: [angle, angle + 360] }
-        }
-        transition={
-          hovering
-            ? { type: 'spring', stiffness: 55, damping: 14 }
-            : { duration: 40, repeat: Infinity, ease: 'linear' }
-        }
-      >
-        <svg viewBox="0 0 200 200" className="h-full w-full">
-          <circle cx="100" cy="100" r="97" fill="none" stroke="white" strokeWidth="1.5" />
-          <circle cx="100" cy="100" r="80" fill="none" stroke="white" strokeWidth="1" strokeDasharray="1 7" />
-          {Array.from({ length: 24 }).map((_, i) => (
-            <line
-              key={i}
-              x1="100" y1="6" x2="100" y2={i % 6 === 0 ? 20 : 15}
-              stroke="white"
-              strokeWidth={i % 6 === 0 ? 1.5 : 1}
-              transform={`rotate(${i * 15} 100 100)`}
-            />
-          ))}
-          <polygon points="100,26 110,100 100,90 90,100" fill="#F6B44B" />
-          <polygon points="100,174 110,100 100,110 90,100" fill="white" />
-          <circle cx="100" cy="100" r="7" fill="white" />
-        </svg>
-      </motion.div>
-    </div>
-  )
+interface TextFieldProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'className'> {
+  id: string
+  label: string
+  icon: LucideIcon
+  invalid?: boolean
+  trailing?: React.ReactNode
+  inputClassName?: string
 }
 
-// A dashed route with a plane riding it, back and forth — a small nod to
-// "navigating" that a static hero image can't give you.
-function FlightPath({ reduceMotion }: { reduceMotion: boolean }) {
+function TextField({ id, label, icon: Icon, invalid = false, trailing, inputClassName = '', ...input }: TextFieldProps) {
   return (
-    <div className="pointer-events-none absolute inset-0" aria-hidden="true">
-      <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="h-full w-full opacity-40">
-        <path d={ROUTE_PATH} fill="none" stroke="white" strokeWidth="0.4" strokeDasharray="1.2 2" />
-      </svg>
-      {WAYPOINTS.map((point, index) => (
-        <motion.span
-          key={index}
-          className="absolute h-1.5 w-1.5 rounded-full bg-[var(--dmc-gold)]"
-          style={{ top: point.top, left: point.left }}
-          animate={reduceMotion ? undefined : { scale: [1, 1.8, 1], opacity: [0.45, 1, 0.45] }}
-          transition={{ duration: 2.6, repeat: Infinity, delay: point.delay, ease: 'easeInOut' }}
+    <div>
+      <label htmlFor={id} className="mb-2 block text-[13px] font-semibold text-[#2C353F]">
+        {label}
+      </label>
+      <div className="group relative">
+        <Icon
+          aria-hidden="true"
+          className={`pointer-events-none absolute left-4 top-1/2 h-[18px] w-[18px] -translate-y-1/2 transition-colors ${
+            invalid ? 'text-[#D9331E]' : 'text-[#6B5E55] group-focus-within:text-[#1F3B63]'
+          }`}
         />
-      ))}
-      {!reduceMotion && (
-        <motion.div
-          className="absolute -ml-2 -mt-2 text-white/30"
-          animate={{
-            left: ROUTE_POINTS.map((p) => `${p.x}%`),
-            top: ROUTE_POINTS.map((p) => `${p.y}%`),
-          }}
-          transition={{ duration: 9, repeat: Infinity, repeatType: 'reverse', ease: 'easeInOut' }}
-        >
-          <Plane className="h-4 w-4 -rotate-45" />
-        </motion.div>
-      )}
+        <input
+          id={id}
+          aria-invalid={invalid || undefined}
+          className={`${FIELD_BASE} ${invalid ? FIELD_INVALID : FIELD_IDLE} ${trailing ? 'pr-12' : 'pr-4'} ${inputClassName}`}
+          {...input}
+        />
+        {trailing}
+      </div>
     </div>
   )
 }
 
-const fadeUp = {
-  hidden: { opacity: 0, y: 18 },
-  show: { opacity: 1, y: 0 },
+function SubmitButton({ loading, idle, busy, disabled = false }: { loading: boolean; idle: string; busy: string; disabled?: boolean }) {
+  return (
+    <button
+      type="submit"
+      disabled={loading || disabled}
+      className="group relative flex h-12 w-full items-center justify-center gap-2 overflow-hidden rounded-xl bg-[#1F3B63] text-[15px] font-semibold text-white shadow-[0_1px_2px_rgba(20,39,63,0.25),0_10px_22px_-10px_rgba(31,59,99,0.65)] transition duration-150 before:absolute before:inset-x-0 before:top-0 before:h-px before:bg-white/25 hover:bg-[#14273F] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[#1F3B63]/40 focus-visible:ring-offset-2 focus-visible:ring-offset-[#FDF3EC] active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-70 disabled:active:scale-100"
+    >
+      {loading ? (
+        <>
+          <Compass className="h-5 w-5 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+          {busy}
+        </>
+      ) : (
+        <>
+          {idle}
+          <ArrowRight className="h-[18px] w-[18px] transition-transform duration-200 group-hover:translate-x-0.5" aria-hidden="true" />
+        </>
+      )}
+    </button>
+  )
 }
 
 export default function LoginForm() {
@@ -161,9 +114,9 @@ export default function LoginForm() {
     password: ''
   })
   const [showPassword, setShowPassword] = useState(false)
+  const [capsLock, setCapsLock] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [focusedField, setFocusedField] = useState<string | null>(null)
   // Two-step login: once /api/auth/login reports mfaRequired, the form
   // switches to asking for the authenticator code instead of navigating —
   // the real session cookie isn't set until /api/auth/verify-mfa succeeds.
@@ -234,6 +187,7 @@ export default function LoginForm() {
 
   const handleVerifyMfa = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!isCompleteVerificationCode(mfaCode)) return
     setLoading(true)
     setError('')
 
@@ -261,298 +215,237 @@ export default function LoginForm() {
     }
   }
 
+  const backToSignIn = () => {
+    setMfaStep(false)
+    setMfaCode('')
+    setError('')
+  }
+
+  // Content blocks rise in one after another; none of it moves for reduced-motion users.
+  const rise = (index: number) => ({
+    initial: reduceMotion ? false : { opacity: 0, y: 14 },
+    animate: { opacity: 1, y: 0 },
+    transition: { duration: 0.45, delay: index * 0.07, ease: 'easeOut' as const },
+  })
+
+  const errorAlert = error ? (
+    <motion.div
+      role="alert"
+      initial={reduceMotion ? false : { opacity: 0, y: -6 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="flex items-start gap-3 rounded-xl border border-[#F2B8B0] bg-[#FDECEA] px-4 py-3 text-sm text-[#B0241E]"
+    >
+      <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+      <span id="login-error">{error}</span>
+    </motion.div>
+  ) : null
+
   return (
-    <div className="min-h-screen cmg-page-shell flex items-center justify-center p-4">
-      <motion.div
-        initial={{ opacity: 0, y: 24 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6, ease: 'easeOut' }}
-        className="w-full max-w-5xl grid grid-cols-1 lg:grid-cols-[1.08fr_0.92fr] bg-white border border-[var(--cmg-border)]/70 shadow-xl rounded-xl overflow-hidden"
-      >
-        <div className="relative hidden lg:flex flex-col justify-between overflow-hidden bg-[var(--cmg-blue-dark)] px-10 py-10 text-white">
-          <div className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-[var(--dmc-gold)]/20 blur-3xl" />
-          <div className="pointer-events-none absolute -left-16 bottom-0 h-64 w-64 rounded-full bg-[var(--dmc-green-medium)]/30 blur-3xl" />
-          <NavigatorCompass reduceMotion={reduceMotion} />
-          <FlightPath reduceMotion={reduceMotion} />
+    <main className="min-h-dvh bg-[#FDF3EC] text-[#2C353F] lg:grid lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
+      <section className="relative flex min-h-dvh flex-col overflow-hidden">
+        {/* Faint compass rose in the corner: the brand mark, kept well behind the form */}
+        <svg
+          viewBox="0 0 200 200"
+          aria-hidden="true"
+          className="pointer-events-none absolute -bottom-48 -right-48 hidden h-[26rem] w-[26rem] text-[#1F3B63] opacity-[0.05] sm:block"
+        >
+          <circle cx="100" cy="100" r="96" fill="none" stroke="currentColor" strokeWidth="1.5" />
+          <circle cx="100" cy="100" r="78" fill="none" stroke="currentColor" strokeWidth="1" strokeDasharray="1 6" />
+          {Array.from({ length: 24 }).map((_, i) => (
+            <line key={i} x1="100" y1="5" x2="100" y2={i % 6 === 0 ? 20 : 14} stroke="currentColor" strokeWidth={i % 6 === 0 ? 1.6 : 1} transform={`rotate(${i * 15} 100 100)`} />
+          ))}
+          <polygon points="100,24 111,100 100,90 89,100" fill="currentColor" />
+          <polygon points="100,176 111,100 100,110 89,100" fill="currentColor" opacity="0.5" />
+        </svg>
 
-          <motion.div
-            className="relative"
-            initial="hidden"
-            animate="show"
-            variants={{ show: { transition: { staggerChildren: 0.09, delayChildren: 0.1 } } }}
-          >
-            <motion.div variants={fadeUp} transition={{ duration: 0.5 }} className="inline-flex bg-white rounded-md p-4 shadow-sm">
-              <div className="relative h-20 w-44">
-                <Image src="/logo.png" alt="Global Navigator" fill sizes="176px" className="object-contain" priority />
-              </div>
-            </motion.div>
-
-            <div className="mt-10 max-w-lg">
-              <motion.p variants={fadeUp} transition={{ duration: 0.5 }} className="text-sm font-semibold uppercase text-[#F6B44B]">
-                Global Navigator
-              </motion.p>
-              <motion.h1 variants={fadeUp} transition={{ duration: 0.5 }} className="mt-3 text-4xl font-bold leading-tight">
-                Global Navigator CRM Portal
-              </motion.h1>
-              <motion.p variants={fadeUp} transition={{ duration: 0.5 }} className="mt-4 text-base leading-7 text-[#F3DFD2]">
-                A focused workspace for leads, clients, operations, payments, and reporting across every Global Navigator branch.
-              </motion.p>
-            </div>
-
-            <div className="mt-10 space-y-5">
-              {[
-                {
-                  icon: User,
-                  title: 'Team Access',
-                  description: 'Role-based access for branch and department workflows.'
-                },
-                {
-                  icon: Shield,
-                  title: 'Protected Records',
-                  description: 'Secure handling for prospect, client, and finance data.'
-                },
-                {
-                  icon: Globe,
-                  title: 'Global Programs',
-                  description: 'Organized visibility across immigration services and regions.'
-                }
-              ].map((feature, index) => (
-                <motion.div key={index} variants={fadeUp} transition={{ duration: 0.5 }} className="flex items-start gap-4">
-                  <div className="w-11 h-11 rounded-md bg-white/10 border border-white/15 flex items-center justify-center flex-shrink-0">
-                    <feature.icon className="w-5 h-5 text-white" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-white">{feature.title}</h3>
-                    <p className="text-sm leading-6 text-[#F3DFD2]">{feature.description}</p>
-                  </div>
-                </motion.div>
-              ))}
-            </div>
-          </motion.div>
-          <div className="relative mt-10 flex items-center gap-3 border-t border-white/15 pt-6 text-sm text-[#F3DFD2]">
-            <CheckCircle2 className="h-5 w-5 text-[var(--cmg-red)]" />
-            Built for daily admissions, sales, and operations work.
-          </div>
+        {/* Phone: a short route-map banner stands in for the hero panel */}
+        <div className="relative h-32 shrink-0 overflow-hidden rounded-b-[2rem] bg-gradient-to-br from-[#14273F] to-[#1F3B63] lg:hidden">
+          <RouteMap compact />
         </div>
 
-        <div className="flex items-center justify-center p-6 sm:p-10">
-          <div className="w-full max-w-md">
-            <div className="lg:hidden mb-8 flex justify-center">
-              <div className="relative h-20 w-44">
-                <Image src="/logo.png" alt="Global Navigator" fill sizes="176px" className="object-contain" priority />
-              </div>
-            </div>
+        <div className="relative flex flex-1 flex-col px-6 pb-8 pt-8 sm:px-12 lg:px-14 lg:pt-12 xl:px-20">
+          <header>
+            <Image src="/logo.png" alt="Global Navigator" width={176} height={96} priority className="h-[4.25rem] w-auto" />
+          </header>
 
-            <motion.div
-              initial="hidden"
-              animate="show"
-              variants={{ show: { transition: { staggerChildren: 0.08, delayChildren: 0.15 } } }}
-            >
-              <motion.div variants={fadeUp} transition={{ duration: 0.4 }} className="mb-8">
-                <div className="mb-4 inline-flex items-center rounded-md bg-[var(--cmg-blue-soft)] px-3 py-1 text-xs font-semibold uppercase text-[var(--cmg-blue)]">
-                  Secure sign in
-                </div>
-                <h2 className="text-3xl font-bold text-[var(--cmg-ink)] mb-2">
-                  {mfaStep ? 'Two-factor verification' : 'Welcome back'}
-                </h2>
-                <p className="text-[var(--cmg-muted)]">
+          <div className="flex flex-1 items-center py-10">
+            <div className="mx-auto w-full max-w-[26rem]">
+              <motion.div key={mfaStep ? 'mfa-heading' : 'signin-heading'} {...rise(0)} className="mb-8">
+                <span className="mb-4 inline-flex items-center gap-1.5 rounded-full bg-[#1F3B63]/[0.08] px-3 py-1 text-xs font-semibold text-[#1F3B63]">
+                  {mfaStep ? <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" /> : <Lock className="h-3.5 w-3.5" aria-hidden="true" />}
+                  {mfaStep ? 'Two-step verification' : 'Staff portal'}
+                </span>
+                <h1 className="text-[2rem] font-bold leading-tight tracking-tight text-[#14273F]">
+                  {mfaStep ? 'Enter your code' : 'Welcome back'}
+                </h1>
+                <p className="mt-2 text-balance leading-relaxed text-[#585A5E]">
                   {mfaStep
-                    ? 'Enter the 6-digit code from your authenticator app, or one of your backup codes.'
-                    : 'Sign in to continue to the Global Navigator workspace.'}
+                    ? 'Open your authenticator app and enter the 6-digit code. Lost your phone? Use one of your backup codes instead.'
+                    : 'Sign in to continue to the Global Navigator CRM.'}
                 </p>
               </motion.div>
 
-              {error && (
-                <motion.div
-                  initial={{ opacity: 0, y: -8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="mb-6 p-4 bg-red-50 border border-red-200 rounded-md"
-                >
-                  <div className="flex items-center space-x-2">
-                    <AlertCircle className="h-4 w-4 text-[var(--cmg-red)]" />
-                    <span className="text-sm text-[var(--cmg-red)]">{error}</span>
-                  </div>
-                </motion.div>
-              )}
-
               {mfaStep ? (
-                <form onSubmit={handleVerifyMfa} className="space-y-6">
-                  <motion.div variants={fadeUp} transition={{ duration: 0.4 }}>
-                    <label htmlFor="mfaCode" className="block text-sm font-semibold text-[var(--cmg-ink)] mb-2">
-                      Verification code
-                    </label>
-                    <div className="relative group">
-                      <Shield className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-[var(--cmg-muted)]" />
-                      <input
-                        id="mfaCode"
-                        name="mfaCode"
-                        type="text"
-                        inputMode="text"
-                        autoFocus
-                        autoComplete="one-time-code"
-                        required
-                        value={mfaCode}
-                        onChange={(e) => { setMfaCode(e.target.value); if (error) setError('') }}
-                        className="w-full pl-10 pr-4 py-3 bg-[var(--cmg-blue-soft)]/50 border border-transparent rounded-lg text-[var(--cmg-ink)] placeholder:text-[var(--cmg-muted)] tracking-widest transition-all duration-200 focus:bg-white focus:border-[var(--cmg-blue)]/40 focus:shadow-sm focus:outline-none"
-                        placeholder="123456"
-                      />
-                    </div>
+                <form onSubmit={handleVerifyMfa} className="space-y-5" noValidate>
+                  <motion.div key="mfa-field" {...rise(1)}>
+                    <TextField
+                      id="mfaCode"
+                      name="mfaCode"
+                      label="Verification code"
+                      icon={ShieldCheck}
+                      invalid={Boolean(error)}
+                      inputClassName="font-mono text-lg tracking-[0.18em] placeholder:tracking-[0.18em]"
+                      type="text"
+                      inputMode="text"
+                      autoFocus
+                      autoComplete="one-time-code"
+                      autoCapitalize="characters"
+                      autoCorrect="off"
+                      spellCheck={false}
+                      maxLength={11}
+                      required
+                      readOnly={loading}
+                      value={mfaCode}
+                      onChange={(e) => {
+                        setMfaCode(normalizeVerificationCode(e.target.value))
+                        if (error) setError('')
+                      }}
+                      placeholder="123456"
+                      aria-describedby={error ? 'login-error' : 'mfa-hint'}
+                    />
+                    <p id="mfa-hint" className="mt-2 text-xs text-[#585A5E]">
+                      Backup codes look like ABCDE-12345 and can be used once.
+                    </p>
                   </motion.div>
 
-                  <motion.div variants={fadeUp} transition={{ duration: 0.4 }}>
-                    <Button
-                      type="submit"
-                      disabled={loading}
-                      className="w-full py-3 px-4 bg-[var(--cmg-blue)] text-white font-semibold rounded-lg shadow-sm hover:bg-[var(--cmg-blue-dark)] hover:shadow-md focus:outline-none focus:ring-2 focus:ring-[var(--cmg-blue)] focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 relative overflow-hidden group"
-                    >
-                      <div className="absolute inset-y-0 left-0 w-1 bg-[var(--cmg-red)]"></div>
-                      <div className="relative z-10 flex items-center justify-center">
-                        {loading ? (
-                          <>
-                            <motion.div
-                              animate={{ rotate: 360 }}
-                              transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                              className="mr-2"
-                            >
-                              <Compass className="h-5 w-5" />
-                            </motion.div>
-                            Verifying...
-                          </>
-                        ) : (
-                          <>
-                            Verify
-                            <ArrowRight className="w-5 h-5 ml-2 transform group-hover:translate-x-1 transition-transform duration-300" />
-                          </>
-                        )}
-                      </div>
-                    </Button>
+                  <div aria-live="assertive">{errorAlert}</div>
+
+                  <motion.div key="mfa-submit" {...rise(2)}>
+                    <SubmitButton loading={loading} idle="Verify" busy="Verifying..." disabled={!isCompleteVerificationCode(mfaCode)} />
                   </motion.div>
 
-                  <motion.div variants={fadeUp} transition={{ duration: 0.4 }} className="text-center">
+                  <motion.div key="mfa-back" {...rise(3)} className="text-center">
                     <button
                       type="button"
-                      onClick={() => { setMfaStep(false); setMfaCode(''); setError('') }}
-                      className="text-sm font-semibold text-[var(--cmg-blue)] hover:text-[var(--cmg-red)] transition-colors duration-200"
+                      onClick={backToSignIn}
+                      className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-sm font-semibold text-[#1F3B63] transition-colors hover:text-[#D9331E] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1F3B63]/40"
                     >
+                      <ArrowLeft className="h-4 w-4" aria-hidden="true" />
                       Back to sign in
                     </button>
                   </motion.div>
                 </form>
               ) : (
-              <form onSubmit={handleSubmit} className="space-y-6">
-                <motion.div variants={fadeUp} transition={{ duration: 0.4 }}>
-                  <label htmlFor="username" className="block text-sm font-semibold text-[var(--cmg-ink)] mb-2">
-                    Login ID
-                  </label>
-                  <div className="relative group">
-                    <User className={`absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 transition-colors duration-200 ${focusedField === 'username' ? 'text-[var(--cmg-blue)]' : 'text-[var(--cmg-muted)]'}`} />
-                    <input
+                <form onSubmit={handleSubmit} className="space-y-5">
+                  <motion.div key="username" {...rise(1)}>
+                    <TextField
                       id="username"
                       name="username"
+                      label="Login ID"
+                      icon={User}
+                      invalid={Boolean(error)}
                       type="text"
+                      autoComplete="username"
+                      autoCapitalize="none"
+                      autoCorrect="off"
+                      spellCheck={false}
                       required
+                      readOnly={loading}
                       value={formData.username}
                       onChange={handleInputChange}
-                      onFocus={() => setFocusedField('username')}
-                      onBlur={() => setFocusedField(null)}
-                      className="w-full pl-10 pr-4 py-3 bg-[var(--cmg-blue-soft)]/50 border border-transparent rounded-lg text-[var(--cmg-ink)] placeholder:text-[var(--cmg-muted)] transition-all duration-200 focus:bg-white focus:border-[var(--cmg-blue)]/40 focus:shadow-sm focus:outline-none"
                       placeholder="Enter your login ID"
+                      aria-describedby={error ? 'login-error' : undefined}
                     />
-                  </div>
-                </motion.div>
+                  </motion.div>
 
-                <motion.div variants={fadeUp} transition={{ duration: 0.4 }}>
-                  <label htmlFor="password" className="block text-sm font-semibold text-[var(--cmg-ink)] mb-2">
-                    Password
-                  </label>
-                  <div className="relative group">
-                    <Lock className={`absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 transition-colors duration-200 ${focusedField === 'password' ? 'text-[var(--cmg-blue)]' : 'text-[var(--cmg-muted)]'}`} />
-                    <input
+                  <motion.div key="password" {...rise(2)}>
+                    <TextField
                       id="password"
                       name="password"
+                      label="Password"
+                      icon={Lock}
+                      invalid={Boolean(error)}
                       type={showPassword ? 'text' : 'password'}
+                      autoComplete="current-password"
+                      autoCapitalize="none"
+                      autoCorrect="off"
+                      spellCheck={false}
                       required
+                      readOnly={loading}
                       value={formData.password}
                       onChange={handleInputChange}
-                      onFocus={() => setFocusedField('password')}
-                      onBlur={() => setFocusedField(null)}
-                      className="w-full pl-10 pr-12 py-3 bg-[var(--cmg-blue-soft)]/50 border border-transparent rounded-lg text-[var(--cmg-ink)] placeholder:text-[var(--cmg-muted)] transition-all duration-200 focus:bg-white focus:border-[var(--cmg-blue)]/40 focus:shadow-sm focus:outline-none"
+                      onKeyDown={(e) => setCapsLock(e.getModifierState('CapsLock'))}
+                      onKeyUp={(e) => setCapsLock(e.getModifierState('CapsLock'))}
+                      onBlur={() => setCapsLock(false)}
                       placeholder="Enter your password"
+                      aria-describedby={error ? 'login-error' : undefined}
+                      trailing={
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword((visible) => !visible)}
+                          aria-label={showPassword ? 'Hide password' : 'Show password'}
+                          aria-pressed={showPassword}
+                          className="absolute right-0.5 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-lg text-[#6B5E55] transition-colors hover:text-[#1F3B63] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1F3B63]/40"
+                        >
+                          {showPassword ? <EyeOff className="h-[18px] w-[18px]" aria-hidden="true" /> : <Eye className="h-[18px] w-[18px]" aria-hidden="true" />}
+                        </button>
+                      }
                     />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-[var(--cmg-muted)] hover:text-[var(--cmg-blue)] transition-colors duration-200"
-                      aria-label={showPassword ? 'Hide password' : 'Show password'}
-                    >
-                      {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                    </button>
-                  </div>
-                </motion.div>
+                    {capsLock && (
+                      <p role="status" className="mt-2 flex items-center gap-1.5 text-xs font-medium text-[#8A5200]">
+                        <AlertCircle className="h-3.5 w-3.5" aria-hidden="true" />
+                        Caps Lock is on
+                      </p>
+                    )}
+                  </motion.div>
 
-                <motion.div variants={fadeUp} transition={{ duration: 0.4 }} className="flex items-center justify-between">
-                  <div className="flex items-center">
-                    <input
-                      id="remember-me"
-                      name="remember-me"
-                      type="checkbox"
-                      className="h-4 w-4 text-[var(--cmg-blue)] focus:ring-[var(--cmg-blue)] border-[var(--cmg-border)] rounded"
-                    />
-                    <label htmlFor="remember-me" className="ml-2 block text-sm text-[var(--cmg-muted)]">
-                      Remember me
-                    </label>
-                  </div>
+                  <div aria-live="assertive">{errorAlert}</div>
 
-                  <div className="text-sm">
-                    <a href="#" className="font-semibold text-[var(--cmg-blue)] hover:text-[var(--cmg-red)] transition-colors duration-200">
-                      Forgot your password?
-                    </a>
-                  </div>
-                </motion.div>
+                  <motion.div key="submit" {...rise(3)}>
+                    <SubmitButton loading={loading} idle="Sign in" busy="Signing in..." />
+                  </motion.div>
 
-                <motion.div variants={fadeUp} transition={{ duration: 0.4 }}>
-                  <Button
-                    type="submit"
-                    disabled={loading}
-                    className="w-full py-3 px-4 bg-[var(--cmg-blue)] text-white font-semibold rounded-lg shadow-sm hover:bg-[var(--cmg-blue-dark)] hover:shadow-md focus:outline-none focus:ring-2 focus:ring-[var(--cmg-blue)] focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 relative overflow-hidden group"
-                  >
-                    <div className="absolute inset-y-0 left-0 w-1 bg-[var(--cmg-red)]"></div>
-                    <div className="relative z-10 flex items-center justify-center">
-                      {loading ? (
-                        <>
-                          <motion.div
-                            animate={{ rotate: 360 }}
-                            transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                            className="mr-2"
-                          >
-                            <Compass className="h-5 w-5" />
-                          </motion.div>
-                          Signing in...
-                        </>
-                      ) : (
-                        <>
-                          Sign in
-                          <ArrowRight className="w-5 h-5 ml-2 transform group-hover:translate-x-1 transition-transform duration-300" />
-                        </>
-                      )}
-                    </div>
-                  </Button>
-                </motion.div>
-              </form>
+                  <motion.p key="help" {...rise(4)} className="text-balance text-center text-sm text-[#585A5E]">
+                    Forgot your password? Ask your administrator or HR to reset it.
+                  </motion.p>
+                </form>
               )}
-
-              <motion.div variants={fadeUp} transition={{ duration: 0.4 }} className="mt-8 pt-6 border-t border-[var(--cmg-border)]">
-                <div className="text-center">
-                  <p className="text-sm text-[var(--cmg-muted)] mb-3">
-                    Immigration simplified for every client interaction.
-                  </p>
-                  <p className="text-xs font-semibold uppercase text-[var(--cmg-blue)]">Global Navigator</p>
-                </div>
-              </motion.div>
-            </motion.div>
+            </div>
           </div>
+
+          <footer className="text-center text-xs text-[#6B5E55] lg:text-left">
+            © {new Date().getFullYear()} Global Navigator · Authorised staff only
+          </footer>
         </div>
-      </motion.div>
-    </div>
+      </section>
+
+      {/* Desktop: the route map on top, the pitch beneath it */}
+      <aside className="relative hidden flex-col overflow-hidden bg-gradient-to-br from-[#14273F] via-[#182F52] to-[#1F3B63] lg:flex">
+        <div className="relative flex-[2]">
+          <RouteMap />
+        </div>
+
+        <div className="relative z-10 flex flex-1 flex-col justify-end px-14 pb-12 xl:px-16">
+          <p className="mb-4 text-xs font-semibold uppercase tracking-[0.22em] text-[#F6B44B]">Global Navigator CRM</p>
+          <h2 className="max-w-md text-balance text-3xl font-bold leading-tight tracking-tight text-white xl:text-4xl">
+            From first enquiry to final approval.
+          </h2>
+          <p className="mt-3 max-w-md text-balance leading-relaxed text-[#E6D9CF]">
+            One workspace for leads, clients, operations, payments and reporting across every Global Navigator branch.
+          </p>
+          <ul className="mt-6 flex flex-wrap gap-2">
+            {PILLARS.map(({ icon: Icon, label }) => (
+              <li
+                key={label}
+                className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/[0.07] px-3.5 py-1.5 text-[13px] font-medium text-white/90 backdrop-blur-sm"
+              >
+                <Icon className="h-4 w-4 text-[#F6B44B]" aria-hidden="true" />
+                {label}
+              </li>
+            ))}
+          </ul>
+        </div>
+      </aside>
+    </main>
   )
 }

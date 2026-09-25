@@ -15,6 +15,7 @@ interface LookupData {
   countries: LookupItem[];
   programTypes: LookupItem[];
   branches: LookupItem[];
+  currencies: LookupItem[];
 }
 
 export default function FeesManagement() {
@@ -27,7 +28,7 @@ export default function FeesManagement() {
   const [showModal, setShowModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
-  const [lookup, setLookup] = useState<LookupData>({ programs: [], countries: [], programTypes: [], branches: [] });
+  const [lookup, setLookup] = useState<LookupData>({ programs: [], countries: [], programTypes: [], branches: [], currencies: [] });
   const [pagination, setPagination] = useState({
     page: 1,
     limit: 10,
@@ -45,7 +46,7 @@ export default function FeesManagement() {
   useEffect(() => {
     fetch('/api/admin/lookup')
       .then(r => r.json())
-      .then(d => setLookup(d))
+      .then(d => setLookup(prev => ({ ...prev, ...d })))
       .catch(() => {});
   }, []);
 
@@ -174,6 +175,8 @@ export default function FeesManagement() {
     lookup.countries.find(c => c.id === id)?.name || (id ? `#${id}` : 'N/A');
   const branchName = (id: number | null | undefined) =>
     lookup.branches.find(b => b.id === id)?.name || (id ? `#${id}` : 'N/A');
+  const currencyName = (id: number | null | undefined) =>
+    lookup.currencies.find(c => c.id === id)?.name || (id ? `#${id}` : 'N/A');
 
   const { sorted: sortedFees, sortKey: feeSortKey, sortDirection: feeSortDirection, toggleSort: toggleFeeSort } = useSortableData<
     CrmFeeAttributes,
@@ -185,7 +188,7 @@ export default function FeesManagement() {
       program: (f) => programName(f.service),
       country: (f) => countryName(f.country),
       branch: (f) => branchName(f.branch),
-      currency: (f) => f.currency,
+      currency: (f) => currencyName(f.currency),
       upfront: (f) => f.upfront,
       profFee: (f) => f.prof_fee,
       status: (f) => f.status,
@@ -307,7 +310,7 @@ export default function FeesManagement() {
               stats={[
                 { label: 'Country', value: countryName(fee.country) },
                 { label: 'Branch', value: branchName(fee.branch) },
-                { label: 'Currency', value: fee.currency || 'N/A' },
+                { label: 'Currency', value: currencyName(fee.currency) },
                 { label: 'Upfront', value: fee.upfront },
                 { label: 'Prof Fee', value: fee.prof_fee },
               ]}
@@ -366,7 +369,7 @@ export default function FeesManagement() {
                     <p><span className="font-medium">Program:</span> {programName(selectedFee.service)}</p>
                     <p><span className="font-medium">Country:</span> {countryName(selectedFee.country)}</p>
                     <p><span className="font-medium">Branch:</span> {branchName(selectedFee.branch)}</p>
-                    <p><span className="font-medium">Currency:</span> {selectedFee.currency || 'N/A'}</p>
+                    <p><span className="font-medium">Currency:</span> {currencyName(selectedFee.currency)}</p>
                     <p><span className="font-medium">Status:</span> {selectedFee.status === 1 ? 'Active' : 'Inactive'}</p>
                   </div>
                 </div>
@@ -517,9 +520,9 @@ function FeeFormModal({ title, initialData, lookup, onSubmit, onClose }: FeeForm
                 saving auto-creates that mapping row if this exact country/type/program
                 combination doesn't already exist. */}
             <div>
-              <label className={lbl}>Program Type *</label>
+              <label className={lbl}>{initialData ? 'Program Type' : 'Program Type *'}</label>
               <SearchableSelect
-                required
+                required={!initialData}
                 value={formData.programType ?? ''}
                 onChange={e => setFormData(prev => ({ ...prev, programType: e.target.value ? Number(e.target.value) : null }))}
                 className={inp}
@@ -546,14 +549,17 @@ function FeeFormModal({ title, initialData, lookup, onSubmit, onClose }: FeeForm
             </div>
             {/* Currency — kept as number ID (FK to crm_currency) */}
             <div>
-              <label className={lbl}>Currency ID</label>
-              <input
-                type="number"
+              <label className={lbl}>Currency</label>
+              <SearchableSelect
                 value={formData.currency ?? ''}
                 onChange={e => setFormData(prev => ({ ...prev, currency: e.target.value ? Number(e.target.value) : null }))}
-                placeholder="Currency ID"
                 className={inp}
-              />
+              >
+                <option value="">Select Currency</option>
+                {lookup.currencies.map(c => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </SearchableSelect>
             </div>
             <div>
               <label className={lbl}>Upfront *</label>

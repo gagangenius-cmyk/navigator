@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, isAuthError } from '@/lib/apiAuth';
 import { isCeo } from '@/lib/roleChecks';
 import { CrmService, CrmServiceAttributes } from '@/models';
-import { Op } from 'sequelize';
+import { Op, UniqueConstraintError } from 'sequelize';
 
 export async function GET(request: NextRequest) {
   const auth = requireAuth(request, ['programs.manage']);
@@ -69,6 +69,9 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(newService.get({ plain: true }), { status: 201 });
   } catch (error) {
+    if (error instanceof UniqueConstraintError) {
+      return NextResponse.json({ error: 'A program with this name already exists.' }, { status: 409 });
+    }
     console.error('Error creating service:', error);
     return NextResponse.json(
       { error: 'Failed to create service' },
@@ -97,6 +100,9 @@ export async function PUT(request: NextRequest) {
 
     return NextResponse.json(service.get({ plain: true }));
   } catch (error) {
+    if (error instanceof UniqueConstraintError) {
+      return NextResponse.json({ error: 'A program with this name already exists.' }, { status: 409 });
+    }
     console.error('Error updating service:', error);
     return NextResponse.json(
       { error: 'Failed to update service' },

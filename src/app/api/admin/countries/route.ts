@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { CrmCountryProces } from '@/models/CrmCountryProces';
 import type { CrmCountryProcesAttributes } from '@/models/CrmCountryProces';
-import { Op } from 'sequelize';
+import { Op, UniqueConstraintError } from 'sequelize';
 import { requireAuth, isAuthError } from '@/lib/apiAuth';
 import { isCeo } from '@/lib/roleChecks';
 
@@ -70,6 +70,9 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(newCountry.get({ plain: true }), { status: 201 });
   } catch (error) {
+    if (error instanceof UniqueConstraintError) {
+      return NextResponse.json({ error: 'A country with this name already exists.' }, { status: 409 });
+    }
     console.error('Error creating country:', error);
     return NextResponse.json(
       { error: 'Failed to create country' },
@@ -98,6 +101,9 @@ export async function PUT(request: NextRequest) {
 
     return NextResponse.json(country.get({ plain: true }));
   } catch (error) {
+    if (error instanceof UniqueConstraintError) {
+      return NextResponse.json({ error: 'A country with this name already exists.' }, { status: 409 });
+    }
     console.error('Error updating country:', error);
     return NextResponse.json(
       { error: 'Failed to update country' },
