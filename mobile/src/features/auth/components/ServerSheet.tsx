@@ -62,7 +62,10 @@ export function ServerSheet({ visible, onClose }: ServerSheetProps) {
           autoCapitalize="none"
           autoCorrect={false}
           keyboardType="url"
-          placeholder="https://crm.example.com"
+          textContentType="URL"
+          returnKeyType="done"
+          onSubmitEditing={save}
+          placeholder="https://navigatorcrm-one.vercel.app"
           error={error}
           hint={API_BASE_URL ? `Build default: ${hostOf(API_BASE_URL)}` : 'This build has no default server'}
         />

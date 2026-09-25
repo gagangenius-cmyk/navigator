@@ -49,6 +49,8 @@ export function Button({
       accessibilityState={{ disabled: inactive, busy: loading }}
       disabled={inactive}
       onPress={onPress}
+      // The compact size is 36pt tall; the slop brings its tap target up to the 44pt minimum.
+      hitSlop={size === 'sm' ? 4 : undefined}
       style={({ pressed }) => [
         styles.base,
         {

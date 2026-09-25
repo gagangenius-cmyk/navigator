@@ -31,6 +31,8 @@ export function Chip({ label, selected = false, onPress, count }: ChipProps) {
       accessibilityState={{ selected }}
       accessibilityLabel={count !== undefined ? `${label}, ${count}` : label}
       onPress={onPress}
+      // The pill is 34pt tall; the slop brings its tap target up to the 44pt minimum.
+      hitSlop={{ top: 5, bottom: 5 }}
       style={[
         styles.chip,
         {

@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
-import { Badge, Button, CachedBanner, Card, Chip, DateTimeField, Divider, EmptyState, ErrorState, Input, LoadingView, Screen, SectionHeader, Sheet, Text } from '@/components';
+import { Badge, Button, CachedBanner, Card, ChipGroup, DateTimeField, Divider, EmptyState, ErrorState, Input, LoadingView, Screen, SectionHeader, Sheet, Text, toOptions } from '@/components';
 import { queryKeys } from '@/constants/queryKeys';
 import { errorMessage } from '@/services/api/errors';
 import { useOfflineQuery } from '@/services/db/useOfflineQuery';
@@ -58,11 +58,7 @@ function ApplySheet({ visible, onClose, leaveTypes }: { visible: boolean; onClos
   return (
     <Sheet visible={visible} onClose={close} title="Apply for leave" dismissable={!submit.isPending}>
       <View style={{ gap: spacing.md }}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          {leaveTypes.map((t) => (
-            <Chip key={t} label={t} selected={type === t} onPress={() => setType(t)} />
-          ))}
-        </ScrollView>
+        <ChipGroup label="Leave type" options={toOptions(leaveTypes)} value={type} onSelect={setType} />
         <DateTimeField label="From" mode="date" value={start} onChange={setStart} minimumDate={new Date()} />
         <DateTimeField label="To" mode="date" value={end} onChange={setEnd} minimumDate={start ?? new Date()} />
         {days.data !== undefined ? (

@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import { FlatList, ScrollView, StyleSheet, View } from 'react-native';
-import { Badge, Button, CachedBanner, Card, Chip, EmptyState, ErrorState, Icon, Input, LoadingView, Screen, Sheet, Text } from '@/components';
+import { FlatList, StyleSheet, View } from 'react-native';
+import { Badge, Button, CachedBanner, Card, ChipGroup, EmptyState, ErrorState, Icon, Input, LoadingView, Screen, Sheet, Text, toOptions } from '@/components';
 import { queryKeys } from '@/constants/queryKeys';
 import { errorMessage } from '@/services/api/errors';
 import { useOfflineQuery } from '@/services/db/useOfflineQuery';
@@ -24,6 +24,9 @@ const STATUS_TONE: Record<string, Tone> = {
 };
 
 const PRIORITY_TONE: Record<string, Tone> = { High: 'danger', Medium: 'warning', Low: 'neutral' };
+
+/** Parses a typed amount; decimal-pad shows a comma on some phone locales, which Number() rejects. */
+const parseAmount = (text: string) => Number(text.trim().replace(',', '.'));
 
 function NewTicketSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const client = useQueryClient();
@@ -48,7 +51,7 @@ function NewTicketSheet({ visible, onClose }: { visible: boolean; onClose: () =>
 
   const create = useMutation({
     mutationFn: () =>
-      createTicket({ title, description, category: category!, priority, estimatedCostAed: cost ? Number(cost) : undefined }, user?.branch ?? 0),
+      createTicket({ title, description, category: category!, priority, estimatedCostAed: cost.trim() ? parseAmount(cost) : undefined }, user?.branch ?? 0),
     onSuccess: () => {
       void client.invalidateQueries({ queryKey: queryKeys.itTickets });
       toast.success('Ticket raised');
@@ -61,7 +64,8 @@ function NewTicketSheet({ visible, onClose }: { visible: boolean; onClose: () =>
     if (!title.trim()) return setError('Give the ticket a title.');
     if (!category) return setError('Choose a category.');
     // New Procurement tickets need a cost estimate to route for approval.
-    if (category === 'New Procurement' && (!cost || Number.isNaN(Number(cost)))) return setError('Enter the estimated cost in AED.');
+    if (category === 'New Procurement' && (!cost.trim() || Number.isNaN(parseAmount(cost)))) return setError('Enter the estimated cost in AED.');
+    if (cost.trim() && (Number.isNaN(parseAmount(cost)) || parseAmount(cost) < 0)) return setError('Enter the estimated cost as a number.');
     setError(null);
     create.mutate();
   };
@@ -71,16 +75,8 @@ function NewTicketSheet({ visible, onClose }: { visible: boolean; onClose: () =>
       <View style={{ gap: spacing.md }}>
         <Input label="Title" value={title} onChangeText={setTitle} editable={!create.isPending} />
         <Input label="Details (optional)" value={description} onChangeText={setDescription} multiline editable={!create.isPending} />
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          {IT_CATEGORIES.map((c) => (
-            <Chip key={c} label={c} selected={category === c} onPress={() => setCategory(c)} />
-          ))}
-        </ScrollView>
-        <View style={{ flexDirection: 'row' }}>
-          {IT_PRIORITIES.map((p) => (
-            <Chip key={p} label={p} selected={priority === p} onPress={() => setPriority(p)} />
-          ))}
-        </View>
+        <ChipGroup label="Category" options={toOptions(IT_CATEGORIES)} value={category} onSelect={setCategory} />
+        <ChipGroup label="Priority" options={toOptions(IT_PRIORITIES)} value={priority} onSelect={setPriority} />
         {category === 'New Procurement' ? <Input label="Estimated cost (AED)" value={cost} onChangeText={setCost} keyboardType="decimal-pad" editable={!create.isPending} /> : null}
         {error ? (
           <Text tone="danger" accessibilityRole="alert">

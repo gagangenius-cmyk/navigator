@@ -1,6 +1,6 @@
 import { useNavigation } from '@react-navigation/native';
-import { useState } from 'react';
-import { View } from 'react-native';
+import { useRef, useState } from 'react';
+import { View, type TextInput } from 'react-native';
 import { Button, Input, Screen, Text } from '@/components';
 import { errorMessage } from '@/services/api/errors';
 import { useSessionStore } from '@/store/sessionStore';
@@ -25,6 +25,8 @@ export function ChangePasswordScreen({ forced = false }: { forced?: boolean }) {
   const [confirm, setConfirm] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const nextRef = useRef<TextInput>(null);
+  const confirmRef = useRef<TextInput>(null);
 
   const submit = async () => {
     const problem = validateNewPassword(current, next, confirm);
@@ -57,22 +59,42 @@ export function ChangePasswordScreen({ forced = false }: { forced?: boolean }) {
         </View>
       ) : null}
       <View style={{ gap: spacing.md }}>
-        <Input label="Current password" value={current} onChangeText={setCurrent} password autoCapitalize="none" editable={!busy} />
         <Input
+          label="Current password"
+          icon="lock-closed-outline"
+          value={current}
+          onChangeText={setCurrent}
+          password
+          autoComplete="current-password"
+          textContentType="password"
+          returnKeyType="next"
+          onSubmitEditing={() => nextRef.current?.focus()}
+          editable={!busy}
+        />
+        <Input
+          ref={nextRef}
           label="New password"
+          icon="key-outline"
           value={next}
           onChangeText={setNext}
           password
-          autoCapitalize="none"
+          autoComplete="new-password"
+          textContentType="newPassword"
+          returnKeyType="next"
+          onSubmitEditing={() => confirmRef.current?.focus()}
           hint={`At least ${MIN_PASSWORD_LENGTH} characters`}
           editable={!busy}
         />
         <Input
+          ref={confirmRef}
           label="Confirm new password"
+          icon="key-outline"
           value={confirm}
           onChangeText={setConfirm}
           password
-          autoCapitalize="none"
+          autoComplete="new-password"
+          textContentType="newPassword"
+          returnKeyType="go"
           editable={!busy}
           onSubmitEditing={submit}
           error={error}

@@ -47,6 +47,8 @@ export interface ThemeColors {
   accent: string;
   overlay: string;
   input: string;
+  /** Resting outline of a text field: 3:1 against the field and page (WCAG 1.4.11), unlike the decorative `border`. */
+  inputBorder: string;
   placeholder: string;
   tabBar: string;
   skeleton: string;
@@ -74,6 +76,7 @@ export const lightColors: ThemeColors = {
   accent: '#6B4FA8',
   overlay: 'rgba(20, 39, 63, 0.45)',
   input: '#FFFFFF',
+  inputBorder: '#9C8370',
   placeholder: '#8A8D92',
   tabBar: '#FFFFFF',
   skeleton: '#F1DDCF',
@@ -108,6 +111,7 @@ export const darkColors: ThemeColors = {
   accent: '#B7A0EA',
   overlay: 'rgba(0, 0, 0, 0.6)',
   input: '#1C2A3D',
+  inputBorder: '#6A809E',
   placeholder: '#7C8CA0',
   tabBar: '#16212F',
   skeleton: '#243448',

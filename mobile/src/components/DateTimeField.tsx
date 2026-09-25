@@ -16,7 +16,7 @@ interface DateTimeFieldProps {
   error?: string | null;
 }
 
-/** Native date (or date + time) picker behind a tappable field. */
+/** Native date (or date + time) picker behind a tappable field, styled like Input. */
 export function DateTimeField({ label, value, onChange, mode = 'datetime', minimumDate, error }: DateTimeFieldProps) {
   const { colors, radius, spacing } = useTheme();
   const [iosOpen, setIosOpen] = useState(false);
@@ -53,6 +53,9 @@ export function DateTimeField({ label, value, onChange, mode = 'datetime', minim
     }
   };
 
+  // Same outline language as Input: a heavier border while the picker is open or on error.
+  const emphasised = iosOpen || !!error;
+
   return (
     <View>
       <Text variant="label" tone="muted" style={{ marginBottom: spacing.xs }}>
@@ -62,13 +65,23 @@ export function DateTimeField({ label, value, onChange, mode = 'datetime', minim
         accessibilityRole="button"
         accessibilityLabel={`${label}: ${shown}`}
         onPress={pick}
-        style={[
+        style={({ pressed }) => [
           styles.field,
-          { backgroundColor: colors.input, borderColor: error ? colors.danger : colors.border, borderRadius: radius.md, minHeight: MIN_TOUCH + 4, paddingHorizontal: spacing.md },
+          {
+            backgroundColor: colors.input,
+            borderColor: error ? colors.danger : iosOpen ? colors.primary : colors.inputBorder,
+            borderWidth: emphasised ? 2 : 1,
+            padding: emphasised ? 0 : 1,
+            borderRadius: radius.md,
+            minHeight: MIN_TOUCH + 4,
+            paddingHorizontal: emphasised ? spacing.md - 1 : spacing.md,
+            opacity: pressed ? 0.85 : 1,
+          },
         ]}
       >
-        <Icon name={mode === 'date' ? 'calendar-outline' : 'time-outline'} size={18} color={colors.textMuted} />
-        <Text style={{ marginLeft: 10, color: value ? colors.text : colors.placeholder }}>{shown}</Text>
+        <Icon name={mode === 'date' ? 'calendar-outline' : 'time-outline'} size={18} color={error ? colors.danger : colors.textMuted} />
+        <Text style={[styles.value, { color: value ? colors.text : colors.placeholder }]}>{shown}</Text>
+        <Icon name={iosOpen ? 'chevron-up' : 'chevron-down'} size={18} color={colors.textMuted} />
       </Pressable>
       {error ? (
         <Text variant="caption" tone="danger" style={{ marginTop: spacing.xs }}>
@@ -88,4 +101,7 @@ export function DateTimeField({ label, value, onChange, mode = 'datetime', minim
   );
 }
 
-const styles = StyleSheet.create({ field: { flexDirection: 'row', alignItems: 'center', borderWidth: 1 } });
+const styles = StyleSheet.create({
+  field: { flexDirection: 'row', alignItems: 'center' },
+  value: { flex: 1, marginLeft: 10 },
+});

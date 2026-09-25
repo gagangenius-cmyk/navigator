@@ -1,6 +1,7 @@
-import { KeyboardAvoidingView, Platform, RefreshControl, ScrollView, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import { RefreshControl, ScrollView, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { SafeAreaView, type Edge } from 'react-native-safe-area-context';
 import { useTheme } from '@/theme/ThemeProvider';
+import { KeyboardAvoider } from './KeyboardAvoider';
 import { OfflineBanner } from './StateViews';
 
 interface ScreenProps {
@@ -46,13 +47,7 @@ export function Screen({
   return (
     <SafeAreaView edges={edges} style={[styles.fill, { backgroundColor: colors.background }]}>
       <OfflineBanner />
-      {keyboardAvoiding ? (
-        <KeyboardAvoidingView style={styles.fill} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          {body}
-        </KeyboardAvoidingView>
-      ) : (
-        body
-      )}
+      {keyboardAvoiding ? <KeyboardAvoider>{body}</KeyboardAvoider> : body}
     </SafeAreaView>
   );
 }

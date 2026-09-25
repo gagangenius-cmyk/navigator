@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { ScrollView, View } from 'react-native';
-import { Button, Chip, DateTimeField, Input, Sheet, Text } from '@/components';
+import { View } from 'react-native';
+import { Button, ChipGroup, DateTimeField, Input, Sheet, Text } from '@/components';
 import { errorMessage } from '@/services/api/errors';
 import { toast } from '@/store/uiStore';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -47,11 +47,12 @@ export function StatusSheet({ visible, onClose, leadId, current, statuses }: Bas
   return (
     <Sheet visible={visible} onClose={close} title="Change status" dismissable={!mutation.isPending}>
       <View style={{ gap: spacing.md }}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          {statuses.map((s) => (
-            <Chip key={s.id} label={s.name} selected={(status ?? current) === s.name} onPress={() => setStatus(s.name)} />
-          ))}
-        </ScrollView>
+        <ChipGroup
+          label="New status"
+          options={statuses.map((s) => ({ value: s.name, label: s.name }))}
+          value={status ?? current}
+          onSelect={setStatus}
+        />
         <Input label="Why is the status changing?" value={notes} onChangeText={setNotes} multiline editable={!mutation.isPending} error={error} />
         <Button title="Update status" onPress={() => void submit()} loading={mutation.isPending} disabled={!status || status === current} fullWidth />
       </View>
@@ -146,18 +147,9 @@ export function FollowUpSheet({ visible, onClose, leadId, employeeId }: BaseProp
       <View style={{ gap: spacing.md }}>
         <DateTimeField label="When" value={when} onChange={setWhen} minimumDate={new Date()} />
         <Input label="What is it about?" value={message} onChangeText={setMessage} editable={!mutation.isPending} />
-        <View>
-          <Text variant="label" tone="muted" style={{ marginBottom: spacing.xs }}>
-            Priority
-          </Text>
-          <View style={{ flexDirection: 'row' }}>
-            {PRIORITIES.map((p) => (
-              <Chip key={p.value} label={p.label} selected={priority === p.value} onPress={() => setPriority(p.value)} />
-            ))}
-          </View>
-        </View>
+        <ChipGroup label="Priority" options={PRIORITIES} value={priority} onSelect={setPriority} />
         {error ? (
-          <Text variant="caption" tone="danger">
+          <Text tone="danger" accessibilityRole="alert">
             {error}
           </Text>
         ) : null}

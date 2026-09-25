@@ -1,9 +1,9 @@
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
-import { View } from 'react-native';
-import { Button, Chip, ErrorState, Input, LoadingView, Screen, Text } from '@/components';
+import { useRef, useState } from 'react';
+import { View, type TextInput } from 'react-native';
+import { Button, ChipGroup, ErrorState, Input, LoadingView, Screen, Text, toOptions } from '@/components';
 import { queryKeys } from '@/constants/queryKeys';
 import type { AppStackParamList } from '@/navigation/types';
 import { errorMessage, isApiError } from '@/services/api/errors';
@@ -59,6 +59,9 @@ function LeadFormBody({ editingId, initial }: { editingId?: number; initial?: Le
   const [errors, setErrors] = useState<LeadFormErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [duplicateId, setDuplicateId] = useState<number | null>(null);
+  const lastNameRef = useRef<TextInput>(null);
+  const emailRef = useRef<TextInput>(null);
+  const phoneRef = useRef<TextInput>(null);
 
   const save = useMutation({
     mutationFn: async () => {
@@ -101,21 +104,69 @@ function LeadFormBody({ editingId, initial }: { editingId?: number; initial?: Le
   return (
     <Screen scroll keyboardAvoiding>
       <View style={{ gap: spacing.md }}>
-        <Input label="First name" value={values.fname} onChangeText={set('fname')} autoCapitalize="words" error={errors.fname} editable={!save.isPending} />
-        <Input label="Last name" value={values.lname} onChangeText={set('lname')} autoCapitalize="words" error={errors.lname} editable={!save.isPending} />
-        <Input label="Email" value={values.email} onChangeText={set('email')} keyboardType="email-address" autoCapitalize="none" autoCorrect={false} error={errors.email} editable={!save.isPending} />
-        <Input label="Phone" value={values.phone} onChangeText={set('phone')} keyboardType="phone-pad" error={errors.phone} hint="Include the country code" editable={!save.isPending} />
+        <Input
+          label="First name"
+          icon="person-outline"
+          value={values.fname}
+          onChangeText={set('fname')}
+          autoCapitalize="words"
+          autoComplete="given-name"
+          textContentType="givenName"
+          returnKeyType="next"
+          onSubmitEditing={() => lastNameRef.current?.focus()}
+          error={errors.fname}
+          editable={!save.isPending}
+        />
+        <Input
+          ref={lastNameRef}
+          label="Last name"
+          icon="person-outline"
+          value={values.lname}
+          onChangeText={set('lname')}
+          autoCapitalize="words"
+          autoComplete="family-name"
+          textContentType="familyName"
+          returnKeyType="next"
+          onSubmitEditing={() => emailRef.current?.focus()}
+          error={errors.lname}
+          editable={!save.isPending}
+        />
+        <Input
+          ref={emailRef}
+          label="Email"
+          icon="mail-outline"
+          value={values.email}
+          onChangeText={set('email')}
+          keyboardType="email-address"
+          autoCapitalize="none"
+          autoCorrect={false}
+          autoComplete="email"
+          textContentType="emailAddress"
+          returnKeyType="next"
+          onSubmitEditing={() => phoneRef.current?.focus()}
+          error={errors.email}
+          editable={!save.isPending}
+        />
+        <Input
+          ref={phoneRef}
+          label="Phone"
+          icon="call-outline"
+          value={values.phone}
+          onChangeText={set('phone')}
+          keyboardType="phone-pad"
+          autoComplete="tel"
+          textContentType="telephoneNumber"
+          error={errors.phone}
+          hint="Include the country code"
+          editable={!save.isPending}
+        />
 
-        <View>
-          <Text variant="label" tone="muted" style={{ marginBottom: spacing.xs }}>
-            Priority
-          </Text>
-          <View style={{ flexDirection: 'row' }}>
-            {PRIORITIES.map((p) => (
-              <Chip key={p} label={p} selected={priority === p} onPress={() => setPriority(priority === p ? undefined : p)} />
-            ))}
-          </View>
-        </View>
+        <ChipGroup
+          label="Priority"
+          options={toOptions(PRIORITIES)}
+          value={priority}
+          onSelect={(p) => setPriority(priority === p ? undefined : p)}
+        />
 
         {!editingId ? <Input label="Notes (optional)" value={notes} onChangeText={setNotes} multiline editable={!save.isPending} /> : null}
 

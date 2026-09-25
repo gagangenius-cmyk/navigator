@@ -1,6 +1,7 @@
-import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/theme/ThemeProvider';
+import { KeyboardAvoider } from './KeyboardAvoider';
 import { Icon } from './ui/Icon';
 import { Text } from './ui/Text';
 
@@ -20,7 +21,7 @@ export function Sheet({ visible, onClose, title, children, dismissable = true }:
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={dismissable ? onClose : undefined} statusBarTranslucent>
-      <KeyboardAvoidingView style={styles.fill} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardAvoider style={styles.fill}>
         <Pressable
           style={[styles.backdrop, { backgroundColor: colors.overlay }]}
           onPress={dismissable ? onClose : undefined}
@@ -51,7 +52,7 @@ export function Sheet({ visible, onClose, title, children, dismissable = true }:
             {children}
           </ScrollView>
         </View>
-      </KeyboardAvoidingView>
+      </KeyboardAvoider>
     </Modal>
   );
 }

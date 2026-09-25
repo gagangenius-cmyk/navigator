@@ -78,6 +78,7 @@ export function LoginScreen() {
       <View style={{ gap: spacing.md }}>
         <Input
           label="Username"
+          icon="person-outline"
           value={username}
           onChangeText={setUsername}
           autoCapitalize="none"
@@ -91,10 +92,10 @@ export function LoginScreen() {
         <Input
           ref={passwordRef}
           label="Password"
+          icon="lock-closed-outline"
           value={password}
           onChangeText={setPassword}
           password
-          autoCapitalize="none"
           autoComplete="current-password"
           textContentType="password"
           returnKeyType="go"

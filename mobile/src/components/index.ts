@@ -3,6 +3,8 @@ export { LoadingView, EmptyState, ErrorState, OfflineBanner, CachedBanner } from
 export { Sheet } from './Sheet';
 export { ToastHost } from './ToastHost';
 export { SegmentedControl, type SegmentOption } from './SegmentedControl';
+export { ChipGroup, toOptions, type ChipOption } from './ChipGroup';
+export { KeyboardAvoider } from './KeyboardAvoider';
 export { SearchBar } from './SearchBar';
 export { StatCard } from './StatCard';
 export { BarList, type BarItem } from './BarList';
