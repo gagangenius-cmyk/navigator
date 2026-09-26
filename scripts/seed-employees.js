@@ -24,8 +24,6 @@ const BRANCH_ABBRV = { DXB: 'DXB SZR' };
 // these ids in sync with the crm_department rows if either changes.
 const DEPT = { Sales: 1, Operations: 2, Admin: 3, HR: 4, Accounts: 5 };
 
-// Canonical active roster, matching the 9-role restructuring in
-// seed-roles-permissions.js. Created if missing (matched by username);
 // existing records get role/branch/department/status kept in sync.
 // `manager` (a username in this same list) populates crm_employee.manager_id,
 // the backbone of the hierarchical Target Assignment system - see
