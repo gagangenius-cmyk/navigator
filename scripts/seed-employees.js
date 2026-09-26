@@ -16,7 +16,7 @@ const baseConfig = {
   multipleStatements: false,
 };
 
-// Single-branch company (Dubai SZR only) - see seed-branches.js.
+
 const BRANCH_ABBRV = { DXB: 'DXB SZR' };
 // Mirrors the seeded rows in crm_department (id -> name); the Add/Edit
 // Employee form at src/app/admin/employees/page.tsx now reads that table
