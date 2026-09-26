@@ -44,6 +44,10 @@ const newEmployees = [
   { branch: 'DXB', dept: 'HR', doj: null, name: 'HR', username: 'HR', role: 'HR' },
   { branch: 'DXB', dept: 'Accounts', doj: null, name: 'Accounts', username: 'Accounts', role: 'Accounts' },
   { branch: 'DXB', dept: 'Operations', doj: null, name: 'Operations', username: 'Operations', role: 'Operations' },
+  // Must stay in this roster: the retire step at the end of seedEmployees()
+  // deactivates every active employee not listed here, which would switch this
+  // account off on the next run of db:seed:employees / db:setup.
+  { branch: 'DXB', dept: 'Admin', doj: null, name: 'Super Admin', username: 'superadmin', role: 'CEO' },
 ];
 
 async function resolveLookups(connection) {
