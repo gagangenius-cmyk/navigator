@@ -43,7 +43,6 @@ class CrmcForumLeadsContracts extends Model<CrmcForumLeadsContractsAttributes, C
 
   public static associate(models: any) {
     CrmcForumLeadsContracts.belongsTo(models.CrmcForumLeads, { foreignKey: 'leadId', targetKey: 'id', as: 'dmcForumLeads' });
-    CrmcForumLeadsContracts.hasMany(models.GaryWorkDocs, { foreignKey: 'ag_no', sourceKey: 'id', as: 'garyWorkDocss' });
   }
 }
 

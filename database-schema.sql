@@ -1,6 +1,6 @@
 -- Global Navigator CRM — current schema
 -- Generated from the live database on 2026-09-12
--- Contains only the 155 tables actually used by the app (crm_ naming).
+-- Contains only the 154 tables actually used by the app (crm_ naming).
 
 SET FOREIGN_KEY_CHECKS = 0;
 
@@ -3287,18 +3287,6 @@ CREATE TABLE `expense_type` (
   `created` date NOT NULL,
   `created_by` int NOT NULL,
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=latin1;
-
--- ----------------------------
--- Table: gary_work_docs
--- ----------------------------
-CREATE TABLE `gary_work_docs` (
-  `id` int NOT NULL AUTO_INCREMENT,
-  `ag_no` int DEFAULT NULL,
-  `docs` varchar(70) DEFAULT NULL,
-  PRIMARY KEY (`id`),
-  KEY `gary_work_docs_ibfk_1` (`ag_no`),
-  CONSTRAINT `gary_work_docs_ibfk_1` FOREIGN KEY (`ag_no`) REFERENCES `crm_forum_leads_contracts` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 -- ----------------------------

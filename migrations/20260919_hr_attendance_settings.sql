@@ -22,5 +22,4 @@ CREATE TABLE IF NOT EXISTS crm_hr_attendance_settings (
 -- application-code fallback logic for a row that doesn't exist yet.
 INSERT INTO crm_hr_attendance_settings (branch_id, weekly_off_days)
 VALUES (0, '0')
-AS new_row
-ON DUPLICATE KEY UPDATE weekly_off_days = crm_hr_attendance_settings.weekly_off_days;
+ON DUPLICATE KEY UPDATE weekly_off_days = weekly_off_days;

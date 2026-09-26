@@ -92,7 +92,6 @@ import { CrmVendorDocuments } from './CrmVendorDocuments';
 import { CrmVendorInvoice } from './CrmVendorInvoice';
 import { CrmWpCases } from './CrmWpCases';
 import { ExpenseType } from './ExpenseType';
-import { GaryWorkDocs } from './GaryWorkDocs';
 import { Ielts } from './Ielts';
 import { Qualification } from './Qualification';
 import { StudentLeadsLogs } from './StudentLeadsLogs';
@@ -229,7 +228,6 @@ const models = {
   CrmVendorInvoice: CrmVendorInvoice,
   CrmWpCases: CrmWpCases,
   ExpenseType: ExpenseType,
-  GaryWorkDocs: GaryWorkDocs,
   Ielts: Ielts,
   Qualification: Qualification,
   StudentLeadsLogs: StudentLeadsLogs,
@@ -398,7 +396,6 @@ export { CrmVendorDocuments } from './CrmVendorDocuments';
 export { CrmVendorInvoice } from './CrmVendorInvoice';
 export { CrmWpCases } from './CrmWpCases';
 export { ExpenseType } from './ExpenseType';
-export { GaryWorkDocs } from './GaryWorkDocs';
 export { Ielts } from './Ielts';
 export { Qualification } from './Qualification';
 export { StudentLeadsLogs } from './StudentLeadsLogs';

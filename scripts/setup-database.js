@@ -78,6 +78,19 @@ const migrations = [
     INDEX idx_notifications_read (is_read),
     INDEX idx_notifications_created (created_at)
   )`,
+  // Normally created lazily by src/app/api/admin/hr/letter-log/route.ts, but
+  // migrations/20260914_core_fk_constraints.sql adds a FK to it, so a fresh
+  // database needs it to exist before the SQL migrations run.
+  `CREATE TABLE IF NOT EXISTS crm_hr_letter_log (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    template_id VARCHAR(20) NOT NULL,
+    template_name VARCHAR(255) NOT NULL,
+    employee_name VARCHAR(255) NOT NULL,
+    ref_number VARCHAR(100) NOT NULL,
+    letter_date DATE NULL,
+    generated_by INT NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )`,
   `CREATE TABLE IF NOT EXISTS crm_forum_leads_remarks (
     id INT AUTO_INCREMENT PRIMARY KEY,
     \`lead\` INT NOT NULL,
@@ -739,6 +752,15 @@ async function ensureIndex(connection, tableName, indexName, columns) {
   }
 }
 
+// MariaDB reports re-adding an existing FK constraint as ER_CANT_CREATE_TABLE
+// (errno 121, "Duplicate key on write or update") where MySQL 8 reports
+// ER_FK_DUP_NAME, so the duplicate-object tolerance above never fired there.
+function isMariaDbDuplicateForeignKey(error, statement) {
+  return error.code === 'ER_CANT_CREATE_TABLE'
+    && /errno: 121\b/.test(error.sqlMessage || '')
+    && /\bADD\s+CONSTRAINT\b/i.test(statement);
+}
+
 async function runSqlMigrations(connection) {
   const directory = path.join(__dirname, '..', 'migrations');
   if (!fs.existsSync(directory)) return 0;
@@ -760,7 +782,7 @@ async function runSqlMigrations(connection) {
       } catch (error) {
         // Older migrations pre-date IF NOT EXISTS for indexes/columns. Treat
         // their duplicate-object errors as the intended idempotent outcome.
-        if (!['ER_DUP_KEYNAME', 'ER_DUP_FIELDNAME', 'ER_TABLE_EXISTS_ERROR', 'ER_FK_DUP_NAME', 'ER_CANT_DROP_FIELD_OR_KEY'].includes(error.code)) throw error;
+        if (!['ER_DUP_KEYNAME', 'ER_DUP_FIELDNAME', 'ER_TABLE_EXISTS_ERROR', 'ER_FK_DUP_NAME', 'ER_CANT_DROP_FIELD_OR_KEY'].includes(error.code) && !isMariaDbDuplicateForeignKey(error, statement)) throw error;
       }
     }
   }
