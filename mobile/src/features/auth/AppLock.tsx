@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { AppState, StyleSheet, View } from 'react-native';
 import { Button, Icon, Text } from '@/components';
 import { authenticate, getBiometricSupport } from '@/services/security/biometrics';
@@ -18,8 +18,11 @@ export function useAppLock(): void {
   const setLocked = useUiStore((s) => s.setLocked);
   const backgroundedAt = useRef<number | null>(null);
 
-  // Cold start (or sign-in) with the lock enabled: start locked.
-  useEffect(() => {
+  // Cold start (or sign-in) with the lock enabled: start locked. useLayoutEffect, not
+  // useEffect - RootNavigator reads `status` directly and can mount AppStack in the same
+  // commit `status` flips to 'signedIn', so a plain effect leaves a one-frame window where
+  // Home paints before the lock overlay commits.
+  useLayoutEffect(() => {
     if (enabled && status === 'signedIn') setLocked(true);
     if (!enabled || status !== 'signedIn') setLocked(false);
   }, [enabled, status, setLocked]);

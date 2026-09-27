@@ -29,6 +29,10 @@ export function ChangePasswordScreen({ forced = false }: { forced?: boolean }) {
   const confirmRef = useRef<TextInput>(null);
 
   const submit = async () => {
+    // Both the button and the confirm field's "Go" key call submit() - without this guard
+    // a fast double-tap (or tapping the button then hitting Go before it re-renders
+    // disabled) fires two concurrent changePassword() calls with the same current password.
+    if (busy) return;
     const problem = validateNewPassword(current, next, confirm);
     if (problem) {
       setError(problem);
