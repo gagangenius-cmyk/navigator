@@ -121,7 +121,8 @@ function assertPermitted(required: string[], path: string): void {
   });
 }
 
-async function ensureFreshAccessToken(): Promise<void> {
+/** Exported for upload.ts, which can't reuse apiRequest (needs a FormData body, no forced JSON Content-Type). */
+export async function ensureFreshAccessToken(): Promise<void> {
   const bridge = getSessionBridge();
   const fresh = bridge.getAccessToken() && bridge.getAccessTokenExpiresAt() - Date.now() > ACCESS_TOKEN_REFRESH_SKEW_MS;
   if (!fresh) await bridge.refreshAccessToken();

@@ -28,6 +28,8 @@ export const APP_BUILD = Application.nativeBuildVersion ?? '0';
 export const APNS_ENVIRONMENT: 'sandbox' | 'production' = APP_ENV === 'development' ? 'sandbox' : 'production';
 
 export const REQUEST_TIMEOUT_MS = 20_000;
+/** File uploads (payment proof, documents) need longer than a normal API call on mobile data. */
+export const UPLOAD_TIMEOUT_MS = 60_000;
 export const ACCESS_TOKEN_REFRESH_SKEW_MS = 60_000;
 
 export const IS_IOS = Platform.OS === 'ios';

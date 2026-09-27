@@ -1,7 +1,7 @@
 import { useNavigation, useRoute, type NavigationProp, type RouteProp } from '@react-navigation/native';
 import { useState } from 'react';
 import { Linking, Pressable, StyleSheet, View } from 'react-native';
-import { Avatar, Badge, CachedBanner, Card, Divider, EmptyState, ErrorState, Icon, LoadingView, Screen, SectionHeader, SegmentedControl, Text } from '@/components';
+import { Avatar, Badge, Button, CachedBanner, Card, Divider, EmptyState, ErrorState, Icon, LoadingView, Screen, SectionHeader, SegmentedControl, Text } from '@/components';
 import { hasPermission } from '@/features/auth/rbac';
 import type { AppStackParamList } from '@/navigation/types';
 import { selectUser, useSessionStore } from '@/store/sessionStore';
@@ -200,6 +200,14 @@ export function LeadDetailScreen() {
               </Text>
             ) : null}
           </View>
+        </Card>
+      ) : hasPermission(user, 'leads.update', 'leads.create') ? (
+        <Card>
+          <Text variant="heading">No opportunity yet</Text>
+          <Text tone="muted" style={{ marginTop: 4, marginBottom: spacing.md }}>
+            Submit a payment to convert this lead into an opportunity.
+          </Text>
+          <Button title="Start opportunity" icon="cash" variant="secondary" onPress={() => navigation.navigate('PaymentSubmission', { leadId: lead.id })} fullWidth />
         </Card>
       ) : null}
 

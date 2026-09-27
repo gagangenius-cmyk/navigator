@@ -82,6 +82,13 @@ const config: ExpoConfig = {
         dark: { image: './assets/splash-icon-dark.png', backgroundColor: '#14273F' },
       },
     ],
+    [
+      'expo-image-picker',
+      {
+        photosPermission: 'Allow Navigator CRM to access your photos to attach proof of payment or client documents.',
+        cameraPermission: 'Allow Navigator CRM to use the camera to photograph proof of payment or client documents.',
+      },
+    ],
   ],
   extra: {
     appEnv,

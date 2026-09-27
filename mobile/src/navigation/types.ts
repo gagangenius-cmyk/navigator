@@ -23,6 +23,7 @@ export type AppStackParamList = {
   LeadPool: undefined;
   Clients: undefined;
   Balances: undefined;
+  PaymentSubmission: { leadId: number };
   ConfirmDecision: { approval: ApprovalKind; decision: 'approve' | 'reject'; recordId: string; leadId?: number };
   Attendance: undefined;
   TeamAttendance: undefined;
