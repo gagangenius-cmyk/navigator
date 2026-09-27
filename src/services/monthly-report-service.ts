@@ -101,7 +101,21 @@ export class MonthlyReportService {
     return cronSchedule;
   }
 
+  // Memoized (in-flight-deduped) so this DDL only runs once per process - see
+  // HRService.ensureLeaveManagementTables in hr-service.ts for the same fix.
+  private static logTableReady: Promise<void> | null = null;
+
   static async ensureLogTable() {
+    if (!this.logTableReady) {
+      this.logTableReady = this.ensureLogTableUncached().catch((error) => {
+        this.logTableReady = null;
+        throw error;
+      });
+    }
+    await this.logTableReady;
+  }
+
+  private static async ensureLogTableUncached() {
     await sequelize.query(`
       CREATE TABLE IF NOT EXISTS monthly_report_log (
         id INT AUTO_INCREMENT PRIMARY KEY,

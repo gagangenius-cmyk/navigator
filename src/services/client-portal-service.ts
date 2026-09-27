@@ -32,7 +32,22 @@ const sendClientEmail = async (to: string, subject: string, html: string) => {
 };
 
 export class ClientPortalService {
+  // Memoized (in-flight-deduped) so the CREATE TABLE / SHOW COLUMNS / ALTER
+  // TABLE checks below run once per process instead of on every call - see
+  // HRService.ensureLeaveManagementTables in hr-service.ts for the same fix.
+  private static tablesReady: Promise<void> | null = null;
+
   static async ensureTables() {
+    if (!this.tablesReady) {
+      this.tablesReady = this.ensureTablesUncached().catch((error) => {
+        this.tablesReady = null;
+        throw error;
+      });
+    }
+    await this.tablesReady;
+  }
+
+  private static async ensureTablesUncached() {
     await sequelize.query(`
       CREATE TABLE IF NOT EXISTS crm_client_credentials (
         client_credential_id CHAR(36) PRIMARY KEY,

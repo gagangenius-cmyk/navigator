@@ -6,29 +6,39 @@ import { DEFAULT_DISCOUNT_TIER_THRESHOLDS, type DiscountTierThresholds } from '.
 // discountApproval.ts, which the client-side discount-approvals page also
 // imports for its pure tier-computation helpers.
 
-let tableEnsured = false;
+// Memoized (in-flight-deduped) the same way as ensureMobileTables in
+// src/lib/mobileSchema.ts, so concurrent callers share one in-flight DDL
+// instead of each racing their own CREATE TABLE/INSERT.
+let tableReady: Promise<void> | null = null;
+
 async function ensureDiscountTierConfigTable() {
-  if (tableEnsured) return;
-  await sequelize.query(`
-    CREATE TABLE IF NOT EXISTS crm_discount_tier_config (
-      id INT NOT NULL PRIMARY KEY DEFAULT 1,
-      auto_max_percent DECIMAL(5,2) NOT NULL DEFAULT 20.00,
-      bm_ceo_max_percent DECIMAL(5,2) NOT NULL DEFAULT 30.00,
-      updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-      updated_by INT NULL
-    )
-  `);
-  await sequelize.query(`
-    INSERT INTO crm_discount_tier_config (id, auto_max_percent, bm_ceo_max_percent)
-    VALUES (1, :autoMaxPercent, :bmCeoMaxPercent)
-    ON DUPLICATE KEY UPDATE id = id
-  `, {
-    replacements: {
-      autoMaxPercent: DEFAULT_DISCOUNT_TIER_THRESHOLDS.autoMaxPercent,
-      bmCeoMaxPercent: DEFAULT_DISCOUNT_TIER_THRESHOLDS.bmCeoMaxPercent,
-    },
-  });
-  tableEnsured = true;
+  if (!tableReady) {
+    tableReady = (async () => {
+      await sequelize.query(`
+        CREATE TABLE IF NOT EXISTS crm_discount_tier_config (
+          id INT NOT NULL PRIMARY KEY DEFAULT 1,
+          auto_max_percent DECIMAL(5,2) NOT NULL DEFAULT 20.00,
+          bm_ceo_max_percent DECIMAL(5,2) NOT NULL DEFAULT 30.00,
+          updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          updated_by INT NULL
+        )
+      `);
+      await sequelize.query(`
+        INSERT INTO crm_discount_tier_config (id, auto_max_percent, bm_ceo_max_percent)
+        VALUES (1, :autoMaxPercent, :bmCeoMaxPercent)
+        ON DUPLICATE KEY UPDATE id = id
+      `, {
+        replacements: {
+          autoMaxPercent: DEFAULT_DISCOUNT_TIER_THRESHOLDS.autoMaxPercent,
+          bmCeoMaxPercent: DEFAULT_DISCOUNT_TIER_THRESHOLDS.bmCeoMaxPercent,
+        },
+      });
+    })().catch((error) => {
+      tableReady = null;
+      throw error;
+    });
+  }
+  await tableReady;
 }
 
 // Tiered discount policy — thresholds are staff-editable (see

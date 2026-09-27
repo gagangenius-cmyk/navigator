@@ -91,7 +91,19 @@ export class UAEComplianceService {
   // the table as it exists in any real environment (see dataAccessAudit.ts's
   // own comment) and would only have mattered on a fresh install anyway,
   // since this is a no-op everywhere the table already exists.
+  private static privacyAuditTableReady: Promise<void> | null = null;
+
   static async ensurePrivacyAuditTable() {
+    if (!this.privacyAuditTableReady) {
+      this.privacyAuditTableReady = this.ensurePrivacyAuditTableUncached().catch((error) => {
+        this.privacyAuditTableReady = null;
+        throw error;
+      });
+    }
+    await this.privacyAuditTableReady;
+  }
+
+  private static async ensurePrivacyAuditTableUncached() {
     await sequelize.query(`
       CREATE TABLE IF NOT EXISTS data_access_audit_log (
         audit_id CHAR(36) PRIMARY KEY,

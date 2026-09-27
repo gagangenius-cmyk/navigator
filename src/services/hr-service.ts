@@ -438,7 +438,21 @@ export class HRService {
     return leaveEntitlements;
   }
 
+  // Memoized (in-flight-deduped) the same way as ensureLeaveManagementTables
+  // above - these DDL/INFORMATION_SCHEMA checks are cheap once, not on every call.
+  private static attendanceRecordTableReady: Promise<void> | null = null;
+
   static async ensureAttendanceRecordTable() {
+    if (!this.attendanceRecordTableReady) {
+      this.attendanceRecordTableReady = this.ensureAttendanceRecordTableUncached().catch((error) => {
+        this.attendanceRecordTableReady = null;
+        throw error;
+      });
+    }
+    await this.attendanceRecordTableReady;
+  }
+
+  private static async ensureAttendanceRecordTableUncached() {
     await sequelize.query(`
       CREATE TABLE IF NOT EXISTS crm_hr_attendance_records (
         attendance_id CHAR(36) PRIMARY KEY,
@@ -676,7 +690,19 @@ export class HRService {
 
   // --- Employee self-service: clock in/out, breaks ---------------------------------
 
+  private static attendanceBreaksTableReady: Promise<void> | null = null;
+
   static async ensureAttendanceBreaksTable() {
+    if (!this.attendanceBreaksTableReady) {
+      this.attendanceBreaksTableReady = this.ensureAttendanceBreaksTableUncached().catch((error) => {
+        this.attendanceBreaksTableReady = null;
+        throw error;
+      });
+    }
+    await this.attendanceBreaksTableReady;
+  }
+
+  private static async ensureAttendanceBreaksTableUncached() {
     await sequelize.query(`
       CREATE TABLE IF NOT EXISTS crm_hr_attendance_breaks (
         break_id CHAR(36) PRIMARY KEY,
@@ -958,7 +984,19 @@ export class HRService {
     return { summary, detail, detailTotal: Number(detailTotal) || 0 };
   }
 
+  private static holidaysTableReady: Promise<void> | null = null;
+
   static async ensureHolidaysTable() {
+    if (!this.holidaysTableReady) {
+      this.holidaysTableReady = this.ensureHolidaysTableUncached().catch((error) => {
+        this.holidaysTableReady = null;
+        throw error;
+      });
+    }
+    await this.holidaysTableReady;
+  }
+
+  private static async ensureHolidaysTableUncached() {
     await sequelize.query(`
       CREATE TABLE IF NOT EXISTS crm_hr_holidays (
         holiday_id CHAR(36) PRIMARY KEY,
@@ -1026,7 +1064,19 @@ export class HRService {
   // company currently operates a single branch, so only the global row is
   // populated at first, but this stays extensible without a schema change
   // if that changes).
+  private static attendanceSettingsTableReady: Promise<void> | null = null;
+
   static async ensureAttendanceSettingsTable() {
+    if (!this.attendanceSettingsTableReady) {
+      this.attendanceSettingsTableReady = this.ensureAttendanceSettingsTableUncached().catch((error) => {
+        this.attendanceSettingsTableReady = null;
+        throw error;
+      });
+    }
+    await this.attendanceSettingsTableReady;
+  }
+
+  private static async ensureAttendanceSettingsTableUncached() {
     await sequelize.query(`
       CREATE TABLE IF NOT EXISTS crm_hr_attendance_settings (
         branch_id INT NOT NULL DEFAULT 0,
@@ -1113,7 +1163,26 @@ export class HRService {
     return workingDays;
   }
 
-  static async ensureLeaveManagementTables() {
+  private static leaveManagementTablesReady: Promise<void> | null = null;
+
+  // Memoized (matches src/lib/mobileSchema.ts's ensureMobileTables pattern) - this used to
+  // run ~9 DDL statements (a CREATE TABLE, 6 INFORMATION_SCHEMA-backed addColumnIfMissing
+  // checks, and an unconditional ALTER TABLE) on every single call, and getLeaveBalances()
+  // calls it once per leave type in a sequential loop (9 types) plus once itself - about
+  // 90 sequential DDL round trips to a remote DB per GET /api/hr/self/leave, measured at
+  // ~30s in production. The mobile app's 20s request timeout meant the Leave screen never
+  // loaded at all. Now the real DDL work runs once per server process lifetime.
+  static async ensureLeaveManagementTables(): Promise<void> {
+    if (!this.leaveManagementTablesReady) {
+      this.leaveManagementTablesReady = this.ensureLeaveManagementTablesUncached().catch((error) => {
+        this.leaveManagementTablesReady = null;
+        throw error;
+      });
+    }
+    await this.leaveManagementTablesReady;
+  }
+
+  private static async ensureLeaveManagementTablesUncached() {
     await sequelize.query(`
       CREATE TABLE IF NOT EXISTS crm_hr_leave_requests (
         leave_id CHAR(36) PRIMARY KEY,
@@ -1263,7 +1332,19 @@ export class HRService {
     }
   }
 
+  private static eosbSettlementTableReady: Promise<void> | null = null;
+
   static async ensureEOSBSettlementTable() {
+    if (!this.eosbSettlementTableReady) {
+      this.eosbSettlementTableReady = this.ensureEOSBSettlementTableUncached().catch((error) => {
+        this.eosbSettlementTableReady = null;
+        throw error;
+      });
+    }
+    await this.eosbSettlementTableReady;
+  }
+
+  private static async ensureEOSBSettlementTableUncached() {
     await sequelize.query(`
       CREATE TABLE IF NOT EXISTS crm_hr_eosb_settlements (
         eosb_id CHAR(36) PRIMARY KEY,
@@ -1290,7 +1371,19 @@ export class HRService {
     `);
   }
 
+  private static payslipTableReady: Promise<void> | null = null;
+
   static async ensurePayslipTable() {
+    if (!this.payslipTableReady) {
+      this.payslipTableReady = this.ensurePayslipTableUncached().catch((error) => {
+        this.payslipTableReady = null;
+        throw error;
+      });
+    }
+    await this.payslipTableReady;
+  }
+
+  private static async ensurePayslipTableUncached() {
     await sequelize.query(`
       CREATE TABLE IF NOT EXISTS crm_hr_payslips (
         payslip_id CHAR(36) PRIMARY KEY,
@@ -1321,7 +1414,19 @@ export class HRService {
     await this.addColumnIfMissing('crm_hr_payslips', 'currency_code', "VARCHAR(10) NOT NULL DEFAULT 'AED' AFTER net_salary");
   }
 
+  private static compensationTableReady: Promise<void> | null = null;
+
   static async ensureCompensationTable() {
+    if (!this.compensationTableReady) {
+      this.compensationTableReady = this.ensureCompensationTableUncached().catch((error) => {
+        this.compensationTableReady = null;
+        throw error;
+      });
+    }
+    await this.compensationTableReady;
+  }
+
+  private static async ensureCompensationTableUncached() {
     await sequelize.query(`
       CREATE TABLE IF NOT EXISTS crm_hr_employee_compensation (
         employee_id CHAR(36) PRIMARY KEY,
@@ -1568,7 +1673,19 @@ export class HRService {
     );
   }
 
+  private static exitChecklistTablesReady: Promise<void> | null = null;
+
   static async ensureExitChecklistTables() {
+    if (!this.exitChecklistTablesReady) {
+      this.exitChecklistTablesReady = this.ensureExitChecklistTablesUncached().catch((error) => {
+        this.exitChecklistTablesReady = null;
+        throw error;
+      });
+    }
+    await this.exitChecklistTablesReady;
+  }
+
+  private static async ensureExitChecklistTablesUncached() {
     await sequelize.query(`
       CREATE TABLE IF NOT EXISTS crm_hr_exit_checklists (
         checklist_id CHAR(36) PRIMARY KEY,
@@ -1811,7 +1928,19 @@ export class HRService {
     return { item_id: input.item_id, status: input.status };
   }
 
+  private static letterTablesReady: Promise<void> | null = null;
+
   static async ensureLetterTables() {
+    if (!this.letterTablesReady) {
+      this.letterTablesReady = this.ensureLetterTablesUncached().catch((error) => {
+        this.letterTablesReady = null;
+        throw error;
+      });
+    }
+    await this.letterTablesReady;
+  }
+
+  private static async ensureLetterTablesUncached() {
     await sequelize.query(`
       CREATE TABLE IF NOT EXISTS crm_hr_letter_templates (
         template_id CHAR(36) PRIMARY KEY,
@@ -2059,7 +2188,19 @@ export class HRService {
     };
   }
 
+  private static exitInterviewTableReady: Promise<void> | null = null;
+
   static async ensureExitInterviewTable() {
+    if (!this.exitInterviewTableReady) {
+      this.exitInterviewTableReady = this.ensureExitInterviewTableUncached().catch((error) => {
+        this.exitInterviewTableReady = null;
+        throw error;
+      });
+    }
+    await this.exitInterviewTableReady;
+  }
+
+  private static async ensureExitInterviewTableUncached() {
     await sequelize.query(`
       CREATE TABLE IF NOT EXISTS crm_hr_exit_interviews (
         exit_id CHAR(36) PRIMARY KEY,
@@ -2525,9 +2666,10 @@ export class HRService {
       }));
     }
 
-    for (const entitlement of leaveEntitlements) {
-      await this.syncLeaveBalance(employeeId, entitlement.type, year);
-    }
+    // Each type targets its own (employee_id, leave_type, year) row (see the UNIQUE KEY
+    // below) - no shared row across iterations, so these are safe to run concurrently
+    // instead of one at a time.
+    await Promise.all(leaveEntitlements.map((entitlement) => this.syncLeaveBalance(employeeId, entitlement.type, year)));
 
     return sequelize.query(
       `
@@ -3462,7 +3604,19 @@ export class HRService {
     return dashboard.exitPipelineAttrition;
   }
 
+  private static workforceDashboardTablesReady: Promise<void> | null = null;
+
   static async ensureWorkforceDashboardTables() {
+    if (!this.workforceDashboardTablesReady) {
+      this.workforceDashboardTablesReady = this.ensureWorkforceDashboardTablesUncached().catch((error) => {
+        this.workforceDashboardTablesReady = null;
+        throw error;
+      });
+    }
+    await this.workforceDashboardTablesReady;
+  }
+
+  private static async ensureWorkforceDashboardTablesUncached() {
     await this.addColumnIfMissing('crm_employee', 'work_location', "ENUM('Onshore', 'Offshore', 'Remote-UAE', 'GCC-Branch') NOT NULL DEFAULT 'Onshore'");
     await this.addColumnIfMissing('crm_employee', 'work_country', "VARCHAR(255) NULL DEFAULT 'UAE'");
     await this.addColumnIfMissing('crm_employee', 'work_city', 'VARCHAR(255) NULL');

@@ -92,7 +92,21 @@ export class RenewalReminderService {
     return maxThresholdDays;
   }
 
+  // Memoized (in-flight-deduped) so this DDL only runs once per process - see
+  // HRService.ensureLeaveManagementTables in hr-service.ts for the same fix.
+  private static notificationLogTableReady: Promise<void> | null = null;
+
   static async ensureNotificationLogTable() {
+    if (!this.notificationLogTableReady) {
+      this.notificationLogTableReady = this.ensureNotificationLogTableUncached().catch((error) => {
+        this.notificationLogTableReady = null;
+        throw error;
+      });
+    }
+    await this.notificationLogTableReady;
+  }
+
+  private static async ensureNotificationLogTableUncached() {
     await sequelize.query(`
       CREATE TABLE IF NOT EXISTS notification_log (
         log_id CHAR(36) PRIMARY KEY,

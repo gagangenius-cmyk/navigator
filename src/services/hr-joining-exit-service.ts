@@ -19,7 +19,22 @@ type ExitInput = {
 type WorkflowRow = Record<string, string | number | null>;
 
 export class HRJoiningExitService {
+  // Memoized (in-flight-deduped) - see HRService.ensureLeaveManagementTables
+  // in hr-service.ts for why: this used to run every DDL/INFORMATION_SCHEMA
+  // check on every call.
+  private static tablesReady: Promise<void> | null = null;
+
   static async ensureTables() {
+    if (!this.tablesReady) {
+      this.tablesReady = this.ensureTablesUncached().catch((error) => {
+        this.tablesReady = null;
+        throw error;
+      });
+    }
+    await this.tablesReady;
+  }
+
+  private static async ensureTablesUncached() {
     await sequelize.query(`CREATE TABLE IF NOT EXISTS crm_hr_recruitment_candidates (
       candidate_id CHAR(36) PRIMARY KEY, full_name VARCHAR(255) NOT NULL, email VARCHAR(255) NOT NULL, phone VARCHAR(80) NULL, applied_position VARCHAR(180) NOT NULL, applied_date DATE NOT NULL, source VARCHAR(120) NULL,
       interview_date DATETIME NULL, interview_outcome ENUM('Pending','Pass','Fail') NOT NULL DEFAULT 'Pending', status ENUM('Applied','Interviewed','Selected','Rejected','Offer Sent','Accepted','Joined') NOT NULL DEFAULT 'Applied', rejection_reason TEXT NULL,

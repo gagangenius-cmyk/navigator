@@ -220,7 +220,22 @@ export class PROService {
     }
   }
 
+  // Memoized (in-flight-deduped) so this DDL/INFORMATION_SCHEMA-check batch
+  // only runs once per process - see HRService.ensureLeaveManagementTables
+  // in src/services/hr-service.ts for the same fix.
+  private static dashboardTablesReady: Promise<void> | null = null;
+
   static async ensureDashboardTables() {
+    if (!this.dashboardTablesReady) {
+      this.dashboardTablesReady = this.ensureDashboardTablesUncached().catch((error) => {
+        this.dashboardTablesReady = null;
+        throw error;
+      });
+    }
+    await this.dashboardTablesReady;
+  }
+
+  private static async ensureDashboardTablesUncached() {
     await sequelize.query(`
       CREATE TABLE IF NOT EXISTS crm_pro_documents (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -574,7 +589,19 @@ export class PROService {
     return { document_id: input.document_id, status };
   }
 
+  private static employeeImmigrationTableReady: Promise<void> | null = null;
+
   static async ensureEmployeeImmigrationTable() {
+    if (!this.employeeImmigrationTableReady) {
+      this.employeeImmigrationTableReady = this.ensureEmployeeImmigrationTableUncached().catch((error) => {
+        this.employeeImmigrationTableReady = null;
+        throw error;
+      });
+    }
+    await this.employeeImmigrationTableReady;
+  }
+
+  private static async ensureEmployeeImmigrationTableUncached() {
     await sequelize.query(`
       CREATE TABLE IF NOT EXISTS crm_pro_employee_immigration (
         pro_emp_id CHAR(36) PRIMARY KEY,
@@ -779,7 +806,19 @@ export class PROService {
     );
   }
 
+  private static wpsManagementTableReady: Promise<void> | null = null;
+
   static async ensureWpsManagementTable() {
+    if (!this.wpsManagementTableReady) {
+      this.wpsManagementTableReady = this.ensureWpsManagementTableUncached().catch((error) => {
+        this.wpsManagementTableReady = null;
+        throw error;
+      });
+    }
+    await this.wpsManagementTableReady;
+  }
+
+  private static async ensureWpsManagementTableUncached() {
     await sequelize.query(`
       CREATE TABLE IF NOT EXISTS crm_pro_wps_records (
         wps_id CHAR(36) PRIMARY KEY,
@@ -981,7 +1020,19 @@ export class PROService {
     );
   }
 
+  private static insuranceRecordsTableReady: Promise<void> | null = null;
+
   static async ensureInsuranceRecordsTable() {
+    if (!this.insuranceRecordsTableReady) {
+      this.insuranceRecordsTableReady = this.ensureInsuranceRecordsTableUncached().catch((error) => {
+        this.insuranceRecordsTableReady = null;
+        throw error;
+      });
+    }
+    await this.insuranceRecordsTableReady;
+  }
+
+  private static async ensureInsuranceRecordsTableUncached() {
     await sequelize.query(`
       CREATE TABLE IF NOT EXISTS crm_pro_insurance_records (
         insurance_id CHAR(36) PRIMARY KEY,
@@ -1155,7 +1206,19 @@ export class PROService {
     return dashboard.monthlyProTaskList;
   }
 
+  private static gccBranchDocumentsTableReady: Promise<void> | null = null;
+
   static async ensureGccBranchDocumentsTable() {
+    if (!this.gccBranchDocumentsTableReady) {
+      this.gccBranchDocumentsTableReady = this.ensureGccBranchDocumentsTableUncached().catch((error) => {
+        this.gccBranchDocumentsTableReady = null;
+        throw error;
+      });
+    }
+    await this.gccBranchDocumentsTableReady;
+  }
+
+  private static async ensureGccBranchDocumentsTableUncached() {
     await sequelize.query(`
       CREATE TABLE IF NOT EXISTS crm_pro_gcc_branch_documents (
         branch_id CHAR(36) PRIMARY KEY,
@@ -1321,7 +1384,19 @@ export class PROService {
     );
   }
 
+  private static ownerDocumentsTableReady: Promise<void> | null = null;
+
   static async ensureOwnerDocumentsTable() {
+    if (!this.ownerDocumentsTableReady) {
+      this.ownerDocumentsTableReady = this.ensureOwnerDocumentsTableUncached().catch((error) => {
+        this.ownerDocumentsTableReady = null;
+        throw error;
+      });
+    }
+    await this.ownerDocumentsTableReady;
+  }
+
+  private static async ensureOwnerDocumentsTableUncached() {
     await sequelize.query(`
       CREATE TABLE IF NOT EXISTS crm_pro_owner_documents (
         owner_id CHAR(36) PRIMARY KEY,
