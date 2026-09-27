@@ -172,7 +172,11 @@
       "Bash(mkdir -p /tmp/arm_check)",
       "Bash(unzip -o -q \"D:\\\\m\\\\android\\\\app\\\\build\\\\outputs\\\\apk\\\\release\\\\app-release.apk\" assets/index.android.bundle -d .)",
       "Bash(/d/android-build/sdk/platform-tools/adb.exe emu *)",
-      "Bash(echo \"tracked=$?\")"
+      "Bash(echo \"tracked=$?\")",
+      "Bash(rm -rf /tmp/arm_check2)",
+      "Bash(mkdir -p /tmp/arm_check2)",
+      "Bash(rm -f /d/android-build/out/NavigatorCRM-arm64-fixed.apk)",
+      "Bash(cp /d/m/android/app/build/outputs/apk/release/app-release.apk /d/android-build/out/NavigatorCRM-arm64-fixed.apk)"
     ],
     "additionalDirectories": [
       "d:\\xampp\\htdocs\\dm-next\\src\\app\\api\\admin\\roles\\[id]",
