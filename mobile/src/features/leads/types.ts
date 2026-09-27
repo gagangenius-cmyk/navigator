@@ -34,7 +34,7 @@ export interface LeadListItem {
 }
 
 /** GET /api/leads/[id]: the lead row (l.*) plus joined labels. */
-export interface LeadDetail extends LeadListItem {
+export interface LeadDetail extends Omit<LeadListItem, 'discount_status'> {
   // Raw ids behind service_interest_label/country_interest_label - the labels are for
   // display, these are what the edit form needs to preselect the right chip.
   service_interest: string | number | null;
@@ -52,6 +52,27 @@ export interface LeadDetail extends LeadListItem {
   discount: number | string | null;
   agreement_number: string | null;
   campaign?: string | null;
+  // crm_forum_leads' own legacy flag column - NOT the discount approval's status
+  // (that's discount_approval_status below). Included only because l.* pulls it in.
+  discount_status?: number | null;
+
+  // Opportunity/workflow summary - same fields the lead list already carries, added
+  // to the single-lead query so the detail screen doesn't need a second round trip
+  // to /api/crm-workflow/{opportunityId} just to show "what stage is this at".
+  resolved_opportunity_id: number | null;
+  opp_status: string | null;
+  opp_stage: string | null;
+  paymentReceived: number | boolean | null;
+  agreementGenerated: number | boolean | null;
+  agreementSigned: number | boolean | null;
+  retentionStatus: string | null;
+  paymentStatus: string | null;
+  discount_approval_status: string | null;
+  workflow_status: string | null;
+  finance_status: string | null;
+  compliance_status: string | null;
+  finance_reason: string | null;
+  compliance_reason: string | null;
 }
 
 /** A row of GET /api/services or GET /api/countries. */

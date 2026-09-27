@@ -28,3 +28,35 @@ export async function fetchDiscounts(status: DiscountStatus | 'all', page = 1, l
 export function decideDiscount(id: number, decision: 'approved' | 'rejected'): Promise<{ success: boolean }> {
   return api.put(`/api/discount-approvals/${id}`, { status: decision });
 }
+
+export interface CreateDiscountInput {
+  leadId: number;
+  opportunityId?: number | null;
+  discountType: 'fixed' | 'percentage';
+  discountAmount: number;
+  originalAmount: number;
+  reason: string;
+}
+
+interface CreateDiscountResponse {
+  success: boolean;
+  message: string;
+  data: { id: number; status: DiscountStatus; tier: string };
+}
+
+/**
+ * Requests a discount. currency is resolved server-side from the requester's own
+ * branch, not sent here. 0-20% (of originalAmount) auto-approves and applies
+ * immediately; above that it queues for Branch Manager/CEO sign-off per the
+ * server's tier thresholds.
+ */
+export function createDiscount(input: CreateDiscountInput): Promise<CreateDiscountResponse> {
+  return api.post<CreateDiscountResponse>('/api/discount-approvals', {
+    leadId: input.leadId,
+    opportunityId: input.opportunityId ?? undefined,
+    discountType: input.discountType,
+    discountAmount: input.discountAmount,
+    originalAmount: input.originalAmount,
+    reason: input.reason.trim(),
+  });
+}

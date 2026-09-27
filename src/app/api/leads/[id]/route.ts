@@ -234,7 +234,11 @@ function validateLeadUpdate(data: Record<string, unknown>): string[] {
   return errors;
 }
 
-const fetchLead = async (id: string) => {
+// Same opportunity/workflow enrichment as the list query (src/app/api/leads/route.ts's
+// buildLeadsQuery) - a mobile/web detail view needs the same "what stage is this
+// opportunity at, who's it waiting on" fields the list row already carries, in one
+// request rather than a second round trip to /api/crm-workflow/{opportunityId}.
+const fetchLead = async (id: string, withWorkflow = true): Promise<Record<string, unknown> | null> => {
   const rows = await sequelize.query(`
     SELECT
       l.*,
@@ -254,7 +258,15 @@ const fetchLead = async (id: string) => {
       COALESCE(cp.name, l.country_interest) as country_interest_label,
       (SELECT a.agreementNumber FROM crm_opportunity_agreements a
        JOIN crm_opportunities o ON a.opportunityId = o.id AND o.is_deleted = 0
-       WHERE o.leadId = l.id AND a.is_deleted = 0 ORDER BY a.createdAt DESC LIMIT 1) AS agreement_number
+       WHERE o.leadId = l.id AND a.is_deleted = 0 ORDER BY a.createdAt DESC LIMIT 1) AS agreement_number,
+      o.id AS resolved_opportunity_id, o.status AS opp_status, o.stage AS opp_stage,
+      o.paymentReceived, o.agreementGenerated, o.agreementSigned, o.retentionStatus,
+      (SELECT p.status FROM crm_opportunity_payments p WHERE p.opportunityId = o.id ORDER BY p.id DESC LIMIT 1) as paymentStatus,
+      -- Aliased (not discount_status): crm_forum_leads already has its own legacy
+      -- discount_status integer column, pulled in by l.* above - reusing the name
+      -- would silently shadow this with whichever one the driver keeps last.
+      (SELECT status FROM crm_discount_approvals da WHERE da.leadId = l.id ORDER BY da.id DESC LIMIT 1) as discount_approval_status${withWorkflow ? `,
+      wr.workflow_status, wr.finance_status, wr.compliance_status, wr.finance_reason, wr.compliance_reason` : ''}
     FROM crm_forum_leads l
     LEFT JOIN crm_employee e1 ON l.assignTo = e1.id
     LEFT JOIN crm_employee e2 ON l.Counsilor = e2.id
@@ -262,12 +274,24 @@ const fetchLead = async (id: string) => {
     LEFT JOIN crm_service s ON s.id = CAST(l.service_interest AS UNSIGNED)
     LEFT JOIN crm_program_type pt ON pt.id = CAST(l.service_interest AS UNSIGNED)
     LEFT JOIN crm_country_proces cp ON cp.id = CAST(l.country_interest AS UNSIGNED)
+    LEFT JOIN crm_opportunities o ON o.id = COALESCE(l.opportunity_id, (SELECT MAX(o2.id) FROM crm_opportunities o2 WHERE o2.leadId = l.id AND o2.is_deleted = 0)) AND o.is_deleted = 0${withWorkflow ? `
+    LEFT JOIN crm_opportunity_workflow_reviews wr ON wr.opportunity_id = o.id` : ''}
     WHERE l.id = ?
     LIMIT 1
   `, {
     replacements: [id],
     type: QueryTypes.SELECT
+  }).catch((error: unknown) => {
+    // Same fallback as the list query: an environment where crm_opportunity_workflow_reviews
+    // doesn't exist yet must not break the whole lead detail page over an optional join.
+    const message = error instanceof Error ? error.message : String(error);
+    if (withWorkflow && (message.includes('crm_opportunity_workflow_reviews') || message.includes('ER_NO_SUCH_TABLE'))) {
+      return null;
+    }
+    throw error;
   });
+
+  if (rows === null) return fetchLead(id, false);
 
   const lead = rows[0] as Record<string, unknown> | undefined;
   if (!lead) return null;

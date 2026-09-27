@@ -1,6 +1,8 @@
+import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { View } from 'react-native';
 import { Button, ChipGroup, DateTimeField, Input, Sheet, Text } from '@/components';
+import { createDiscount } from '@/features/discounts/api';
 import { errorMessage } from '@/services/api/errors';
 import { toast } from '@/store/uiStore';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -55,6 +57,90 @@ export function StatusSheet({ visible, onClose, leadId, current, statuses }: Bas
         />
         <Input label="Why is the status changing?" value={notes} onChangeText={setNotes} multiline editable={!mutation.isPending} error={error} />
         <Button title="Update status" onPress={() => void submit()} loading={mutation.isPending} disabled={!status || status === current} fullWidth />
+      </View>
+    </Sheet>
+  );
+}
+
+/** Fixed vs percentage just changes how the entered number is interpreted client-side
+ * before it's sent - the server only ever stores/validates an absolute discountAmount. */
+const DISCOUNT_TYPES = [
+  { value: 'fixed', label: 'Fixed amount' },
+  { value: 'percentage', label: 'Percentage' },
+] as const;
+
+export function RequestDiscountSheet({
+  visible,
+  onClose,
+  leadId,
+  opportunityId,
+  defaultOriginalAmount,
+}: BaseProps & { opportunityId: number | null; defaultOriginalAmount: number }) {
+  const { spacing } = useTheme();
+  const [discountType, setDiscountType] = useState<'fixed' | 'percentage'>('fixed');
+  const [originalText, setOriginalText] = useState(defaultOriginalAmount > 0 ? String(defaultOriginalAmount) : '');
+  const [amountText, setAmountText] = useState('');
+  const [reason, setReason] = useState('');
+  const [error, setError] = useState<string | null>(null);
+
+  const mutation = useMutation({
+    mutationFn: (input: { discountAmount: number; originalAmount: number; reason: string }) =>
+      createDiscount({ leadId, opportunityId, discountType, discountAmount: input.discountAmount, originalAmount: input.originalAmount, reason: input.reason }),
+  });
+
+  const close = () => {
+    setDiscountType('fixed');
+    setOriginalText(defaultOriginalAmount > 0 ? String(defaultOriginalAmount) : '');
+    setAmountText('');
+    setReason('');
+    setError(null);
+    onClose();
+  };
+
+  const submit = async () => {
+    const originalAmount = Number(originalText.replace(',', '.'));
+    if (!Number.isFinite(originalAmount) || originalAmount <= 0) {
+      setError('Enter the original (pre-discount) amount.');
+      return;
+    }
+    const entered = Number(amountText.replace(',', '.'));
+    if (!Number.isFinite(entered) || entered <= 0) {
+      setError('Enter an amount greater than zero.');
+      return;
+    }
+    const discountAmount = discountType === 'percentage' ? (originalAmount * entered) / 100 : entered;
+    if (discountAmount > originalAmount) {
+      setError(discountType === 'percentage' ? 'That is more than 100% of the value.' : 'That is more than the original amount.');
+      return;
+    }
+    if (reason.trim().length < 3) {
+      setError('Explain why this discount is needed.');
+      return;
+    }
+    setError(null);
+    try {
+      const result = await mutation.mutateAsync({ discountAmount, originalAmount, reason: reason.trim() });
+      toast.success(result.message);
+      close();
+    } catch (e) {
+      setError(errorMessage(e, 'Unable to submit the discount request.'));
+    }
+  };
+
+  return (
+    <Sheet visible={visible} onClose={close} title="Request discount" dismissable={!mutation.isPending}>
+      <View style={{ gap: spacing.md }}>
+        <Input label="Original amount" value={originalText} onChangeText={setOriginalText} keyboardType="decimal-pad" editable={!mutation.isPending} />
+        <ChipGroup label="Type" options={DISCOUNT_TYPES} value={discountType} onSelect={setDiscountType} />
+        <Input
+          label={discountType === 'percentage' ? 'Discount (%)' : 'Discount amount'}
+          value={amountText}
+          onChangeText={setAmountText}
+          keyboardType="decimal-pad"
+          editable={!mutation.isPending}
+        />
+        <Input label="Reason" value={reason} onChangeText={setReason} multiline editable={!mutation.isPending} error={error} />
+        <Button title="Submit request" onPress={() => void submit()} loading={mutation.isPending} fullWidth />
       </View>
     </Sheet>
   );

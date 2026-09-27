@@ -9,7 +9,7 @@ import { approvalTone, leadStatusTone, priorityTone } from '@/theme/status';
 import { useTheme } from '@/theme/ThemeProvider';
 import { formatCurrency, formatDate, formatDateTime, timeAgo } from '@/utils/format';
 import { callPhone, openWhatsApp } from '@/utils/phone';
-import { FollowUpSheet, RemarkSheet, StatusSheet } from '../components/LeadSheets';
+import { FollowUpSheet, RemarkSheet, RequestDiscountSheet, StatusSheet } from '../components/LeadSheets';
 import { useLead, useLeadActivity, useLeadStatuses } from '../hooks';
 import { leadName, leadPhone } from '../types';
 
@@ -63,6 +63,7 @@ export function LeadDetailScreen() {
   const [statusOpen, setStatusOpen] = useState(false);
   const [remarkOpen, setRemarkOpen] = useState(false);
   const [followUpOpen, setFollowUpOpen] = useState(false);
+  const [discountOpen, setDiscountOpen] = useState(false);
 
   const canUpdate = hasPermission(user, 'leads.update');
 
@@ -127,6 +128,7 @@ export function LeadDetailScreen() {
         <QuickAction icon="logo-whatsapp" label="WhatsApp" onPress={() => void openWhatsApp(phone)} disabled={!phone} />
         <QuickAction icon="chatbubble-ellipses" label="Remark" onPress={() => setRemarkOpen(true)} disabled={!canUpdate} />
         <QuickAction icon="alarm" label="Follow-up" onPress={() => setFollowUpOpen(true)} disabled={!user} />
+        <QuickAction icon="pricetag" label="Discount" onPress={() => setDiscountOpen(true)} disabled={!canUpdate} />
         {hasPermission(user, 'leads.update', 'leads.create') ? (
           <QuickAction icon="create" label="Edit" onPress={() => navigation.navigate('LeadForm', { leadId: lead.id })} />
         ) : null}
@@ -156,6 +158,48 @@ export function LeadDetailScreen() {
             Total {formatCurrency(total)}
             {lead.agreement_number ? ` · ${lead.agreement_number}` : ''}
           </Text>
+        </Card>
+      ) : null}
+
+      {lead.resolved_opportunity_id ? (
+        <Card>
+          <Text variant="heading" style={{ marginBottom: spacing.sm }}>
+            Opportunity
+          </Text>
+          <View style={{ gap: spacing.sm }}>
+            <View style={styles.rowBetween}>
+              <Text tone="muted">Stage</Text>
+              <Text variant="bodyStrong">{lead.opp_stage || lead.workflow_status || '—'}</Text>
+            </View>
+            {lead.discount_approval_status ? (
+              <View style={styles.rowBetween}>
+                <Text tone="muted">Discount</Text>
+                <Badge label={lead.discount_approval_status} tone={approvalTone(lead.discount_approval_status)} />
+              </View>
+            ) : null}
+            {lead.finance_status ? (
+              <View style={styles.rowBetween}>
+                <Text tone="muted">Accounts</Text>
+                <Badge label={lead.finance_status} tone={approvalTone(lead.finance_status)} />
+              </View>
+            ) : null}
+            {lead.compliance_status ? (
+              <View style={styles.rowBetween}>
+                <Text tone="muted">Compliance</Text>
+                <Badge label={lead.compliance_status} tone={approvalTone(lead.compliance_status)} />
+              </View>
+            ) : null}
+            {lead.finance_reason ? (
+              <Text variant="caption" tone="danger">
+                Accounts: {lead.finance_reason}
+              </Text>
+            ) : null}
+            {lead.compliance_reason ? (
+              <Text variant="caption" tone="danger">
+                Compliance: {lead.compliance_reason}
+              </Text>
+            ) : null}
+          </View>
         </Card>
       ) : null}
 
@@ -239,6 +283,13 @@ export function LeadDetailScreen() {
       <StatusSheet visible={statusOpen} onClose={() => setStatusOpen(false)} leadId={lead.id} current={lead.status} statuses={statuses.data ?? []} />
       <RemarkSheet visible={remarkOpen} onClose={() => setRemarkOpen(false)} leadId={lead.id} />
       {user ? <FollowUpSheet visible={followUpOpen} onClose={() => setFollowUpOpen(false)} leadId={lead.id} employeeId={user.id} /> : null}
+      <RequestDiscountSheet
+        visible={discountOpen}
+        onClose={() => setDiscountOpen(false)}
+        leadId={lead.id}
+        opportunityId={lead.resolved_opportunity_id}
+        defaultOriginalAmount={total}
+      />
     </Screen>
   );
 }
