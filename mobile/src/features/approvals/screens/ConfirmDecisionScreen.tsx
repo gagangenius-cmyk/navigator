@@ -1,5 +1,5 @@
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, View } from 'react-native';
 import { queryClient } from '@/app/queryClient';
 import { Button, EmptyState, Input, LoadingView, Screen, SegmentedControl, Text } from '@/components';
@@ -45,13 +45,25 @@ export function ConfirmDecisionScreen() {
     void getBiometricSupport().then((s) => setBiometricLabel(s.label));
   }, []);
 
+  // Blocks the header back button, the swipe-back gesture and Android hardware back while a
+  // decision is in flight (mid biometric prompt or mid API call) - without this, leaving the
+  // screen doesn't cancel the pending submit, it just hides it, and the user has no idea
+  // whether their approve/reject went through. Our own goBack() below sets allowLeave first.
+  const allowLeave = useRef(false);
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('beforeRemove', (e) => {
+      if (busy && !allowLeave.current) e.preventDefault();
+    });
+    return unsubscribe;
+  }, [navigation, busy]);
+
   // Decisions only apply to open items, so the pending list always contains the record.
   const discounts = useDiscountList('pending', params.approval === 'discount');
   const payments = usePaymentList('pending', params.approval === 'payment');
   const compliance = useComplianceList('pending', params.approval === 'compliance');
   const source = params.approval === 'discount' ? discounts : params.approval === 'payment' ? payments : compliance;
 
-  const item = useMemo<ApprovalItem | null>(() => {
+  const liveItem = useMemo<ApprovalItem | null>(() => {
     if (params.approval === 'discount') {
       const row = discounts.data?.data.items.find((r) => String(r.id) === params.recordId);
       return row ? { kind: 'discount', row } : null;
@@ -63,6 +75,15 @@ export function ConfirmDecisionScreen() {
     const row = compliance.data?.data.find((r) => String(r.id) === params.recordId);
     return row ? { kind: 'compliance', row } : null;
   }, [params.approval, params.recordId, discounts.data, payments.data, compliance.data]);
+
+  // A background refetch of the pending list can drop this record (e.g. someone else just
+  // decided it) while a submission is still in flight. Keep showing the last known item
+  // instead of the item flipping to null and the screen switching to "Already handled"
+  // underneath the still-running biometric/submit flow. (Adjusting state during render,
+  // not a ref: https://react.dev/reference/react/useState#storing-information-from-previous-renders)
+  const [lastItem, setLastItem] = useState<ApprovalItem | null>(null);
+  if (liveItem && liveItem !== lastItem) setLastItem(liveItem);
+  const item = liveItem ?? (busy ? lastItem : null);
 
   const labels = decisionLabels(params.approval, decision);
   const noteRequired = requiresNote(params.approval, decision);
@@ -77,25 +98,29 @@ export function ConfirmDecisionScreen() {
     }
     setError(null);
 
-    // The gate: biometrics (or the device passcode) before any decision leaves the phone.
-    const outcome = await authenticate(`${labels.title}`);
-    if (outcome === 'cancelled') return;
-    if (outcome === 'failed') {
-      setError('Authentication failed. Nothing was sent.');
-      return;
-    }
-    if (outcome === 'unavailable') {
-      // No biometrics or passcode on this device: fall back to an explicit confirmation.
-      const ok = await confirmDialog(labels.title, 'This device has no biometric or passcode lock. Confirm this decision?', labels.verb);
-      if (!ok) return;
-    }
-
+    // Disable the button before anything async starts (including the biometric prompt
+    // itself, which awaits a few native bridge calls first) - otherwise a fast double-tap
+    // fires two concurrent submissions of the same approval/rejection.
     setBusy(true);
     try {
+      // The gate: biometrics (or the device passcode) before any decision leaves the phone.
+      const outcome = await authenticate(`${labels.title}`);
+      if (outcome === 'cancelled') return;
+      if (outcome === 'failed') {
+        setError('Authentication failed. Nothing was sent.');
+        return;
+      }
+      if (outcome === 'unavailable') {
+        // No biometrics or passcode on this device: fall back to an explicit confirmation.
+        const ok = await confirmDialog(labels.title, 'This device has no biometric or passcode lock. Confirm this decision?', labels.verb);
+        if (!ok) return;
+      }
+
       await submitDecision({ approval: params.approval, decision, recordId: params.recordId, notes: note.trim() || null, user });
       toast.success(labels.done);
       void queryClient.invalidateQueries({ queryKey: queryKeys.approvals });
       void queryClient.invalidateQueries({ queryKey: queryKeys.notifications });
+      allowLeave.current = true;
       navigation.goBack();
     } catch (e) {
       setError(errorMessage(e, 'The decision could not be recorded.'));

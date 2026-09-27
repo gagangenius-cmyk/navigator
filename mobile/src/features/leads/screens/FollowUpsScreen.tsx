@@ -28,16 +28,16 @@ export function FollowUpsScreen() {
 
   const items = query.data?.data.items ?? [];
 
-  const complete = (id: number) =>
+  const complete = (id: number, leadId: number) =>
     action.mutate(
-      { id, action: 'complete' },
+      { id, leadId, action: 'complete' },
       {
         onSuccess: () => toast.success('Follow-up completed'),
         onError: (e) => toast.error(errorMessage(e, 'Unable to complete the follow-up.')),
       },
     );
 
-  const cancel = (id: number) =>
+  const cancel = (id: number, leadId: number) =>
     Alert.alert('Cancel this follow-up?', undefined, [
       { text: 'Keep', style: 'cancel' },
       {
@@ -45,7 +45,7 @@ export function FollowUpsScreen() {
         style: 'destructive',
         onPress: () =>
           action.mutate(
-            { id, action: 'cancel' },
+            { id, leadId, action: 'cancel' },
             { onSuccess: () => toast.info('Follow-up cancelled'), onError: (e) => toast.error(errorMessage(e, 'Unable to cancel it.')) },
           ),
       },
@@ -97,8 +97,8 @@ export function FollowUpsScreen() {
                 {item.status === 'pending' ? (
                   <View style={[styles.actions, { marginTop: spacing.md }]}>
                     {item.phone ? <Button title="Call" size="sm" variant="outline" icon="call" onPress={() => void callPhone(item.phone)} style={styles.flex} /> : null}
-                    <Button title="Done" size="sm" icon="checkmark" onPress={() => complete(item.id)} loading={action.isPending && action.variables?.id === item.id && action.variables.action === 'complete'} style={styles.flex} />
-                    <Button title="Cancel" size="sm" variant="ghost" onPress={() => cancel(item.id)} style={styles.flex} />
+                    <Button title="Done" size="sm" icon="checkmark" onPress={() => complete(item.id, item.lead_id)} loading={action.isPending && action.variables?.id === item.id && action.variables.action === 'complete'} style={styles.flex} />
+                    <Button title="Cancel" size="sm" variant="ghost" onPress={() => cancel(item.id, item.lead_id)} style={styles.flex} />
                   </View>
                 ) : null}
               </Card>

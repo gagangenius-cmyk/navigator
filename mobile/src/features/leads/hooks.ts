@@ -142,10 +142,14 @@ export function useCreateFollowUp() {
 export function useFollowUpAction() {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, action, notes }: { id: number; action: 'complete' | 'cancel'; notes?: string }) => actOnFollowUp(id, action, notes),
-    onSuccess: () => {
+    mutationFn: ({ id, action, notes }: { id: number; leadId: number; action: 'complete' | 'cancel'; notes?: string }) =>
+      actOnFollowUp(id, action, notes),
+    onSuccess: (_data, { leadId }) => {
       void client.invalidateQueries({ queryKey: ['follow-ups'] });
       void client.invalidateQueries({ queryKey: queryKeys.leads });
+      // Otherwise the lead's own Activity > Follow-ups tab keeps showing this as pending
+      // until a manual pull-to-refresh, even though it was just completed/cancelled here.
+      void client.invalidateQueries({ queryKey: queryKeys.leadActivity(leadId) });
     },
   });
 }

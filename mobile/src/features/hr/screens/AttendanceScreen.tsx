@@ -93,7 +93,12 @@ export function AttendanceScreen() {
               <View style={{ gap: spacing.md }}>
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
                   {BREAK_TYPES.map((type: BreakType) => (
-                    <Chip key={type} label={type} onPress={() => run.mutate(() => startBreak(type), { onSuccess: () => toast.info(`${type} started`) })} />
+                    <Chip
+                      key={type}
+                      label={type}
+                      disabled={run.isPending}
+                      onPress={() => run.mutate(() => startBreak(type), { onSuccess: () => toast.info(`${type} started`) })}
+                    />
                   ))}
                 </View>
                 <Text variant="caption" tone="muted">

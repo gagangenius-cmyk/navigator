@@ -20,17 +20,19 @@ interface ChipProps {
   selected?: boolean;
   onPress: () => void;
   count?: number;
+  disabled?: boolean;
 }
 
 /** A tappable filter pill. */
-export function Chip({ label, selected = false, onPress, count }: ChipProps) {
+export function Chip({ label, selected = false, onPress, count, disabled = false }: ChipProps) {
   const { colors, radius, spacing } = useTheme();
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityState={{ selected }}
+      accessibilityState={{ selected, disabled }}
       accessibilityLabel={count !== undefined ? `${label}, ${count}` : label}
       onPress={onPress}
+      disabled={disabled}
       // The pill is 34pt tall; the slop brings its tap target up to the 44pt minimum.
       hitSlop={{ top: 5, bottom: 5 }}
       style={[
@@ -40,6 +42,7 @@ export function Chip({ label, selected = false, onPress, count }: ChipProps) {
           borderColor: selected ? colors.primary : colors.border,
           borderRadius: radius.pill,
           paddingHorizontal: spacing.md,
+          opacity: disabled ? 0.5 : 1,
         },
       ]}
     >
