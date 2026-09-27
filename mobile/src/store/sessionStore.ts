@@ -172,7 +172,14 @@ export const useSessionStore = create<SessionState>((set, get) => {
         if (transient && cachedUser) {
           set({ status: 'signedIn', user: cachedUser, offlineBoot: true });
         } else if (get().status === 'booting') {
-          set({ status: 'signedOut', user: null });
+          // Anything other than a transient/offline failure means this device's stored
+          // session is no longer good (e.g. a 403 from a deactivated account - the only
+          // case that already ran a full signOut() is a 401 inside refreshOnce() above).
+          // A bare status flip left the old refresh token, cached profile and persisted
+          // query cache on disk, so the next person to sign in on this device would
+          // briefly see the previous user's cached leads/approvals/balances/profile
+          // under the same generic (non-user-scoped) query keys.
+          await signOut({ remote: false });
         }
       }
     },
