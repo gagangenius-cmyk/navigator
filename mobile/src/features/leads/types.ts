@@ -156,7 +156,7 @@ export interface PoolLead {
   poolMinutesWaiting: number | null;
 }
 
-export type LeadView = 'leads' | 'my-leads' | 'clients';
+export type LeadView = 'leads' | 'my-leads' | 'clients' | 'my-clients';
 
 export interface LeadFilters {
   search?: string;

@@ -12,19 +12,21 @@ import { LeadCard } from '../components/LeadCard';
 import { useLeadList, useLeadStatuses } from '../hooks';
 import type { LeadListItem, LeadView } from '../types';
 
-export function LeadListScreen({ view: fixedView }: { view?: LeadView } = {}) {
+export function LeadListScreen({ mode = 'leads' }: { mode?: 'leads' | 'clients' } = {}) {
   const navigation = useNavigation<NavigationProp<AppStackParamList>>();
   const user = useSessionStore(selectUser);
   const { colors, spacing } = useTheme();
+  const isClientsMode = mode === 'clients';
 
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState<string | null>(null);
-  // Counselors only ever see their own leads (the server scopes it); everyone else can
-  // switch between the whole book and just their own.
-  const [view, setView] = useState<LeadView>('leads');
-  const activeView = fixedView ?? view;
-  const canSwitchView = !fixedView && !isCounsellor(user);
-  const canCreate = canAccess('LeadForm', user) && !fixedView;
+  // Counselors only ever see their own leads/clients (the server scopes it automatically);
+  // everyone else (Branch Manager, Regional Manager, CEO/company-wide roles) can switch
+  // between everything they can see and just their own.
+  const [scopeToMe, setScopeToMe] = useState(false);
+  const activeView: LeadView = isClientsMode ? (scopeToMe ? 'my-clients' : 'clients') : scopeToMe ? 'my-leads' : 'leads';
+  const canSwitchView = !isCounsellor(user);
+  const canCreate = canAccess('LeadForm', user) && !isClientsMode;
 
   const debouncedSearch = useDebouncedValue(search);
   const statuses = useLeadStatuses();
@@ -54,20 +56,30 @@ export function LeadListScreen({ view: fixedView }: { view?: LeadView } = {}) {
         </View>
         {canSwitchView ? (
           <SegmentedControl
-            options={[
-              { value: 'leads', label: 'All leads' },
-              { value: 'my-leads', label: 'My leads' },
-            ]}
-            value={view}
-            onChange={setView}
+            options={
+              isClientsMode
+                ? [
+                    { value: 'all', label: 'All clients' },
+                    { value: 'mine', label: 'My clients' },
+                  ]
+                : [
+                    { value: 'all', label: 'All leads' },
+                    { value: 'mine', label: 'My leads' },
+                  ]
+            }
+            value={scopeToMe ? 'mine' : 'all'}
+            onChange={(v) => setScopeToMe(v === 'mine')}
           />
         ) : null}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-          <Chip label="All" selected={status === null} onPress={() => setStatus(null)} />
-          {statusOptions.map((name) => (
-            <Chip key={name} label={name} selected={status === name} onPress={() => setStatus(status === name ? null : name)} />
-          ))}
-        </ScrollView>
+        {/* Lead statuses (New, Contacted, ...) don't apply once a lead has become a client. */}
+        {!isClientsMode ? (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+            <Chip label="All" selected={status === null} onPress={() => setStatus(null)} />
+            {statusOptions.map((name) => (
+              <Chip key={name} label={name} selected={status === name} onPress={() => setStatus(status === name ? null : name)} />
+            ))}
+          </ScrollView>
+        ) : null}
         {first ? <CachedBanner fromCache={first.fromCache} syncedAt={first.syncedAt} /> : null}
       </View>
 
@@ -114,4 +126,4 @@ const styles = StyleSheet.create({
 export const LeadsTabScreen = () => <LeadListScreen />;
 
 /** Clients (converted leads) reuse the lead list with the server's `clients` view. */
-export const ClientsScreen = () => <LeadListScreen view="clients" />;
+export const ClientsScreen = () => <LeadListScreen mode="clients" />;

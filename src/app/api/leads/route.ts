@@ -251,10 +251,18 @@ export async function GET(request: NextRequest) {
       whereConditions.push(`NOT ${HAS_OPP_SQL}`)
       whereConditions.push('(l.Counsilor = ? OR l.assignTo = ?)')
       replacements.push(currentUser.id, currentUser.id)
-    } else if (opportunityView === 'clients') {
+    } else if (opportunityView === 'clients' || opportunityView === 'my-clients') {
       whereConditions.push(HAS_OPP_SQL)
       whereConditions.push(CLIENT_STATUS_SQL)
-      if (isBranchManager) {
+      // 'my-clients' narrows to the caller's own clients regardless of their broader
+      // visibility (branch/region/company) - the mobile app's Clients screen offers this
+      // as a toggle for Branch Manager/CEO tiers, who otherwise default to seeing every
+      // client in their scope. Counselors already only ever see their own via the
+      // !canViewAll branch below, so 'my-clients' is equivalent to plain 'clients' for them.
+      if (opportunityView === 'my-clients') {
+        whereConditions.push(`(l.Counsilor = ? OR l.assignTo = ? OR EXISTS (SELECT 1 FROM crm_opportunities o WHERE o.leadId = l.id AND o.is_deleted = 0 AND (o.assignedTo = ? OR o.createdBy = ?)))`)
+        replacements.push(currentUser.id, currentUser.id, currentUser.id, currentUser.id)
+      } else if (isBranchManager) {
         whereConditions.push('l.branch = ?')
         replacements.push(currentUser.branch)
       } else if (isRegionalManager) {
