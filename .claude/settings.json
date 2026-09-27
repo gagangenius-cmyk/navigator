@@ -167,11 +167,17 @@
       "Bash(rm -rf /d/m/android/app/build/intermediates/assets/release/mergeReleaseAssets)",
       "Bash(rm -rf /d/m/android/app/build/intermediates/compressed_assets/release/compressReleaseAssets)",
       "Bash(rm -rf /d/m/android/app/build/intermediates/sourcemaps/react)",
-      "Bash(xargs -n1 basename)"
+      "Bash(xargs -n1 basename)",
+      "Bash(export MSYS_NO_PATHCONV=1)",
+      "Bash(mkdir -p /tmp/arm_check)",
+      "Bash(unzip -o -q \"D:\\\\m\\\\android\\\\app\\\\build\\\\outputs\\\\apk\\\\release\\\\app-release.apk\" assets/index.android.bundle -d .)",
+      "Bash(/d/android-build/sdk/platform-tools/adb.exe emu *)",
+      "Bash(echo \"tracked=$?\")"
     ],
     "additionalDirectories": [
       "d:\\xampp\\htdocs\\dm-next\\src\\app\\api\\admin\\roles\\[id]",
-      "D:\\xampp\\htdocs\\dm-next"
+      "D:\\xampp\\htdocs\\dm-next",
+      "\\tmp"
     ]
   },
   "hooks": {
