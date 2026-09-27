@@ -348,9 +348,16 @@ export async function PUT(request: NextRequest) {
 
       if (reassignmentData && (reassignmentData as any[]).length > 0) {
         const reassign = (reassignmentData as any)[0];
-        
+
+        const [priorOwnerRows] = await sequelize.query(
+          'SELECT assignTo FROM crm_forum_leads WHERE id = ? LIMIT 1',
+          { replacements: [reassign.leadId] }
+        );
+        const priorOwner = (priorOwnerRows as any[])[0]?.assignTo;
+        const oldAssignTo = priorOwner !== null && priorOwner !== undefined ? Number(priorOwner) : null;
+
         await sequelize.query(`
-          UPDATE crm_forum_leads 
+          UPDATE crm_forum_leads
           SET assignTo = ?, Counsilor = ?, last_updated = ?, last_updtd_time = ?, status = ?
           WHERE id = ?
         `, {
@@ -362,6 +369,17 @@ export async function PUT(request: NextRequest) {
             reassign.newStatus,
             reassign.leadId
           ]
+        });
+
+        // Approving a reassignment moved the lead without stamping the
+        // assigned-since date, logging it, or telling the new owner - the
+        // shared helper does all three (and never throws).
+        await recordLeadAssignment({
+          leadId: Number(reassign.leadId),
+          oldAssignTo,
+          newAssignTo: reassign.toEmployeeId ? Number(reassign.toEmployeeId) : null,
+          actorId: auth.id,
+          actorRole: auth.roleName || auth.type,
         });
       }
     }

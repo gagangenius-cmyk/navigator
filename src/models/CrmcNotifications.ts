@@ -1,6 +1,7 @@
 import { DataTypes, Model, Optional } from 'sequelize';
 import { sequelize } from '../lib/sequelize';
 import { pushNotification } from '../lib/pusherServer';
+import { isPushEligible, sendMobilePush } from '../lib/mobilePush';
 
 export interface CrmcNotificationsAttributes {
   id: number;
@@ -113,7 +114,29 @@ CrmcNotifications.init(
       // every current and future path gets live delivery for free. No-ops
       // safely when Pusher isn't configured, and never throws — a push
       // failure must never roll back a notification that already exists.
-      async afterCreate(notification) {
+      async afterCreate(notification, options) {
+        // Native push for the mobile app (FCM/APNs). Only a handful of types
+        // are pushed (see src/lib/mobilePush.ts). When the notification is
+        // created inside a transaction (crm-workflow-service.ts), wait for the
+        // COMMIT so a rolled-back workflow step never pings a phone. Never
+        // throws; sendMobilePush swallows its own errors.
+        if (isPushEligible(notification.type)) {
+          const dispatch = () => sendMobilePush({
+            id: notification.id,
+            user_id: notification.user_id,
+            type: notification.type,
+            title: notification.title,
+            message: notification.message,
+            related_id: notification.related_id,
+            related_type: notification.related_type,
+          });
+          if (options?.transaction) {
+            options.transaction.afterCommit(() => { void dispatch(); });
+          } else {
+            await dispatch();
+          }
+        }
+
         try {
           await pushNotification(notification.user_id, {
             id: notification.id,

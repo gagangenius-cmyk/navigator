@@ -294,7 +294,10 @@ export async function POST(request: NextRequest) {
     );
     const clientName = leadRow ? `${leadRow.fname || ''} ${leadRow.lname || ''}`.trim() : `Lead #${body.leadId}`;
     const discountNotification = {
-      type: 'discount_requested',
+      // Auto-approved discounts (no sign-off needed) are informational; only a
+      // genuine pending request is type 'discount_requested', which is what the
+      // mobile app pushes to the CEO with [Approve]/[Reject] (lib/mobilePush.ts).
+      type: isAutoApproved ? 'discount_auto_approved' : 'discount_requested',
       title: isAutoApproved ? `Discount auto-approved (0-${thresholds.autoMaxPercent}%)` : 'Discount approval requested',
       message: isAutoApproved
         ? `${clientName || `Lead #${body.leadId}`} received a ${discountAmount} ${branchCurrency.currencyCode} discount (${discountTierLabel(tier, thresholds)}) — no approval was required.`

@@ -4,6 +4,7 @@ import { sequelize, connectDB } from '@/lib/sequelize';
 import { requireAuth, isAuthError } from '@/lib/apiAuth';
 import { isFoeOrBranchManagerOrCeo, isBranchManagerOrCeo, isCeo } from '@/lib/roleChecks';
 import { logLeadRemark } from '@/lib/leadRemarks';
+import { notifyLeadAssigned } from '@/lib/notify';
 import { resolveLeadReferenceId } from '@/lib/leadReferenceResolver';
 import { resolveBranchReference } from '@/lib/branchResolver';
 import { CrmcFollowUpReminders } from '@/models/CrmcFollowUpReminders';
@@ -569,6 +570,16 @@ export async function PUT(
         actorId: auth.id,
         actorRole: auth.roleName || auth.type,
       });
+
+      // This path writes its own assignment history (above) instead of going
+      // through recordLeadAssignment, so it never told the new owner. A failed
+      // alert must not fail an edit that already saved.
+      await notifyLeadAssigned({
+        leadId: Number(id),
+        newAssignTo,
+        actorId: auth.id,
+        actorLabel,
+      }).catch((error) => console.error('Failed to notify new lead owner:', error));
     }
 
     if (statusChanged) {

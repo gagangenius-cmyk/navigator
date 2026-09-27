@@ -4,6 +4,7 @@ import { QueryTypes } from 'sequelize';
 import { verifyToken } from '@/lib/auth';
 import { isCeo } from '@/lib/roleChecks';
 import { notifyMetaLeadQuality } from '@/lib/meta/lead-quality-feedback';
+import { recordLeadAssignment } from '@/lib/leadRemarks';
 
 const ALLOWED_FIELDS = new Set([
   'status', 'priority', 'lead_quality', 'assignTo', 'branch', 'region',
@@ -64,8 +65,9 @@ export async function PUT(
       payTotal: number | string | null;
       discount: number | string | null;
       paidYet: number | string | null;
+      assignTo: number | string | null;
     }>(
-      'SELECT payTotal, discount, paidYet FROM crm_forum_leads WHERE id = ? LIMIT 1',
+      'SELECT payTotal, discount, paidYet, assignTo FROM crm_forum_leads WHERE id = ? LIMIT 1',
       { replacements: [id], type: QueryTypes.SELECT },
     );
     if (!existing) return NextResponse.json({ error: 'Lead not found' }, { status: 404 });
@@ -97,6 +99,21 @@ export async function PUT(
       `UPDATE crm_forum_leads SET ${setClauses} WHERE id = ?`,
       { replacements: values, type: QueryTypes.UPDATE }
     );
+
+    // assignTo is an allowed quick-edit field, but this path never stamped the
+    // assigned-since date, logged the change, or told the new owner.
+    if (updates.assignTo !== undefined) {
+      const oldAssignTo = existing.assignTo !== null && existing.assignTo !== undefined ? Number(existing.assignTo) : null;
+      const rawNew = updates.assignTo;
+      const newAssignTo = rawNew === null || rawNew === '' ? null : Number(rawNew);
+      await recordLeadAssignment({
+        leadId: id,
+        oldAssignTo,
+        newAssignTo: newAssignTo !== null && Number.isFinite(newAssignTo) ? newAssignTo : null,
+        actorId: currentUser.id,
+        actorRole: currentUser.roleName || currentUser.type,
+      });
+    }
 
     const [updated] = await sequelize.query(
       'SELECT id, fname, lname, status, priority, lead_quality, payTotal, discount, paidYet, payBalance FROM crm_forum_leads WHERE id = ? LIMIT 1',

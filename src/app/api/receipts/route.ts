@@ -6,7 +6,7 @@ import { requireAuth, isAuthError } from '@/lib/apiAuth';
 import { isBranchManagerOrCeo, isCeo } from '@/lib/roleChecks';
 import { branchCurrencyError, resolveBranchCurrency } from '@/lib/branchCurrency';
 import { formatDocumentNumber, formatReceiptNumber } from '@/lib/documentNumbering';
-import { notifyRole } from '@/lib/notify';
+import { notifyCeo, notifyRole } from '@/lib/notify';
 import { getAdminFeeAmount } from '@/lib/receiptTemplate';
 import { ensurePayHistoryAdminFeeColumns } from '@/lib/ensurePayHistoryAdminFeeColumns';
 import { ensureClientActualNameColumn } from '@/lib/ensureClientActualNameColumn';
@@ -452,6 +452,18 @@ export async function POST(request: NextRequest) {
     await notifyRole({
       roleType: 'accountant',
       branchId,
+      type: 'payment_submission',
+      title: 'Payment submitted for verification',
+      message: `Receipt ${receiptNumber} (${branchCurrency.currencyCode} ${paidAmount}) for ${lead.fname} ${lead.lname} is awaiting accounts verification.`,
+      priority: 'medium',
+      link: `/admin/leads/${lead.id}/edit`,
+      relatedId: lead.id,
+      relatedType: 'lead',
+    });
+
+    // The CEO oversees Accounts approvals too, and the notifyRole above only
+    // reaches the legacy 'accountant' role type (see notifyCeo in lib/notify).
+    await notifyCeo({
       type: 'payment_submission',
       title: 'Payment submitted for verification',
       message: `Receipt ${receiptNumber} (${branchCurrency.currencyCode} ${paidAmount}) for ${lead.fname} ${lead.lname} is awaiting accounts verification.`,

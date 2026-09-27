@@ -49,7 +49,10 @@ export async function verifyPassword(password: string, hashedPassword: string): 
   return bcrypt.compare(password, hashedPassword)
 }
 
-export function generateToken(user: User): string {
+// `expiresIn` defaults to the web session lifetime. The mobile app passes a
+// short access-token TTL (see src/lib/mobileAuth.ts) and keeps its session
+// alive with rotating refresh tokens instead of one 24h token.
+export function generateToken(user: User, expiresIn: jwt.SignOptions['expiresIn'] = '24h'): string {
   return jwt.sign(
     {
       id: user.id,
@@ -65,7 +68,7 @@ export function generateToken(user: User): string {
       permissions: user.permissions
     },
     JWT_SECRET,
-    { expiresIn: '24h' }
+    { expiresIn }
   )
 }
 

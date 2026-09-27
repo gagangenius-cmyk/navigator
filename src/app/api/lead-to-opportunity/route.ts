@@ -8,7 +8,7 @@ import { resolveBranchExchangeRate } from '@/lib/exchangeRate';
 import { getBranchTaxInfo } from '@/lib/branchTax';
 import { renderAgreementForBranch } from '@/lib/renderAgreementForBranch';
 import { formatDocumentNumber, formatReceiptNumber } from '@/lib/documentNumbering';
-import { notifyRole } from '@/lib/notify';
+import { notifyCeo, notifyRole } from '@/lib/notify';
 import { logAudit } from '@/lib/auditLog';
 import { deriveProductTypeFromLabel } from '@/lib/clientPortalProducts';
 import { getAdminFeeAmount } from '@/lib/receiptTemplate';
@@ -1186,6 +1186,18 @@ export async function POST(request: NextRequest) {
     await notifyRole({
       roleType: 'accountant',
       branchId,
+      type: 'payment_submission',
+      title: 'Payment submitted for verification',
+      message: `Payment ${paymentNumber} for ${clientName} is awaiting accounts verification.`,
+      priority: 'medium',
+      link: `/admin/leads/${leadId}/edit`,
+      relatedId: leadId,
+      relatedType: 'lead',
+    });
+
+    // Same alert to the CEO (notifyRole above only reaches the legacy
+    // 'accountant' role type). Deduped against /api/receipts by notifyCeo.
+    await notifyCeo({
       type: 'payment_submission',
       title: 'Payment submitted for verification',
       message: `Payment ${paymentNumber} for ${clientName} is awaiting accounts verification.`,
