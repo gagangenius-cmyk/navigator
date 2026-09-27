@@ -105,7 +105,15 @@ export function LeadListScreen({ mode = 'leads' }: { mode?: 'leads' | 'clients' 
           ListEmptyComponent={
             <EmptyState
               icon="people-outline"
-              title={debouncedSearch || status ? 'No matching leads' : 'No leads yet'}
+              title={
+                debouncedSearch || status
+                  ? isClientsMode
+                    ? 'No matching clients'
+                    : 'No matching leads'
+                  : isClientsMode
+                    ? 'No clients yet'
+                    : 'No leads yet'
+              }
               message={debouncedSearch || status ? 'Try a different search or filter.' : undefined}
             />
           }
