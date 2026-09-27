@@ -177,7 +177,9 @@
       "Bash(mkdir -p /tmp/arm_check2)",
       "Bash(rm -f /d/android-build/out/NavigatorCRM-arm64-fixed.apk)",
       "Bash(cp /d/m/android/app/build/outputs/apk/release/app-release.apk /d/android-build/out/NavigatorCRM-arm64-fixed.apk)",
-      "Bash(npx expo *)"
+      "Bash(npx expo *)",
+      "Bash(./gradlew.bat assembleRelease -PreactNativeArchitectures=x86_64 --no-daemon --max-workers=2)",
+      "Bash(node -e \"const p=require\\('./package.json'\\); console.log\\('expo:', p.dependencies.expo\\)\")"
     ],
     "additionalDirectories": [
       "d:\\xampp\\htdocs\\dm-next\\src\\app\\api\\admin\\roles\\[id]",
