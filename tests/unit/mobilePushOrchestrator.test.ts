@@ -82,6 +82,7 @@ describe('sendMobilePush', () => {
   });
 
   it('carries the real lead facts, the category, the channel and the unread badge', async () => {
+    process.env.MOBILE_PUSH_REDACT = 'false';
     await sendMobilePush(source());
     const payload = sendAndroidPush.mock.calls[0][1];
 
@@ -137,6 +138,7 @@ describe('sendMobilePush', () => {
   });
 
   it('builds the approval payloads with the exact record id for the confirm sheet', async () => {
+    process.env.MOBILE_PUSH_REDACT = 'false';
     query.mockImplementation(async (sql: string) =>
       sql.includes('COUNT(*)')
         ? [{ total: 1 }]

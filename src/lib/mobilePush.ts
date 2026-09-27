@@ -153,7 +153,11 @@ export async function sendMobilePush(source: PushSource): Promise<void> {
     const devices = await getActiveMobileDevices(source.user_id);
     if (!devices.length) return;
 
-    const redact = process.env.MOBILE_PUSH_REDACT === 'true';
+    // Secure by default: redact unless explicitly turned off. Push content is an
+    // OS-level surface (iOS renders it straight to the lock screen) that isn't
+    // gated by the app's own auth/biometric lock, so an unset env var must not
+    // mean "show client names, phone numbers and amounts to anyone near the phone".
+    const redact = process.env.MOBILE_PUSH_REDACT !== 'false';
     // All four push types are keyed by the lead; related_type is 'lead' for each.
     const leadId = source.related_type === 'lead' ? source.related_id : null;
     const [facts, badge] = await Promise.all([loadPushFacts(source.type, leadId), unreadCount(source.user_id)]);

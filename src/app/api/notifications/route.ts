@@ -136,15 +136,28 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { userId, type, title, message, priority, relatedId, relatedType, link } = body;
 
-    if (!userId || !type || !title || !message) {
+    if (!type || !title || !message) {
       return NextResponse.json(
-        { error: 'Missing required fields: userId, type, title, message' },
+        { error: 'Missing required fields: type, title, message' },
         { status: 400 }
       );
     }
 
+    // No caller creates notifications for someone else today, and this route
+    // now also triggers real mobile push delivery (see CrmcNotifications
+    // afterCreate) - an attacker-supplied userId/relatedId used to let any
+    // authenticated employee push an arbitrary, real-looking notification
+    // (with genuine client PII pulled via relatedId) to any other employee's
+    // phone. Only self-notifications are allowed here.
+    if (userId !== undefined && Number(userId) !== auth.id) {
+      return NextResponse.json(
+        { error: 'Cannot create a notification for another user' },
+        { status: 403 }
+      );
+    }
+
     const notification = await CrmcNotifications.create({
-      user_id: parseInt(userId),
+      user_id: auth.id,
       type,
       title,
       message,

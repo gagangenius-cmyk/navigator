@@ -74,7 +74,12 @@ export function generateToken(user: User, expiresIn: jwt.SignOptions['expiresIn'
 
 export function verifyToken(token: string): User | null {
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as User
+    const decoded = jwt.verify(token, JWT_SECRET) as User & { purpose?: string }
+    // Reject any special-purpose token (e.g. the MFA-pending token below) here,
+    // at the one function every requireAuth() call funnels through - otherwise
+    // a token minted for a narrow purpose would authenticate as a full session
+    // on any route that doesn't itself re-check `purpose`.
+    if (decoded.purpose) return null
     return decoded
   } catch {
     return null
@@ -85,8 +90,8 @@ export function verifyToken(token: string): User | null {
 // verified" (see src/app/api/auth/login/route.ts and
 // src/app/api/auth/verify-mfa/route.ts). Deliberately separate from the real
 // session token/cookie so a caller can never skip the MFA step by reusing
-// this token as if it were `auth-token` — verifyToken() below only accepts
-// tokens without a `purpose`, and requireAuth() reads `auth-token` alone.
+// this token as if it were `auth-token` — verifyToken() above rejects any
+// token carrying a `purpose`, and requireAuth() reads `auth-token` alone.
 const MFA_PENDING_PURPOSE = 'mfa-pending'
 
 export function generateMfaPendingToken(employeeId: number): string {
