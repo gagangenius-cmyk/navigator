@@ -154,7 +154,7 @@ npm run prebuild:android # validates the config plugins (Firebase, SQLCipher, no
 | build env | `GOOGLE_SERVICES_FILE`, `EAS_PROJECT_ID` | Firebase config, EAS project |
 
 **Placeholders to replace before shipping:** bundle id `com.globalnavigator.crm`, the EAS project id, and the app
-icon / splash artwork. Every profile in `eas.json` points at `https://navigatorcrm-one.vercel.app`; change it there if
+icon / splash artwork. Every profile in `eas.json` points at `https://navigatorcrm.online`; change it there if
 staging and production ever get separate hosts. The images in `assets/` are
 generated from the web app's 507 px `public/logo.png`, so they are a little soft at icon sizes: supply the
 vector/high-resolution brand artwork before a store release.
@@ -218,7 +218,7 @@ set GRADLE_USER_HOME=D:\android-build\gradle-home
 set NODE_ENV=production
 set APP_ENV=preview
 set EXPO_PUBLIC_APP_ENV=preview
-set EXPO_PUBLIC_API_URL=https://navigatorcrm-one.vercel.app
+set EXPO_PUBLIC_API_URL=https://navigatorcrm.online
 
 cd D:\m
 npx expo prebuild --platform android --no-install --clean
@@ -228,7 +228,7 @@ gradlew.bat assembleRelease -PreactNativeArchitectures=arm64-v8a --no-daemon --m
 
 The APK is `android\app\build\outputs\apk\release\app-release.apk`. Install it with `adb install -r app-release.apk`, or
 copy it to the phone and open it (allow installs from that source). It already talks to
-`https://navigatorcrm-one.vercel.app`; use the **Server** button on the login screen only to point it somewhere else.
+`https://navigatorcrm.online`; use the **Server** button on the login screen only to point it somewhere else.
 
 - `arm64-v8a` covers virtually every phone since 2017 and keeps the build short and small. Use `x86_64` for an emulator.
 - `--no-daemon --max-workers=2` keep memory use low on an 8 GB machine.
