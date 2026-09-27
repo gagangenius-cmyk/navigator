@@ -10,6 +10,8 @@ export interface LeadFormValues {
   lname: string;
   email: string;
   phone: string;
+  service_interest?: string;
+  country_interest?: string;
 }
 
 export type LeadFormErrors = Partial<Record<keyof LeadFormValues, string>>;

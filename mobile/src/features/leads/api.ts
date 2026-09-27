@@ -8,6 +8,7 @@ import type {
   LeadFilters,
   LeadListItem,
   LeadStatusOption,
+  LookupOption,
   PoolLead,
 } from './types';
 
@@ -42,6 +43,16 @@ export async function fetchLeadStatuses(): Promise<LeadStatusOption[]> {
   return response.data ?? [];
 }
 
+/** Programs (a.k.a. services) a lead can be interested in - crm_service, active only. */
+export function fetchServices(): Promise<LookupOption[]> {
+  return api.get<LookupOption[]>('/api/services');
+}
+
+/** Countries a lead can be interested in - crm_country_proces, active only. */
+export function fetchCountries(): Promise<LookupOption[]> {
+  return api.get<LookupOption[]>('/api/countries');
+}
+
 export interface CreateLeadInput {
   fname: string;
   lname: string;
@@ -49,6 +60,8 @@ export interface CreateLeadInput {
   phone: string;
   priority?: string;
   notes?: string;
+  service_interest?: string;
+  country_interest?: string;
 }
 
 export interface CreatedLead extends Partial<LeadListItem> {
@@ -70,6 +83,8 @@ export function createLead(input: CreateLeadInput, user: SessionUser): Promise<C
       phone: input.phone.trim(),
       priority: input.priority,
       lead_remark: input.notes?.trim() || undefined,
+      service_interest: input.service_interest,
+      country_interest: input.country_interest,
       branch: user.branch,
       assignTo: user.id,
     },
@@ -77,7 +92,10 @@ export function createLead(input: CreateLeadInput, user: SessionUser): Promise<C
   );
 }
 
-export function updateLead(id: number, patch: Partial<Pick<CreateLeadInput, 'fname' | 'lname' | 'email' | 'phone' | 'priority'>>): Promise<unknown> {
+export function updateLead(
+  id: number,
+  patch: Partial<Pick<CreateLeadInput, 'fname' | 'lname' | 'email' | 'phone' | 'priority' | 'service_interest' | 'country_interest'>>,
+): Promise<unknown> {
   return api.put(`/api/leads/${id}`, patch, { requires: ['leads.update', 'leads.create'] });
 }
 

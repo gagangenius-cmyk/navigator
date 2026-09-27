@@ -9,6 +9,8 @@ export const queryKeys = {
   leadActivity: (id: number) => ['leads', 'activity', id] as const,
   leadStatuses: ['lead-statuses'] as const,
   leadFilterOptions: ['lead-filter-options'] as const,
+  services: ['services'] as const,
+  countries: ['countries'] as const,
   leadPool: ['lead-pool'] as const,
   clients: ['clients'] as const,
   employees: ['employees'] as const,

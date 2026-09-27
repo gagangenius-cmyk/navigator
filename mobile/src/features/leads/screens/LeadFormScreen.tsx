@@ -11,7 +11,7 @@ import { selectUser, useSessionStore } from '@/store/sessionStore';
 import { toast } from '@/store/uiStore';
 import { useTheme } from '@/theme/ThemeProvider';
 import { createLead, updateLead } from '../api';
-import { useLead } from '../hooks';
+import { useCountries, useLead, useServices } from '../hooks';
 import { hasErrors, validateLeadForm, type LeadFormErrors, type LeadFormValues } from '../leadValidation';
 import { PRIORITIES, type LeadDetail } from '../types';
 
@@ -55,6 +55,14 @@ function LeadFormBody({ editingId, initial }: { editingId?: number; initial?: Le
     phone: initial?.mobile || initial?.phone || '',
   }));
   const [priority, setPriority] = useState<string | undefined>(initial?.priority ?? undefined);
+  const [serviceInterest, setServiceInterest] = useState<string | undefined>(
+    initial?.service_interest != null ? String(initial.service_interest) : undefined,
+  );
+  const [countryInterest, setCountryInterest] = useState<string | undefined>(
+    initial?.country_interest != null ? String(initial.country_interest) : undefined,
+  );
+  const services = useServices();
+  const countries = useCountries();
   const [notes, setNotes] = useState('');
   const [errors, setErrors] = useState<LeadFormErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
@@ -66,10 +74,10 @@ function LeadFormBody({ editingId, initial }: { editingId?: number; initial?: Le
   const save = useMutation({
     mutationFn: async () => {
       if (editingId) {
-        await updateLead(editingId, { ...values, priority });
+        await updateLead(editingId, { ...values, priority, service_interest: serviceInterest, country_interest: countryInterest });
         return editingId;
       }
-      const created = await createLead({ ...values, priority, notes }, user!);
+      const created = await createLead({ ...values, priority, notes, service_interest: serviceInterest, country_interest: countryInterest }, user!);
       return created.id;
     },
     onSuccess: (id) => {
@@ -167,6 +175,24 @@ function LeadFormBody({ editingId, initial }: { editingId?: number; initial?: Le
           value={priority}
           onSelect={(p) => setPriority(priority === p ? undefined : p)}
         />
+
+        {services.data?.length ? (
+          <ChipGroup
+            label="Program"
+            options={services.data.map((s) => ({ value: String(s.id), label: s.name }))}
+            value={serviceInterest}
+            onSelect={(v) => setServiceInterest(serviceInterest === v ? undefined : v)}
+          />
+        ) : null}
+
+        {countries.data?.length ? (
+          <ChipGroup
+            label="Country"
+            options={countries.data.map((c) => ({ value: String(c.id), label: c.name }))}
+            value={countryInterest}
+            onSelect={(v) => setCountryInterest(countryInterest === v ? undefined : v)}
+          />
+        ) : null}
 
         {!editingId ? <Input label="Notes (optional)" value={notes} onChangeText={setNotes} multiline editable={!save.isPending} /> : null}
 

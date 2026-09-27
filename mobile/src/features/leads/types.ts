@@ -35,6 +35,10 @@ export interface LeadListItem {
 
 /** GET /api/leads/[id]: the lead row (l.*) plus joined labels. */
 export interface LeadDetail extends LeadListItem {
+  // Raw ids behind service_interest_label/country_interest_label - the labels are for
+  // display, these are what the edit form needs to preselect the right chip.
+  service_interest: string | number | null;
+  country_interest: string | number | null;
   mname: string | null;
   nationality: string | null;
   address: string | null;
@@ -48,6 +52,12 @@ export interface LeadDetail extends LeadListItem {
   discount: number | string | null;
   agreement_number: string | null;
   campaign?: string | null;
+}
+
+/** A row of GET /api/services or GET /api/countries. */
+export interface LookupOption {
+  id: number;
+  name: string;
 }
 
 export interface LeadStatusOption {

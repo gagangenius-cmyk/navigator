@@ -17,6 +17,8 @@ import {
   fetchLeadPool,
   fetchLeads,
   fetchLeadStatuses,
+  fetchServices,
+  fetchCountries,
   actOnFollowUp,
   type AppointmentFilter,
   type CreateFollowUpInput,
@@ -36,6 +38,48 @@ export function useLeadStatuses() {
       } catch (error) {
         if (isNetworkError(error)) {
           const hit = await cacheGet<Awaited<ReturnType<typeof fetchLeadStatuses>>>('lead-statuses');
+          if (hit) return hit.data;
+        }
+        throw error;
+      }
+    },
+    staleTime: 10 * 60_000,
+  });
+}
+
+/** Programs a lead can be interested in - rarely changes, so cached like lead statuses. */
+export function useServices() {
+  return useQuery({
+    queryKey: queryKeys.services,
+    queryFn: async () => {
+      try {
+        const data = await fetchServices();
+        void cacheSet('services', data);
+        return data;
+      } catch (error) {
+        if (isNetworkError(error)) {
+          const hit = await cacheGet<Awaited<ReturnType<typeof fetchServices>>>('services');
+          if (hit) return hit.data;
+        }
+        throw error;
+      }
+    },
+    staleTime: 10 * 60_000,
+  });
+}
+
+/** Countries a lead can be interested in - same caching as useServices. */
+export function useCountries() {
+  return useQuery({
+    queryKey: queryKeys.countries,
+    queryFn: async () => {
+      try {
+        const data = await fetchCountries();
+        void cacheSet('countries', data);
+        return data;
+      } catch (error) {
+        if (isNetworkError(error)) {
+          const hit = await cacheGet<Awaited<ReturnType<typeof fetchCountries>>>('countries');
           if (hit) return hit.data;
         }
         throw error;
