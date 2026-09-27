@@ -28,3 +28,34 @@ export interface SubmitPaymentResult {
     lead: { id: number; name: string | null };
   };
 }
+
+/** The 3 mandatory document categories the web wizard's Documents stage requires,
+ * plus the signed agreement itself - matches crm_opportunity_documents.category. */
+export type DocumentCategory = 'id_proof' | 'passport' | 'counsellor_sheet' | 'signed_agreement';
+
+export const DOCUMENT_CATEGORIES: { value: DocumentCategory; label: string }[] = [
+  { value: 'id_proof', label: 'ID proof' },
+  { value: 'passport', label: 'Passport copy' },
+  { value: 'counsellor_sheet', label: 'Counsellor sheet' },
+];
+
+/** A row of GET /api/opportunity-documents?opportunityId=... */
+export interface OpportunityDocument {
+  id: number;
+  opportunityId: number;
+  category: DocumentCategory | string;
+  documentName: string;
+  filePath: string;
+  status: string;
+  uploadDate: string;
+}
+
+export interface SubmitComplianceInput {
+  leadId: number;
+  opportunityId: number;
+  signedAgreementUrl: string;
+  clientSignature?: string;
+  /** ISO date. */
+  signatureDate?: string;
+  conversationSummary?: string;
+}

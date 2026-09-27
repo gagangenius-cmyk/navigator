@@ -31,6 +31,7 @@ export const ROUTE_ACCESS: Partial<Record<RouteName, AccessRule>> = {
   Clients: { permissions: ['clients.view'] },
   Balances: { permissions: ['leads.view', 'finance.view', 'payments.view'] },
   PaymentSubmission: { permissions: ['leads.update', 'leads.create'] },
+  OpportunityDocuments: { permissions: ['documents.view', 'documents.create', 'agreements.create'] },
 
   Approvals: { predicate: canSeeApprovals },
   ConfirmDecision: { predicate: canSeeApprovals },

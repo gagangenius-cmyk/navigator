@@ -1,6 +1,6 @@
 import { api } from '@/services/api/client';
 import { uploadFile, type PickedFile } from '@/services/api/upload';
-import type { SubmitPaymentInput, SubmitPaymentResult } from './types';
+import type { DocumentCategory, OpportunityDocument, SubmitComplianceInput, SubmitPaymentInput, SubmitPaymentResult } from './types';
 
 /**
  * Uploads proof of payment for a lead that doesn't have an opportunity yet (the
@@ -41,5 +41,42 @@ export function submitPayment(input: SubmitPaymentInput): Promise<SubmitPaymentR
       },
     },
     { requires: ['leads.view'] },
+  );
+}
+
+export function fetchOpportunityDocuments(opportunityId: number): Promise<OpportunityDocument[]> {
+  return api.get<OpportunityDocument[]>('/api/opportunity-documents', {
+    query: { opportunityId },
+    requires: ['documents.view'],
+  });
+}
+
+/**
+ * Mirrors the web wizard's Documents/Signed-Agreement stages - unlike the payment
+ * proof (uploaded before any opportunity exists), an opportunity id is already known
+ * here, so this goes through the same server-side multipart endpoint the web app uses.
+ */
+export function uploadOpportunityDocument(opportunityId: number, category: DocumentCategory, file: PickedFile): Promise<OpportunityDocument> {
+  return uploadFile<OpportunityDocument>('/api/opportunity-documents', file, {
+    opportunityId: String(opportunityId),
+    category,
+    documentName: file.name,
+    required: 'true',
+  });
+}
+
+/** Compliance stage: submits the signed agreement for CEO/compliance review. */
+export function submitForCompliance(input: SubmitComplianceInput): Promise<{ success: boolean; data: { id: number } }> {
+  return api.post(
+    '/api/opportunity-compliance-approvals',
+    {
+      leadId: input.leadId,
+      opportunityId: input.opportunityId,
+      signedAgreementUrl: input.signedAgreementUrl,
+      clientSignature: input.clientSignature || undefined,
+      signatureDate: input.signatureDate || undefined,
+      conversationSummary: input.conversationSummary || undefined,
+    },
+    { requires: ['agreements.create'] },
   );
 }

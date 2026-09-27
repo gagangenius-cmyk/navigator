@@ -199,6 +199,14 @@ export function LeadDetailScreen() {
                 Compliance: {lead.compliance_reason}
               </Text>
             ) : null}
+            {hasPermission(user, 'documents.create', 'agreements.create') ? (
+              <Button
+                title="Documents & agreement"
+                variant="outline"
+                size="sm"
+                onPress={() => navigation.navigate('OpportunityDocuments', { leadId: lead.id, opportunityId: lead.resolved_opportunity_id! })}
+              />
+            ) : null}
           </View>
         </Card>
       ) : hasPermission(user, 'leads.update', 'leads.create') ? (

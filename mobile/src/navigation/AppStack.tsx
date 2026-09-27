@@ -13,6 +13,7 @@ import { LeadDetailScreen } from '@/features/leads/screens/LeadDetailScreen';
 import { LeadFormScreen } from '@/features/leads/screens/LeadFormScreen';
 import { ClientsScreen } from '@/features/leads/screens/LeadListScreen';
 import { LeadPoolScreen } from '@/features/leads/screens/LeadPoolScreen';
+import { OpportunityDocumentsScreen } from '@/features/opportunities/screens/OpportunityDocumentsScreen';
 import { PaymentSubmissionScreen } from '@/features/opportunities/screens/PaymentSubmissionScreen';
 import { ProfileScreen } from '@/features/profile/screens/ProfileScreen';
 import { SettingsScreen } from '@/features/profile/screens/SettingsScreen';
@@ -33,6 +34,7 @@ const Screens = {
   Clients: withAccess('Clients', ClientsScreen),
   Balances: withAccess('Balances', BalancesScreen),
   PaymentSubmission: withAccess('PaymentSubmission', PaymentSubmissionScreen),
+  OpportunityDocuments: withAccess('OpportunityDocuments', OpportunityDocumentsScreen),
   ConfirmDecision: withAccess('ConfirmDecision', ConfirmDecisionScreen),
   Payslips: withAccess('Payslips', PayslipsScreen),
   ItTickets: withAccess('ItTickets', ItTicketsScreen),
@@ -60,6 +62,7 @@ export function AppStack() {
       <Stack.Screen name="Clients" component={Screens.Clients} options={{ title: 'Clients' }} />
       <Stack.Screen name="Balances" component={Screens.Balances} options={{ title: 'Outstanding balances' }} />
       <Stack.Screen name="PaymentSubmission" component={Screens.PaymentSubmission} options={{ title: 'Submit payment' }} />
+      <Stack.Screen name="OpportunityDocuments" component={Screens.OpportunityDocuments} options={{ title: 'Documents' }} />
       <Stack.Screen name="ConfirmDecision" component={Screens.ConfirmDecision} options={{ title: 'Confirm decision', presentation: 'modal' }} />
       <Stack.Screen name="Attendance" component={AttendanceScreen} options={{ title: 'Attendance' }} />
       <Stack.Screen name="TeamAttendance" component={Screens.TeamAttendance} options={{ title: 'Team attendance' }} />
