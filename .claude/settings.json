@@ -127,7 +127,10 @@
       "Bash(grep -v \"^index.ts$\")",
       "Bash(gh auth *)",
       "Bash(gh repo *)",
-      "Bash(git ls-remote *)"
+      "Bash(git ls-remote *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git stash *)",
+      "Bash(git reset *)"
     ],
     "additionalDirectories": [
       "d:\\xampp\\htdocs\\dm-next\\src\\app\\api\\admin\\roles\\[id]",
