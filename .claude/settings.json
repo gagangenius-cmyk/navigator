@@ -176,7 +176,8 @@
       "Bash(rm -rf /tmp/arm_check2)",
       "Bash(mkdir -p /tmp/arm_check2)",
       "Bash(rm -f /d/android-build/out/NavigatorCRM-arm64-fixed.apk)",
-      "Bash(cp /d/m/android/app/build/outputs/apk/release/app-release.apk /d/android-build/out/NavigatorCRM-arm64-fixed.apk)"
+      "Bash(cp /d/m/android/app/build/outputs/apk/release/app-release.apk /d/android-build/out/NavigatorCRM-arm64-fixed.apk)",
+      "Bash(npx expo *)"
     ],
     "additionalDirectories": [
       "d:\\xampp\\htdocs\\dm-next\\src\\app\\api\\admin\\roles\\[id]",
