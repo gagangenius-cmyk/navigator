@@ -134,7 +134,13 @@
       "Bash(npx vercel *)",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" https://navigatorcrm.online/api/mobile/config)",
       "Bash(chmod +x \"C:\\\\Users\\\\97154\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\d--xampp-htdocs-navigator-next\\\\11d01fa8-9d7e-4fb9-94ea-1aac2521da21\\\\scratchpad\\\\smoke-test-mobile.sh\")",
-      "Bash(npx jest *)"
+      "Bash(npx jest *)",
+      "PowerShell(cmdkey /delete:LegacyGeneric:target=git:https://github.com)",
+      "Bash(curl -s -o /dev/null -w \"root: %{http_code}\\\\n\" https://navigator-8go4hgim4-navigator10.vercel.app/)",
+      "Bash(curl -s -o /dev/null -w \"mobile config: %{http_code}\\\\n\" https://navigator-8go4hgim4-navigator10.vercel.app/api/mobile/config)",
+      "Bash(curl -s https://navigator-8go4hgim4-navigator10.vercel.app/api/mobile/config)",
+      "Bash(curl -s -w \"\\\\nHTTP:%{http_code}\\\\n\" https://navigatorcrm.online/api/mobile/config)",
+      "Bash(curl -s -I https://navigatorcrm.online/api/mobile/config)"
     ],
     "additionalDirectories": [
       "d:\\xampp\\htdocs\\dm-next\\src\\app\\api\\admin\\roles\\[id]",
