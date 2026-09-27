@@ -107,7 +107,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     }
 
     const [existingResult] = await sequelize.query(`
-      SELECT id, leadId, opportunityId, discountedAmount, discountAmount, originalAmount, requestedBy, is_deleted FROM crm_discount_approvals WHERE id = ?
+      SELECT id, leadId, opportunityId, discountedAmount, discountAmount, originalAmount, requestedBy, is_deleted, status FROM crm_discount_approvals WHERE id = ?
     `, {
       replacements: [discountId]
     });
@@ -127,6 +127,16 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     if (['approved', 'rejected'].includes(body.status) && existingForAuth.is_deleted) {
       return NextResponse.json(
         { success: false, error: 'This discount request was replaced by a correction and can no longer be approved or rejected.' },
+        { status: 409 }
+      );
+    }
+
+    // Without this, two reviewers (or one double-tapping / retrying after a timeout) can
+    // both act on the same request, re-sending the approval notification and letting an
+    // already-approved/rejected discount be silently flipped again with no error.
+    if (['approved', 'rejected'].includes(body.status) && existingForAuth.status !== 'pending') {
+      return NextResponse.json(
+        { success: false, error: `This discount request was already ${existingForAuth.status} - it can't be reviewed again.` },
         { status: 409 }
       );
     }

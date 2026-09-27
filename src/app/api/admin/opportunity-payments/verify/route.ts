@@ -49,15 +49,25 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Status must be verified or rejected' }, { status: 400 });
     }
 
-    const [linkedOpportunity] = await sequelize.query<{ isDeleted: number }>(
-      `SELECT o.is_deleted AS isDeleted
+    const [linkedOpportunity] = await sequelize.query<{ isDeleted: number; accountantStatus: string | null }>(
+      `SELECT o.is_deleted AS isDeleted, COALESCE(p.accountantStatus, 'pending') AS accountantStatus
        FROM crm_opportunity_payments p
        LEFT JOIN crm_opportunities o ON o.id = p.opportunityId
        WHERE p.id = :paymentId LIMIT 1`,
       { replacements: { paymentId }, type: QueryTypes.SELECT }
     );
-    if (linkedOpportunity?.isDeleted) {
+    if (!linkedOpportunity) {
+      return NextResponse.json({ error: 'Payment not found.' }, { status: 404 });
+    }
+    if (linkedOpportunity.isDeleted) {
       return NextResponse.json({ error: 'This payment belongs to an opportunity that no longer exists.' }, { status: 409 });
+    }
+    // Without this, two Accounts reviewers (or one double-tapping / retrying after a
+    // timeout) can both act on the same payment - re-notifying the counselor, re-running
+    // the workflow-gate update, and even flipping an already-verified payment to rejected
+    // (or back) with no error either time.
+    if (linkedOpportunity.accountantStatus !== 'pending') {
+      return NextResponse.json({ error: `This payment was already ${linkedOpportunity.accountantStatus} - it can't be reviewed again.` }, { status: 409 });
     }
 
     // Update payment status

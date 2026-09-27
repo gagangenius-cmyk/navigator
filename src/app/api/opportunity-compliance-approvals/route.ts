@@ -274,6 +274,23 @@ export async function PUT(request: NextRequest) {
       );
     }
 
+    // Without this, two reviewers (or one double-tapping / retrying after a timeout) can
+    // both act on the same signed agreement, re-sending the sign-off notification and
+    // letting an already-approved/rejected review be silently flipped again with no error.
+    if (['approved', 'rejected'].includes(body.status)) {
+      const [currentRows] = await sequelize.query(
+        `SELECT status FROM crm_opportunity_compliance_approvals WHERE id = ?`,
+        { replacements: [id] }
+      );
+      const currentStatus = (currentRows as any[])[0]?.status;
+      if (currentStatus && currentStatus !== 'pending') {
+        return NextResponse.json(
+          { success: false, error: `This compliance review was already ${currentStatus} - it can't be reviewed again.` },
+          { status: 409 }
+        );
+      }
+    }
+
     // There's no dedicated "compliance officer" role/permission in this codebase
     // (see the POST handler's notifyRole comment above) — Branch Manager and CEO
     // are the documented fallback reviewers, so approve/reject is gated
