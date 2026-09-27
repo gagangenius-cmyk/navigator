@@ -5,6 +5,7 @@ import { ChangePasswordScreen } from '@/features/auth/screens/ChangePasswordScre
 import { AttendanceScreen } from '@/features/hr/screens/AttendanceScreen';
 import { LeaveScreen } from '@/features/hr/screens/LeaveScreen';
 import { PayslipsScreen } from '@/features/hr/screens/PayslipsScreen';
+import { TeamAttendanceScreen } from '@/features/hr/screens/TeamAttendanceScreen';
 import { ItTicketsScreen } from '@/features/it-support/screens/ItTicketsScreen';
 import { AppointmentsScreen } from '@/features/leads/screens/AppointmentsScreen';
 import { FollowUpsScreen } from '@/features/leads/screens/FollowUpsScreen';
@@ -33,6 +34,7 @@ const Screens = {
   ConfirmDecision: withAccess('ConfirmDecision', ConfirmDecisionScreen),
   Payslips: withAccess('Payslips', PayslipsScreen),
   ItTickets: withAccess('ItTickets', ItTicketsScreen),
+  TeamAttendance: withAccess('TeamAttendance', TeamAttendanceScreen),
 };
 
 export function AppStack() {
@@ -57,6 +59,7 @@ export function AppStack() {
       <Stack.Screen name="Balances" component={Screens.Balances} options={{ title: 'Outstanding balances' }} />
       <Stack.Screen name="ConfirmDecision" component={Screens.ConfirmDecision} options={{ title: 'Confirm decision', presentation: 'modal' }} />
       <Stack.Screen name="Attendance" component={AttendanceScreen} options={{ title: 'Attendance' }} />
+      <Stack.Screen name="TeamAttendance" component={Screens.TeamAttendance} options={{ title: 'Team attendance' }} />
       <Stack.Screen name="Leave" component={LeaveScreen} options={{ title: 'Leave' }} />
       <Stack.Screen name="Payslips" component={Screens.Payslips} options={{ title: 'Payslips' }} />
       <Stack.Screen name="ItTickets" component={Screens.ItTickets} options={{ title: 'IT support' }} />

@@ -30,6 +30,30 @@ export function fetchAttendance(limit = 14): Promise<AttendanceResponse> {
   return api.get<AttendanceResponse>('/api/hr/self/attendance', { query: { limit } });
 }
 
+export interface TeamAttendanceRow {
+  attendance_id: string;
+  employee_id: string;
+  employee_name: string | null;
+  date: string;
+  check_in: string | null;
+  check_out: string | null;
+  status: string;
+  overtime_hours: number | null;
+  notes: string | null;
+}
+
+/**
+ * Company/branch-wide attendance for CEO and HR (hr.view or hr.reports.attendance) -
+ * scoped server-side to the caller's branch unless they can view all branches.
+ */
+export async function fetchTeamAttendance(dateFrom: string, dateTo: string): Promise<TeamAttendanceRow[]> {
+  const response = await api.get<{ data: TeamAttendanceRow[] }>('/api/admin/hr/attendance', {
+    query: { date_from: dateFrom, date_to: dateTo, limit: 200 },
+    requires: ['hr.view', 'hr.reports.attendance'],
+  });
+  return response.data ?? [];
+}
+
 export function clockIn(): Promise<unknown> {
   return api.post('/api/hr/self/attendance', { action: 'clock-in' });
 }

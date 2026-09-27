@@ -25,6 +25,7 @@ export type AppStackParamList = {
   Balances: undefined;
   ConfirmDecision: { approval: ApprovalKind; decision: 'approve' | 'reject'; recordId: string; leadId?: number };
   Attendance: undefined;
+  TeamAttendance: undefined;
   Leave: undefined;
   Payslips: undefined;
   ItTickets: undefined;

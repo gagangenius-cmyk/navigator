@@ -36,6 +36,7 @@ export const ROUTE_ACCESS: Partial<Record<RouteName, AccessRule>> = {
 
   Payslips: { permissions: ['hr.self', 'hr.payroll'] },
   ItTickets: { permissions: ['it.self'] },
+  TeamAttendance: { permissions: ['hr.view', 'hr.reports.attendance'] },
   // Home, Notifications, More, Profile, Settings, Attendance, Leave: any signed-in user.
 };
 

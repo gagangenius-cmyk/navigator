@@ -29,6 +29,7 @@ const SECTIONS: { title: string; items: MenuItem[] }[] = [
     title: 'Me at work',
     items: [
       { route: 'Attendance', access: 'Attendance', icon: 'time', title: 'Attendance', subtitle: 'Clock in, breaks, history' },
+      { route: 'TeamAttendance', access: 'TeamAttendance', icon: 'people', title: 'Team attendance', subtitle: 'Who is in today' },
       { route: 'Leave', access: 'Leave', icon: 'airplane', title: 'Leave' },
       { route: 'Payslips', access: 'Payslips', icon: 'document-text', title: 'Payslips' },
       { route: 'ItTickets', access: 'ItTickets', icon: 'hardware-chip', title: 'IT support' },
