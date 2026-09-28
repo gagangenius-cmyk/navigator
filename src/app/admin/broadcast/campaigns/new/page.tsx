@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -183,7 +184,11 @@ export default function NewCampaignPage() {
                   ))}
                 </SelectContent>
               </Select>
-              {segments.length === 0 && <span className="text-xs text-[var(--cmg-muted)]">No segments yet - create one via POST /api/broadcast/segments first.</span>}
+              {segments.length === 0 && (
+                <span className="text-xs text-[var(--cmg-muted)]">
+                  No segments yet - <Link href="/admin/broadcast/segments/new" className="text-[var(--cmg-blue)] hover:underline">create one</Link> first.
+                </span>
+              )}
             </label>
             <div className="flex justify-end">
               <Button disabled={!name.trim() || !segmentId} onClick={() => setStep('template')}>Next: Template</Button>

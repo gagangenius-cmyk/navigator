@@ -1,6 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 interface SegmentRow {
@@ -36,12 +38,14 @@ export default function SegmentsPage() {
 
   return (
     <div className="flex flex-col gap-4 p-3 lg:p-4">
-      <div>
-        <h1 className="text-2xl font-semibold text-[var(--cmg-ink)]">Audience Segments</h1>
-        <p className="text-sm text-[var(--cmg-muted)]">
-          Saved lead filters used to target broadcast campaigns. Create one via the Segments API
-          (<code>POST /api/broadcast/segments</code>) — a visual segment builder is not built yet.
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold text-[var(--cmg-ink)]">Audience Segments</h1>
+          <p className="text-sm text-[var(--cmg-muted)]">Saved lead filters used to target broadcast campaigns.</p>
+        </div>
+        <Link href="/admin/broadcast/segments/new">
+          <Button>New segment</Button>
+        </Link>
       </div>
 
       <Card>
@@ -65,7 +69,11 @@ export default function SegmentsPage() {
               <tbody>
                 {segments.map((segment) => (
                   <tr key={segment.id} className="border-b border-[var(--cmg-border)]/50 last:border-0">
-                    <td className="py-2 pr-4 font-medium">{segment.name}</td>
+                    <td className="py-2 pr-4">
+                      <Link href={`/admin/broadcast/segments/${segment.id}`} className="font-medium text-[var(--cmg-blue)] hover:underline">
+                        {segment.name}
+                      </Link>
+                    </td>
                     <td className="py-2 pr-4">{segment.isShared ? 'Yes' : 'No'}</td>
                     <td className="py-2 pr-4">{segment.lastEstimatedCount ?? '—'}</td>
                     <td className="py-2 pr-4 text-[var(--cmg-muted)]">

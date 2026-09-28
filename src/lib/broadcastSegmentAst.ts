@@ -1,34 +1,15 @@
 import { z } from 'zod';
 import { Op, type WhereOptions } from 'sequelize';
+import { SEGMENT_FIELD_ALLOWLIST, SEGMENT_OPERATORS_BY_TYPE as OPERATORS_BY_TYPE, type SegmentField } from './broadcastSegmentFields';
 
 // Validated filter AST for crm_contact_segments.filter_ast
 // (docs/broadcast-architecture.md). Never raw SQL from the client - every
-// field name is checked against SEGMENT_FIELD_ALLOWLIST below before it can
-// reach a query, and every operator maps to a fixed Sequelize Op, so there
-// is no path from a segment definition to arbitrary SQL injection.
+// field name is checked against SEGMENT_FIELD_ALLOWLIST (src/lib/broadcastSegmentFields.ts)
+// below before it can reach a query, and every operator maps to a fixed
+// Sequelize Op, so there is no path from a segment definition to arbitrary
+// SQL injection.
 
-// Columns on crm_forum_leads (src/models/CrmcForumLeads.ts) that a segment
-// may filter on, with the operators that make sense for their type. Kept
-// deliberately small for Phase 3's first cut - extend this list (never
-// bypass it) as real campaign use cases need more fields.
-export const SEGMENT_FIELD_ALLOWLIST = {
-  branch: { column: 'branch', type: 'number' },
-  region: { column: 'region', type: 'number' },
-  status: { column: 'status', type: 'string' },
-  assignTo: { column: 'assignTo', type: 'number' },
-  opportunity_status: { column: 'opportunity_status', type: 'string' },
-  qualification_score: { column: 'qualification_score', type: 'number' },
-  created: { column: 'created', type: 'date' },
-  next_followup_date: { column: 'next_followup_date', type: 'date' },
-} as const;
-
-export type SegmentField = keyof typeof SEGMENT_FIELD_ALLOWLIST;
-
-const OPERATORS_BY_TYPE: Record<string, string[]> = {
-  string: ['eq', 'neq', 'contains', 'in', 'is_null', 'is_not_null'],
-  number: ['eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'in', 'is_null', 'is_not_null'],
-  date: ['eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'is_null', 'is_not_null'],
-};
+export { SEGMENT_FIELD_ALLOWLIST, type SegmentField };
 
 const conditionSchema = z.object({
   field: z.enum(Object.keys(SEGMENT_FIELD_ALLOWLIST) as [SegmentField, ...SegmentField[]]),
