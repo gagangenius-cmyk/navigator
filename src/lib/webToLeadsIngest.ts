@@ -20,6 +20,7 @@ import { logLeadRemark, recordLeadAssignment } from '@/lib/leadRemarks';
 import { resolveLeadReferenceId } from '@/lib/leadReferenceResolver';
 import { resolveBranchReference } from '@/lib/branchResolver';
 import { resolveLeadAssignment } from '@/lib/assignmentRuleEngine';
+import { fireLeadCreatedTrigger, fireFormSubmittedTrigger } from '@/lib/workflowTriggers';
 
 export interface WebToLeadsIngestResult {
   success: boolean;
@@ -286,6 +287,15 @@ export async function ingestWebToLead(
   } as unknown as CreationAttributes<CrmcForumLeads>;
 
   const lead = await (CrmcForumLeads as any).create(leadPayload);
+
+  // This endpoint predates insertLeadRecord() (src/lib/leadDefaults.ts) and
+  // has its own INSERT (via CrmcForumLeads.create above) rather than routing
+  // through it - fire-and-forget both triggers here directly so leads
+  // created via web-to-leads/Meta Lead Ads/Contact Form 7 aren't silently
+  // invisible to trigger.lead_created and trigger.form_submitted workflows,
+  // same as leads created through insertLeadRecord() already are.
+  void fireLeadCreatedTrigger(lead.id, branch.id);
+  void fireFormSubmittedTrigger(lead.id, 'web-to-leads');
 
   // Stamps transfer_date/transfer_time/transfered/transfered_by (the
   // "assigned since" audit fields every other assignment path relies on),

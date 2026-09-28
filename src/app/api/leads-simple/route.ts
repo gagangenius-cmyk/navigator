@@ -5,6 +5,7 @@ import { recordLeadAssignment } from '@/lib/leadRemarks';
 import { verifyToken } from '@/lib/auth';
 import { QueryTypes } from 'sequelize';
 import { checkForDuplicate, findExistingLead } from '@/lib/duplicateLeadCheck';
+import { fireLeadCreatedTrigger } from '@/lib/workflowTriggers';
 
 export async function POST(request: NextRequest) {
   try {
@@ -165,6 +166,12 @@ export async function POST(request: NextRequest) {
       actorId: currentUser.id,
       actorRole: currentUser.roleName || currentUser.type,
     });
+
+    // This endpoint has its own INSERT (above) rather than going through
+    // insertLeadRecord() (src/lib/leadDefaults.ts) - fire trigger.lead_created
+    // directly here too, or leads quick-added from LeadManagement.tsx would
+    // be silently invisible to every trigger.lead_created workflow.
+    void fireLeadCreatedTrigger(leadId, assignment.branchId);
 
     // Get the created lead
     const [newLead] = await sequelize.query(`

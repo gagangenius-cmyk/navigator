@@ -8,6 +8,7 @@ import { recordLeadAssignment } from '@/lib/leadRemarks';
 import { checkForDuplicate } from '@/lib/duplicateLeadCheck';
 import { buildDefaultLeadData, insertLeadRecord } from '@/lib/leadDefaults';
 import { captureError } from '@/lib/errorTracking';
+import { fireFormSubmittedTrigger } from '@/lib/workflowTriggers';
 
 export async function POST(request: NextRequest) {
   try {
@@ -101,6 +102,9 @@ export async function POST(request: NextRequest) {
     if (leadId && assignToId) {
       await recordLeadAssignment({ leadId, oldAssignTo: null, newAssignTo: assignToId, actorId: null, actorRole: 'System (lead intake)' });
     }
+    // insertLeadRecord() already fires trigger.lead_created - this endpoint
+    // is also a distinct form-submission source, so fire that trigger too.
+    if (leadId) void fireFormSubmittedTrigger(leadId, 'lead-intake');
     return NextResponse.json({
       success: true,
       leadId,

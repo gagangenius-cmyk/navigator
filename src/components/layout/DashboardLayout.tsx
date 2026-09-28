@@ -303,6 +303,19 @@ const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
       ]
     },
     {
+      // Distinct from the legacy 'Campaigns' (crm_campaigns) and
+      // 'Email Templates' (crm_email_templates) items above - those stay on
+      // their own simple tables. See docs/broadcast-architecture.md.
+      title: 'Broadcast Center',
+      items: [
+        { name: 'Templates', href: '/admin/broadcast/templates', icon: Mail, permission: 'templates.manage' },
+        { name: 'Segments', href: '/admin/broadcast/segments', icon: MessageSquare, permission: 'campaigns.manage' },
+        { name: 'Campaigns', href: '/admin/broadcast/campaigns', icon: Send, permission: 'campaigns.manage' },
+        { name: 'Workflows', href: '/admin/broadcast/workflows', icon: Route, permission: 'workflows.manage' },
+        { name: 'Analytics', href: '/admin/broadcast/analytics', icon: BarChart3, permissions: ['campaigns.manage', 'workflows.manage'] },
+      ]
+    },
+    {
       title: 'Configuration',
       items: [
         { name: 'Programs', href: '/admin/programs', icon: Target, permission: 'programs.manage' },

@@ -1,6 +1,7 @@
 import { QueryTypes, Transaction } from 'sequelize';
 import { sequelize } from './sequelize';
 import { CACHE_TAGS, invalidateReportCaches } from './reportCache';
+import { fireLeadCreatedTrigger } from './workflowTriggers';
 
 // crm_forum_leads has ~65 NOT-NULL-no-default columns (a legacy schema with
 // no DEFAULT clauses at all on most fields). Every INSERT into it must
@@ -243,5 +244,13 @@ export async function insertLeadRecord(leadData: LeadData, transaction?: Transac
   // invalidation, never stale data.
   invalidateReportCaches([CACHE_TAGS.leads]);
 
-  return getInsertId(insertResult);
+  const insertId = getInsertId(insertResult);
+
+  // Fire-and-forget, same reasoning as invalidateReportCaches above - see
+  // src/lib/workflowTriggers.ts for exactly which lead-creation paths this
+  // does and doesn't cover (not 100% of them yet) and why a workflow
+  // automation failure must never affect the lead-creation response.
+  void fireLeadCreatedTrigger(insertId, leadData.branch);
+
+  return insertId;
 }

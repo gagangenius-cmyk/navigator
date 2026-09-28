@@ -12,6 +12,7 @@ import { ensureClientActualNameColumn } from '@/lib/ensureClientActualNameColumn
 import { isFinanceAndComplianceApproved, APPROVAL_REQUIRED_ERROR, CLIENT_STATUS_VALUES } from '@/lib/opportunityApprovalGate';
 import { CACHE_TAGS, invalidateReportCaches } from '@/lib/reportCache';
 import { notifyMetaLeadQuality } from '@/lib/meta/lead-quality-feedback';
+import { fireLeadUpdatedTrigger, fireStageChangedTrigger } from '@/lib/workflowTriggers';
 
 let dbInitialized = false;
 
@@ -430,15 +431,23 @@ export async function PUT(
 
     const updateFields: string[] = [];
     const updateValues: unknown[] = [];
+    // Fields whose stored value is actually changing by this request - not
+    // just fields the request happened to include (re-saving an unchanged
+    // value must not fire trigger.lead_updated). Compared against
+    // existingLead's own raw value with loose string equality since this
+    // request's values (form input) and the DB's stored values don't always
+    // share a JS type (e.g. a numeric id vs the same value as a string).
+    const changedFields = new Set<string>();
 
     for (const [rawKey, value] of Object.entries(data)) {
       const key = aliases[rawKey] || rawKey;
       if (key === 'id' || !editableFields.has(key) || value === undefined) continue;
       updateFields.push(`${key} = ?`);
       const normalizedValue = normalizeLeadUpdateValue(key, value);
+      let resolvedValue: unknown;
       if (key === 'country_interest' || key === 'service_interest' || key === 'market_source') {
         try {
-          updateValues.push(await resolveLeadReferenceId(key, normalizedValue));
+          resolvedValue = await resolveLeadReferenceId(key, normalizedValue);
         } catch (error) {
           return NextResponse.json(
             { error: error instanceof Error ? error.message : 'Invalid lead reference value' },
@@ -453,9 +462,14 @@ export async function PUT(
             { status: 422 }
           );
         }
-        updateValues.push(branch.id);
+        resolvedValue = branch.id;
       } else {
-        updateValues.push(normalizedValue);
+        resolvedValue = normalizedValue;
+      }
+      updateValues.push(resolvedValue);
+      const existingValue = (existingLead as Record<string, unknown>)[key];
+      if (String(existingValue ?? '') !== String(resolvedValue ?? '')) {
+        changedFields.add(key);
       }
     }
 
@@ -620,6 +634,13 @@ export async function PUT(
         actorId: auth.id,
         actorRole: auth.roleName || auth.type,
       });
+      // Fire-and-forget, same reasoning as notifyLeadAssigned above - a
+      // workflow automation failure must never fail a lead edit that already saved.
+      void fireStageChangedTrigger(Number(id), existingStatus || null, incomingStatus as string);
+    }
+
+    if (changedFields.size > 0) {
+      void fireLeadUpdatedTrigger(Number(id), [...changedFields]);
     }
 
     // Reports the CRM's assessment of this lead back to Meta via the

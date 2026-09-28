@@ -64,10 +64,16 @@ async function recordDelivery(recipient: string, subject: string, status: 'sent'
   }
 }
 
-export async function sendEmail({ to, subject, html, attachments }: {
+export async function sendEmail({ to, subject, html, text, replyTo, attachments }: {
   to: string;
   subject: string;
   html: string;
+  // Optional plain-text alternative - added for the broadcast campaign
+  // sender (src/lib/broadcastWorker.ts), which the originating spec requires
+  // to always send one alongside HTML. Every existing call site keeps
+  // working unchanged since this is purely additive.
+  text?: string;
+  replyTo?: string;
   // Resend expects base64-encoded content per attachment - no encoding/mime handling here.
   attachments?: { filename: string; content: string }[];
 }) {
@@ -87,7 +93,15 @@ export async function sendEmail({ to, subject, html, attachments }: {
         Authorization: `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ from, to, subject, html, ...(attachments?.length ? { attachments } : {}) }),
+      body: JSON.stringify({
+        from,
+        to,
+        subject,
+        html,
+        ...(text ? { text } : {}),
+        ...(replyTo ? { reply_to: replyTo } : {}),
+        ...(attachments?.length ? { attachments } : {}),
+      }),
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Network error calling Resend';

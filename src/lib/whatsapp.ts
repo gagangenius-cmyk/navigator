@@ -138,6 +138,91 @@ export async function sendWhatsAppMessage({ to, message, actorId, leadId }: {
   return json;
 }
 
+// Sends an approved WhatsApp template message (Meta's "template" message
+// type), as opposed to sendWhatsAppMessage()'s plain text. This is the only
+// send path the Phase 3 broadcast worker (src/lib/broadcastWorker.ts) is
+// allowed to use for business-initiated campaigns, since a plain-text
+// message either requires an active 24h customer-service window (not true
+// for most broadcast recipients) or is rejected outright by Meta - and
+// docs/broadcast-architecture.md's compliance rule is explicit: "Never let
+// an unapproved WhatsApp template launch a business-initiated campaign."
+// Enforcing that a template is actually approved is the *caller's*
+// responsibility (see checkTemplateApprovedForLaunch in
+// src/lib/broadcastPreflight.ts) - this function only knows how to place
+// the API call once given the provider's own template name/language and
+// already-rendered component parameters; it does not look anything up.
+export async function sendWhatsAppTemplateMessage({
+  to,
+  templateName,
+  languageCode,
+  components,
+  actorId,
+  leadId,
+}: {
+  to: string;
+  /** The template's name exactly as registered with Meta (not this CRM's internal template id). */
+  templateName: string;
+  languageCode: string;
+  /** Meta's component-parameter array, e.g. [{ type: 'body', parameters: [{ type: 'text', text: 'Aisha' }] }]. */
+  components?: unknown[];
+  actorId?: number | null;
+  leadId?: number | null;
+}) {
+  const digits = to.replace(/\D/g, '');
+  const accessToken = process.env.WHATSAPP_ACCESS_TOKEN;
+  const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+  const logLabel = `[template:${templateName}]`;
+
+  if (!digits) {
+    const error = 'No valid phone number to send to';
+    void recordDelivery({ recipient: to, message: logLabel, status: 'failed', error, actorId, leadId });
+    throw new Error(error);
+  }
+
+  if (!accessToken || !phoneNumberId) {
+    const error = 'WHATSAPP_ACCESS_TOKEN / WHATSAPP_PHONE_NUMBER_ID are not configured';
+    void recordDelivery({ recipient: digits, message: logLabel, status: 'failed', error, actorId, leadId });
+    throw new Error(error);
+  }
+
+  let res: Response;
+  try {
+    res = await fetch(`https://graph.facebook.com/${GRAPH_API_VERSION}/${phoneNumberId}/messages`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        messaging_product: 'whatsapp',
+        to: digits,
+        type: 'template',
+        template: {
+          name: templateName,
+          language: { code: languageCode },
+          ...(components?.length ? { components } : {}),
+        },
+      }),
+    });
+  } catch (error) {
+    const errMessage = error instanceof Error ? error.message : 'Network error calling WhatsApp Cloud API';
+    void recordDelivery({ recipient: digits, message: logLabel, status: 'failed', error: errMessage, actorId, leadId });
+    throw error;
+  }
+
+  const json = await res.json().catch(() => null);
+
+  if (!res.ok) {
+    const errMessage = `WhatsApp Cloud API error: ${res.status} ${json?.error?.message || JSON.stringify(json)}`;
+    void recordDelivery({ recipient: digits, message: logLabel, status: 'failed', error: errMessage, actorId, leadId });
+    throw new Error(errMessage);
+  }
+
+  const providerMessageId = json?.messages?.[0]?.id ?? null;
+  void recordDelivery({ recipient: digits, message: logLabel, status: 'sent', providerMessageId, actorId, leadId });
+  return json;
+}
+
 export interface WhatsAppDeliveryLogEntry {
   id: number;
   recipient: string;

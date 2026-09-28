@@ -125,3 +125,37 @@ export function getRecordVisibilityScope(user: (RoleCheckUser & { role?: string 
   if (['regional_manager', 'rm'].includes(type)) return 'region';
   return 'own';
 }
+
+// "May this user act on this specific branch-scoped broadcast record" (a
+// campaign/template/workflow fetched by ID) - mirrors the branchId-or-null
+// scoping each of their own GET list routes already applies
+// (src/app/api/broadcast/{campaigns,templates,workflows}/route.ts), so a
+// single-ID route can't be used to reach a record that user's own list call
+// would never have returned in the first place. A null branchId is an
+// org-wide record (visible to everyone with the base permission, same as
+// the list routes' `[Op.or]: [auth.branch, null]`).
+export function canAccessBranchScopedRecord(
+  user: (RoleCheckUser & { role?: string | number | null; branch?: number | null }) | null | undefined,
+  record: { branchId?: number | null } | null | undefined
+): boolean {
+  if (!record) return false;
+  if (canViewAllBranches(user)) return true;
+  return record.branchId === null || record.branchId === undefined || record.branchId === user?.branch;
+}
+
+// "May this user use this specific contact segment" - mirrors
+// crm_contact_segments' own ownerId/isShared model
+// (src/models/CrmContactSegments.ts): full access for canViewAllBranches
+// roles, otherwise only the segment's owner or, if it was explicitly shared,
+// anyone in its branch. Shared by every route that dereferences a
+// segmentId, not just src/app/api/broadcast/segments/[id]/route.ts, so a
+// campaign can't be pointed at a private segment it has no business seeing.
+export function canAccessSegment(
+  user: (RoleCheckUser & { role?: string | number | null; branch?: number | null; id?: number | null }) | null | undefined,
+  segment: { ownerId?: number | null; isShared?: boolean | null; branchId?: number | null } | null | undefined
+): boolean {
+  if (!segment) return false;
+  if (canViewAllBranches(user)) return true;
+  if (segment.ownerId != null && segment.ownerId === user?.id) return true;
+  return Boolean(segment.isShared) && segment.branchId === user?.branch;
+}

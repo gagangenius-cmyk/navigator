@@ -10,7 +10,7 @@ interface CrmcForumLeadsRemarksAttributes {
   status: number;
 }
 
-interface CrmcForumLeadsRemarksCreationAttributes extends Optional<CrmcForumLeadsRemarksAttributes, 'date' | 'remark' | 'emp' | 'created'> {}
+interface CrmcForumLeadsRemarksCreationAttributes extends Optional<CrmcForumLeadsRemarksAttributes, 'id' | 'date' | 'remark' | 'emp' | 'created'> {}
 
 class CrmcForumLeadsRemarks extends Model<CrmcForumLeadsRemarksAttributes, CrmcForumLeadsRemarksCreationAttributes> implements CrmcForumLeadsRemarksAttributes {
   declare id: number;

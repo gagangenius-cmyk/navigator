@@ -87,6 +87,15 @@ export const canAccessAdminPath = (user: AccessUser | null | undefined, pathname
     { test: (value) => value === '/admin/discount-approvals' || value.startsWith('/admin/discount-approvals/'), permissions: ['sales.update', 'admin.access'] },
     { test: (value) => value === '/admin/lead-transfers', permissions: ['transfers.manage'] },
     { test: (value) => value === '/admin/lead-assignment-availability', permissions: ['sales.view', 'admin.access'] },
+
+    // Broadcast Center (docs/broadcast-architecture.md) - distinct from the
+    // legacy /admin/campaigns and /admin/email-templates pages, which stay
+    // on their own crm_campaigns/crm_email_templates tables untouched.
+    { test: (value) => value === '/admin/broadcast/templates' || value.startsWith('/admin/broadcast/templates/'), permissions: ['templates.manage'] },
+    { test: (value) => value === '/admin/broadcast/segments' || value.startsWith('/admin/broadcast/segments/'), permissions: ['campaigns.manage'] },
+    { test: (value) => value === '/admin/broadcast/campaigns' || value.startsWith('/admin/broadcast/campaigns/'), permissions: ['campaigns.manage'] },
+    { test: (value) => value === '/admin/broadcast/workflows' || value.startsWith('/admin/broadcast/workflows/'), permissions: ['workflows.manage'] },
+    { test: (value) => value === '/admin/broadcast/analytics', permissions: ['campaigns.manage', 'workflows.manage'] },
     { test: (value) => value === '/admin/immigration-tools' || value.startsWith('/admin/immigration-tools/'), permissions: ['leads.view'] },
 
     // Clients

@@ -86,6 +86,13 @@ const adminPermissions = [
   'marketing.manage',
   'campaigns.manage',
   'templates.manage',
+  // Visual workflow automation + conversational bot builder
+  // (docs/broadcast-architecture.md). Added alongside the routes that first
+  // need them (src/app/api/broadcast/workflows) rather than left unseeded,
+  // so Director of Sales (via fullAccessExceptDeletePermissions, derived
+  // from this same array below) can actually be granted them once assigned.
+  'workflows.manage',
+  'bots.manage',
   'b2b.manage',
   'employers.manage',
   'transfers.manage',

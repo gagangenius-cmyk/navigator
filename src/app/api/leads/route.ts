@@ -12,6 +12,7 @@ import { recordLeadAssignment, logLeadRemark } from '@/lib/leadRemarks'
 import { ensureClientActualNameColumn } from '@/lib/ensureClientActualNameColumn'
 import { buildDefaultLeadData, insertLeadRecord } from '@/lib/leadDefaults'
 import { captureError } from '@/lib/errorTracking'
+import { fireLeadCreatedTrigger } from '@/lib/workflowTriggers'
 import { checkRateLimit, recordFailedAttempt } from '@/lib/rateLimiter'
 import { ensureLeadScoreTable } from '@/lib/leadScore'
 import { checkDuplicatesWithAIInBackground } from '@/lib/duplicateAiCheck'
@@ -770,6 +771,13 @@ export async function POST(request: NextRequest) {
 
             const leadId = getInsertId(insertResult)
             if (!leadId) throw new Error('Lead was created but the new lead ID could not be resolved')
+
+            // This branch hand-writes its own INSERT (above) rather than
+            // going through insertLeadRecord() - see
+            // src/lib/workflowTriggers.ts's header comment - so fire the
+            // trigger directly here too, or bulk-imported leads would be
+            // silently invisible to every trigger.lead_created workflow.
+            void fireLeadCreatedTrigger(leadId, resolvedLeadData.branch)
 
             // Assigns the lead to the importer (stamps transfer_date/time,
             // flips 'untouched' -> 'New', logs a lead_assigned entry into

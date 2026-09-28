@@ -24,6 +24,17 @@ export async function register() {
 
     const { startMetaLeadsRetryCron } = await import('@/lib/meta-leads-retry-cron');
     await startMetaLeadsRetryCron();
+
+    // Broadcast/workflow automation (docs/broadcast-architecture.md)
+    // deliberately does NOT register a cron here, unlike every job above -
+    // its worker (BullMQ Workers + scheduler) runs as its own standalone
+    // process (`npm run worker`, see workers/index.ts), not inside the
+    // Next.js server. The spec this feature was built against is explicit
+    // that background workers must stay outside Vercel/serverless request
+    // handling, and instrumentation.ts's register() only reliably behaves
+    // like a long-lived process under `next start`/Docker - never under
+    // Vercel's actual serverless functions, where nothing here would keep
+    // polling between requests anyway.
   }
 }
 

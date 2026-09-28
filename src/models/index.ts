@@ -135,6 +135,29 @@ import { CrmContractAgreement } from './CrmContractAgreement';
 import { CrmContractReceipt } from './CrmContractReceipt';
 import { CrmContractPaymentSchedule } from './CrmContractPaymentSchedule';
 
+// Broadcast Center / Template Library / Visual Workflow Automation / Bot
+// Builder - see docs/broadcast-architecture.md.
+import { CrmMessagingIntegrations } from './CrmMessagingIntegrations';
+import { CrmContactChannelConsents } from './CrmContactChannelConsents';
+import { CrmContactConsentEvents } from './CrmContactConsentEvents';
+import { CrmMessageSuppressions } from './CrmMessageSuppressions';
+import { CrmContactSegments } from './CrmContactSegments';
+import { CrmMessageTemplates } from './CrmMessageTemplates';
+import { CrmMessageTemplateVersions } from './CrmMessageTemplateVersions';
+import { CrmMessageTemplateStatusEvents } from './CrmMessageTemplateStatusEvents';
+import { CrmBroadcastCampaigns } from './CrmBroadcastCampaigns';
+import { CrmBroadcastRecipients } from './CrmBroadcastRecipients';
+import { CrmBroadcastEvents } from './CrmBroadcastEvents';
+import { CrmWorkflowDefinitions } from './CrmWorkflowDefinitions';
+import { CrmWorkflowVersions } from './CrmWorkflowVersions';
+import { CrmWorkflowEnrollments } from './CrmWorkflowEnrollments';
+import { CrmWorkflowStepExecutions } from './CrmWorkflowStepExecutions';
+import { CrmWorkflowWaits } from './CrmWorkflowWaits';
+import { CrmBotSessions } from './CrmBotSessions';
+import { CrmBotMessages } from './CrmBotMessages';
+import { CrmAutomationOutbox } from './CrmAutomationOutbox';
+import { CrmAutomationAuditLogs } from './CrmAutomationAuditLogs';
+
 const models = {
   Appointments: Appointments,
   BranchTarget: BranchTarget,
@@ -266,6 +289,26 @@ const models = {
   CrmContractAgreement,
   CrmContractReceipt,
   CrmContractPaymentSchedule,
+  CrmMessagingIntegrations,
+  CrmContactChannelConsents,
+  CrmContactConsentEvents,
+  CrmMessageSuppressions,
+  CrmContactSegments,
+  CrmMessageTemplates,
+  CrmMessageTemplateVersions,
+  CrmMessageTemplateStatusEvents,
+  CrmBroadcastCampaigns,
+  CrmBroadcastRecipients,
+  CrmBroadcastEvents,
+  CrmWorkflowDefinitions,
+  CrmWorkflowVersions,
+  CrmWorkflowEnrollments,
+  CrmWorkflowStepExecutions,
+  CrmWorkflowWaits,
+  CrmBotSessions,
+  CrmBotMessages,
+  CrmAutomationOutbox,
+  CrmAutomationAuditLogs,
 };
 
 type ModelWithAssociate = {
@@ -478,3 +521,46 @@ export { CrmContractReceipt } from './CrmContractReceipt';
 export type { CrmContractReceiptAttributes, CrmContractReceiptCreationAttributes } from './CrmContractReceipt';
 export { CrmContractPaymentSchedule } from './CrmContractPaymentSchedule';
 export type { CrmContractPaymentScheduleAttributes, CrmContractPaymentScheduleCreationAttributes } from './CrmContractPaymentSchedule';
+
+// Broadcast Center / Template Library / Visual Workflow Automation / Bot
+// Builder - see docs/broadcast-architecture.md.
+export { CrmMessagingIntegrations } from './CrmMessagingIntegrations';
+export type { CrmMessagingIntegrationsAttributes, CrmMessagingIntegrationsCreationAttributes } from './CrmMessagingIntegrations';
+export { CrmContactChannelConsents } from './CrmContactChannelConsents';
+export type { CrmContactChannelConsentsAttributes, CrmContactChannelConsentsCreationAttributes } from './CrmContactChannelConsents';
+export { CrmContactConsentEvents } from './CrmContactConsentEvents';
+export type { CrmContactConsentEventsAttributes, CrmContactConsentEventsCreationAttributes } from './CrmContactConsentEvents';
+export { CrmMessageSuppressions } from './CrmMessageSuppressions';
+export type { CrmMessageSuppressionsAttributes, CrmMessageSuppressionsCreationAttributes } from './CrmMessageSuppressions';
+export { CrmContactSegments } from './CrmContactSegments';
+export type { CrmContactSegmentsAttributes, CrmContactSegmentsCreationAttributes } from './CrmContactSegments';
+export { CrmMessageTemplates } from './CrmMessageTemplates';
+export type { CrmMessageTemplatesAttributes, CrmMessageTemplatesCreationAttributes } from './CrmMessageTemplates';
+export { CrmMessageTemplateVersions } from './CrmMessageTemplateVersions';
+export type { CrmMessageTemplateVersionsAttributes, CrmMessageTemplateVersionsCreationAttributes } from './CrmMessageTemplateVersions';
+export { CrmMessageTemplateStatusEvents } from './CrmMessageTemplateStatusEvents';
+export type { CrmMessageTemplateStatusEventsAttributes, CrmMessageTemplateStatusEventsCreationAttributes } from './CrmMessageTemplateStatusEvents';
+export { CrmBroadcastCampaigns } from './CrmBroadcastCampaigns';
+export type { CrmBroadcastCampaignsAttributes, CrmBroadcastCampaignsCreationAttributes } from './CrmBroadcastCampaigns';
+export { CrmBroadcastRecipients } from './CrmBroadcastRecipients';
+export type { CrmBroadcastRecipientsAttributes, CrmBroadcastRecipientsCreationAttributes } from './CrmBroadcastRecipients';
+export { CrmBroadcastEvents } from './CrmBroadcastEvents';
+export type { CrmBroadcastEventsAttributes, CrmBroadcastEventsCreationAttributes } from './CrmBroadcastEvents';
+export { CrmWorkflowDefinitions } from './CrmWorkflowDefinitions';
+export type { CrmWorkflowDefinitionsAttributes, CrmWorkflowDefinitionsCreationAttributes } from './CrmWorkflowDefinitions';
+export { CrmWorkflowVersions } from './CrmWorkflowVersions';
+export type { CrmWorkflowVersionsAttributes, CrmWorkflowVersionsCreationAttributes } from './CrmWorkflowVersions';
+export { CrmWorkflowEnrollments } from './CrmWorkflowEnrollments';
+export type { CrmWorkflowEnrollmentsAttributes, CrmWorkflowEnrollmentsCreationAttributes } from './CrmWorkflowEnrollments';
+export { CrmWorkflowStepExecutions } from './CrmWorkflowStepExecutions';
+export type { CrmWorkflowStepExecutionsAttributes, CrmWorkflowStepExecutionsCreationAttributes } from './CrmWorkflowStepExecutions';
+export { CrmWorkflowWaits } from './CrmWorkflowWaits';
+export type { CrmWorkflowWaitsAttributes, CrmWorkflowWaitsCreationAttributes } from './CrmWorkflowWaits';
+export { CrmBotSessions } from './CrmBotSessions';
+export type { CrmBotSessionsAttributes, CrmBotSessionsCreationAttributes } from './CrmBotSessions';
+export { CrmBotMessages } from './CrmBotMessages';
+export type { CrmBotMessagesAttributes, CrmBotMessagesCreationAttributes } from './CrmBotMessages';
+export { CrmAutomationOutbox } from './CrmAutomationOutbox';
+export type { CrmAutomationOutboxAttributes, CrmAutomationOutboxCreationAttributes } from './CrmAutomationOutbox';
+export { CrmAutomationAuditLogs } from './CrmAutomationAuditLogs';
+export type { CrmAutomationAuditLogsAttributes, CrmAutomationAuditLogsCreationAttributes } from './CrmAutomationAuditLogs';

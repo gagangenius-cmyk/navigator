@@ -6,6 +6,7 @@ import { requireAuth, isAuthError } from '@/lib/apiAuth';
 import { resolveLeadReferenceId } from '@/lib/leadReferenceResolver';
 import { checkForDuplicate, normalizePhone } from '@/lib/duplicateLeadCheck';
 import { recordLeadAssignment } from '@/lib/leadRemarks';
+import { fireLeadCreatedTrigger } from '@/lib/workflowTriggers';
 
 const SAMPLE_ROWS = [
   {
@@ -334,6 +335,13 @@ export async function POST(request: NextRequest) {
 
         const insertId = getInsertId(insertResult);
         if (!insertId) throw new Error('Lead was created but the new lead ID could not be resolved');
+
+        // This endpoint has its own INSERT (above) rather than going through
+        // insertLeadRecord() (src/lib/leadDefaults.ts) - fire
+        // trigger.lead_created directly here too, or leads created via the
+        // dedicated Bulk Lead Upload admin page would be silently invisible
+        // to every trigger.lead_created workflow.
+        void fireLeadCreatedTrigger(insertId, leadData.branch);
 
         if (assignToId) {
           await recordLeadAssignment({
