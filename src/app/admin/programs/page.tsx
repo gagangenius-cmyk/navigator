@@ -90,6 +90,9 @@ export default function ProgramsManagement() {
   // Form state
   const [formData, setFormData] = useState(emptyForm);
   const [formError, setFormError] = useState('');
+  // Optional country + program type picked in the Add Program form so the new
+  // program is mapped (crm_countries_type_program) in the same step.
+  const [addMap, setAddMap] = useState({ countryId: '', typeId: '' });
   const [formBusy, setFormBusy] = useState(false);
 
   // Bulk actions
@@ -141,6 +144,7 @@ export default function ProgramsManagement() {
 
   const openAdd = () => {
     setFormData(emptyForm);
+    setAddMap({ countryId: '', typeId: '' });
     setFormError('');
     setShowAddModal(true);
   };
@@ -176,6 +180,10 @@ export default function ProgramsManagement() {
     setFormBusy(true);
     try {
       const isEdit = !!editingService;
+      if (!isEdit && !!addMap.countryId !== !!addMap.typeId) {
+        setFormError('Select both a country and a program type to map, or leave both empty');
+        return;
+      }
       const body = isEdit ? { id: editingService!.id, ...formData } : formData;
       const res = await fetch('/api/admin/programs', {
         method: isEdit ? 'PUT' : 'POST',
@@ -186,6 +194,18 @@ export default function ProgramsManagement() {
         const err = await res.json();
         setFormError(err.error || 'Failed to save');
         return;
+      }
+      if (!isEdit && addMap.countryId && addMap.typeId) {
+        const created = await res.json();
+        const mapRes = await fetch('/api/admin/program-mappings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ programId: created.id, countryId: Number(addMap.countryId), typeId: Number(addMap.typeId) }),
+        });
+        if (!mapRes.ok) {
+          const mapErr = await mapRes.json().catch(() => ({}));
+          window.toast.error(`Program created, but country mapping failed: ${mapErr.error || 'unknown error'}`);
+        }
       }
       closeForm();
       fetchServices();
@@ -511,6 +531,37 @@ export default function ProgramsManagement() {
                   <option value={0}>Inactive</option>
                 </SearchableSelect>
               </div>
+              {!editingService && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Country</label>
+                    <SearchableSelect
+                      value={addMap.countryId}
+                      onChange={e => setAddMap({ countryId: e.target.value, typeId: e.target.value ? addMap.typeId : '' })}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="">Select Country (optional)</option>
+                      {lookup.countries.map(c => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </SearchableSelect>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Program Type</label>
+                    <SearchableSelect
+                      value={addMap.typeId}
+                      onChange={e => setAddMap(p => ({ ...p, typeId: e.target.value }))}
+                      disabled={!addMap.countryId}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                    >
+                      <option value="">{addMap.countryId ? 'Select Program Type' : 'Select a country first'}</option>
+                      {lookup.programTypes.map(t => (
+                        <option key={t.id} value={t.id}>{t.name}</option>
+                      ))}
+                    </SearchableSelect>
+                  </div>
+                </div>
+              )}
               {formError && <p className="text-sm text-red-600">{formError}</p>}
               <div className="flex justify-end gap-3 pt-2">
                 <button type="button" onClick={closeForm}
