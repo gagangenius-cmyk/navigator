@@ -2072,7 +2072,7 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
                 <Upload className="w-4 h-4 mr-2" />
                 {importing ? 'Importing...' : 'Import'}
               </button>
-              {isBranchManagerOrCeo(user) && (
+              {isCeo(user) && (
                 <button
                   onClick={handleExportExcel}
                   className="flex h-10 items-center rounded-md border border-gray-300 px-3 text-sm font-semibold hover:bg-gray-50"
@@ -3693,10 +3693,10 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
                   setFormData({
                     ...formData,
                     status: nextStatus,
-                    // Prospect leads use a P1-P4 priority scale instead of
+                    // Prospect leads use a Hot/Warm/Cold priority scale instead of
                     // High/Medium/Low, so the previously selected priority
                     // may no longer be a valid option once status changes.
-                    priority: isProspect && !wasProspect ? 'P1' : !isProspect && wasProspect ? 'Medium' : formData.priority
+                    priority: isProspect && !wasProspect ? 'Hot' : !isProspect && wasProspect ? 'Medium' : formData.priority
                   });
                 }}
                 className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
@@ -3720,10 +3720,9 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
                 <option value="">Select Priority</option>
                 {formData.status === 'Prospect' ? (
                   <>
-                    <option value="P1">P1</option>
-                    <option value="P2">P2</option>
-                    <option value="P3">P3</option>
-                    <option value="P4">P4</option>
+                    <option value="Hot">Hot</option>
+                    <option value="Warm">Warm</option>
+                    <option value="Cold">Cold</option>
                   </>
                 ) : (
                   <>

@@ -370,11 +370,9 @@ export async function GET(request: NextRequest) {
 
     // If export is requested, return all data without pagination
     if (exportType === 'excel') {
-      // Export is restricted to CEO (full company, unfiltered by the branch
-      // scoping above) and Branch Manager (their own branch only, via the
-      // same whereConditions branch-scoping every other role already gets).
-      if (!isBranchManagerOrCeo(currentUser)) {
-        return NextResponse.json({ error: 'Only the CEO or a Branch Manager can export leads' }, { status: 403 })
+      // Export is restricted to the CEO only.
+      if (!isCeo(currentUser)) {
+        return NextResponse.json({ error: 'Only the CEO can export leads' }, { status: 403 })
       }
 
       // Every export pulls the full unpaginated lead/PII set - throttle by

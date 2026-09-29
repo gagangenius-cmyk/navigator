@@ -49,8 +49,8 @@ function scorePriority(priority: string | null): { points: number; reason: strin
   const p = (priority || '').trim().toLowerCase();
   if (p === 'hot' || p === 'p1') return { points: 15, reason: 'High priority (+15)' };
   if (p === 'high') return { points: 15, reason: 'High priority (+15)' };
-  if (p === 'medium' || p === 'p2') return { points: 5, reason: null }; // the overwhelming default - not worth surfacing as a "reason"
-  if (p === 'low' || p === 'p3') return { points: -5, reason: 'Low priority (-5)' };
+  if (p === 'medium' || p === 'warm' || p === 'p2') return { points: 5, reason: null }; // the overwhelming default - not worth surfacing as a "reason"
+  if (p === 'low' || p === 'cold' || p === 'p3') return { points: -5, reason: 'Low priority (-5)' };
   if (p === 'p4') return { points: -10, reason: 'P4 priority (-10)' };
   return { points: 0, reason: null };
 }

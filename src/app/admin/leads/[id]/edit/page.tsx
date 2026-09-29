@@ -343,13 +343,13 @@ export default function AdminEditLeadPage() {
         next.age = calculateAgeFromDob(value);
       }
       // Statuses flagged uses_p_priority_scale (crm_lead_status, e.g. Hot)
-      // are prioritized P1-P4 instead of High/Medium/Low, so switching
+      // are prioritized Hot/Warm/Cold instead of High/Medium/Low, so switching
       // status in/out of one must re-pick a priority valid for the
       // now-active option list.
       if (name === 'status') {
         const wasPScale = usesPriorityScale(prev.status);
         const isPScale = usesPriorityScale(value);
-        if (isPScale && !wasPScale) next.priority = 'P1';
+        if (isPScale && !wasPScale) next.priority = 'Hot';
         else if (!isPScale && wasPScale) next.priority = 'Medium';
       }
       return next;
@@ -459,7 +459,7 @@ export default function AdminEditLeadPage() {
   const salutations = ['--None--', 'Mr.', 'Ms.', 'Mrs.', 'Dr.', 'Prof.'];
   const genderOptions = ['--None--', 'Male', 'Female', 'Other', 'Prefer not to say'];
   const staticCountries = ALL_COUNTRIES;
-  const priorities = usesPriorityScale(formData.status) ? ['P1', 'P2', 'P3', 'P4'] : ['High', 'Medium', 'Low'];
+  const priorities = usesPriorityScale(formData.status) ? ['Hot', 'Warm', 'Cold'] : ['High', 'Medium', 'Low'];
   // 'untouched'/'New' are lifecycle sentinels, not part of the
   // admin-configurable crm_lead_status list — kept as fixed leading options
   // so a lead still sitting at either value shows a valid selection here.

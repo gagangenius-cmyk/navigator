@@ -185,7 +185,7 @@ export interface LeadFilters {
   view?: LeadView;
 }
 
-export const PRIORITIES = ['P1', 'P2', 'P3', 'P4'] as const;
+export const PRIORITIES = ['Hot', 'Warm', 'Cold'] as const;
 
 /** Display name of a lead, preferring the client's actual name once converted. */
 export function leadName(lead: Pick<LeadListItem, 'fname' | 'lname' | 'client_actual_name'>): string {

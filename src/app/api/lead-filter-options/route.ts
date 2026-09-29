@@ -24,7 +24,7 @@ const ensureDBConnection = async () => {
   }
 };
 
-const basePriorities = ['P1', 'P2', 'P3', 'P4', 'High', 'Medium', 'Low'];
+const basePriorities = ['Hot', 'Warm', 'Cold', 'P1', 'P2', 'P3', 'P4', 'High', 'Medium', 'Low'];
 
 const addOption = (map: Map<string, FilterOption>, value: unknown, label?: unknown, region?: unknown) => {
   if (value === null || value === undefined || String(value).trim() === '') return;

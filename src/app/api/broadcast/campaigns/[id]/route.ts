@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, isAuthError } from '@/lib/apiAuth';
 import { connectDB } from '@/lib/sequelize';
 import { CrmBroadcastCampaigns, CrmBroadcastRecipients, CrmContactSegments, sequelize } from '@/models';
-import { canAccessBranchScopedRecord, canAccessSegment } from '@/lib/roleChecks';
+import { canAccessBranchScopedRecord, canAccessSegment, isCeo } from '@/lib/roleChecks';
 
 const CAMPAIGN_PERMISSION = ['campaigns.manage'];
 
@@ -90,7 +90,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     const campaign = await CrmBroadcastCampaigns.findOne({ where: { id: Number.parseInt(id, 10), isDeleted: false } });
     if (!campaign) return NextResponse.json({ success: false, error: 'Campaign not found' }, { status: 404 });
     if (!canAccessBranchScopedRecord(auth, campaign)) return NextResponse.json({ success: false, error: 'Campaign not found' }, { status: 404 });
-    if (campaign.status !== 'draft') {
+    if (campaign.status !== 'draft' && !isCeo(auth)) {
       return NextResponse.json({ success: false, error: 'Only a draft campaign can be deleted - cancel a launched one instead' }, { status: 409 });
     }
 

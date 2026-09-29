@@ -2276,10 +2276,9 @@ function ProspectStage({ lead, data, setData, onLeadUpdated, onSaveProspect, onN
               className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
             >
               <option value="">Select priority</option>
-              <option value="P1">P1 - Payment Expected in a week</option>
-              <option value="P2">P2 - Discussions going on can close by Month End</option>
-              <option value="P3">P3 - Developing Interest</option>
-              <option value="P4">P4 - Not sure when to start / Future Interest</option>
+              <option value="Hot">Hot - Payment Expected in a week</option>
+              <option value="Warm">Warm - Discussions going on can close by Month End</option>
+              <option value="Cold">Cold - Developing Interest</option>
             </SearchableSelect>
           </div>
         </div>
@@ -2504,7 +2503,7 @@ function ProspectStage({ lead, data, setData, onLeadUpdated, onSaveProspect, onN
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
         <div className="flex items-center">
           <AlertCircle className="mr-2 text-blue-600" size={20} />
-          <span className="text-sm text-blue-800">Lead Status must be set to "Hot" and Lead Priority to "P1" before continuing to Quotation.</span>
+          <span className="text-sm text-blue-800">Lead Status must be set to "Hot" and Lead Priority to "Hot" before continuing to Quotation.</span>
         </div>
       </div>
 
@@ -2519,7 +2518,7 @@ function ProspectStage({ lead, data, setData, onLeadUpdated, onSaveProspect, onN
         </button>
         <button
           onClick={handleContinueToQuotation}
-          disabled={!data.opportunityName || !data.estimatedValue || !data.serviceRequired || leadDraft.status !== 'Hot' || leadDraft.priority !== 'P1'}
+          disabled={!data.opportunityName || !data.estimatedValue || !data.serviceRequired || leadDraft.status !== 'Hot' || !['Hot', 'P1'].includes(leadDraft.priority)}
           className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center font-medium"
         >
           Continue to Quotation
