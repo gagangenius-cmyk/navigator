@@ -1,5 +1,6 @@
 'use client';
 
+import Select from 'react-select';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { useState, useEffect } from 'react';
 import { useSortableData, SortableTh } from '@/components/ui/sortable-th';
@@ -540,23 +541,18 @@ export default function ProgramsManagement() {
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       Countries{addMap.countryIds.length > 0 ? ` (${addMap.countryIds.length} selected)` : ' (optional)'}
                     </label>
-                    <div className="max-h-40 overflow-y-auto rounded-lg border border-gray-300 p-2 space-y-1">
-                      {lookup.countries.map(c => (
-                        <label key={c.id} className="flex items-center gap-2 text-sm text-gray-700">
-                          <input
-                            type="checkbox"
-                            checked={addMap.countryIds.includes(String(c.id))}
-                            onChange={e => setAddMap(p => ({
-                              ...p,
-                              countryIds: e.target.checked
-                                ? [...p.countryIds, String(c.id)]
-                                : p.countryIds.filter(id => id !== String(c.id)),
-                            }))}
-                          />
-                          {c.name}
-                        </label>
-                      ))}
-                    </div>
+                    <Select
+                      isMulti
+                      options={lookup.countries.map(c => ({ value: String(c.id), label: c.name }))}
+                      value={lookup.countries
+                        .filter(c => addMap.countryIds.includes(String(c.id)))
+                        .map(c => ({ value: String(c.id), label: c.name }))}
+                      onChange={opts => setAddMap(p => ({ ...p, countryIds: opts.map(o => o.value) }))}
+                      placeholder="Select countries..."
+                      closeMenuOnSelect={false}
+                      menuPortalTarget={typeof document !== 'undefined' ? document.body : undefined}
+                      styles={{ menuPortal: base => ({ ...base, zIndex: 9999 }) }}
+                    />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Program Type</label>

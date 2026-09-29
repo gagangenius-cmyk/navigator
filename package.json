@@ -65,6 +65,7 @@
     "react-dom": "19.2.3",
     "react-dropzone": "^20.0.0",
     "react-email-editor": "^2.1.2",
+    "react-select": "^5.10.2",
     "recharts": "^3.7.0",
     "sequelize": "^6.37.7",
     "socket.io": "^4.8.3",
