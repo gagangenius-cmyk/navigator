@@ -92,7 +92,7 @@ export default function ProgramsManagement() {
   const [formError, setFormError] = useState('');
   // Optional country + program type picked in the Add Program form so the new
   // program is mapped (crm_countries_type_program) in the same step.
-  const [addMap, setAddMap] = useState({ countryId: '', typeId: '' });
+  const [addMap, setAddMap] = useState<{ countryIds: string[]; typeId: string }>({ countryIds: [], typeId: '' });
   const [formBusy, setFormBusy] = useState(false);
 
   // Bulk actions
@@ -144,14 +144,14 @@ export default function ProgramsManagement() {
 
   const openAdd = () => {
     setFormData(emptyForm);
-    setAddMap({ countryId: '', typeId: '' });
+    setAddMap({ countryIds: [], typeId: '' });
     setFormError('');
     setShowAddModal(true);
   };
 
   const openEdit = (svc: Service) => {
     setFormData({ name: svc.name, flag: svc.flag || '', slogan_logo: svc.slogan_logo || '', status: svc.status });
-    setAddMap({ countryId: '', typeId: '' });
+    setAddMap({ countryIds: [], typeId: '' });
     setFormError('');
     setEditingService(svc);
   };
@@ -181,8 +181,8 @@ export default function ProgramsManagement() {
     setFormBusy(true);
     try {
       const isEdit = !!editingService;
-      if (!!addMap.countryId !== !!addMap.typeId) {
-        setFormError('Select both a country and a program type to map, or leave both empty');
+      if ((addMap.countryIds.length > 0) !== !!addMap.typeId) {
+        setFormError('Select a program type together with the countries to map, or leave both empty');
         return;
       }
       const body = isEdit ? { id: editingService!.id, ...formData } : formData;
@@ -196,18 +196,19 @@ export default function ProgramsManagement() {
         setFormError(err.error || 'Failed to save');
         return;
       }
-      if (addMap.countryId && addMap.typeId) {
+      if (addMap.countryIds.length > 0 && addMap.typeId) {
         const saved = await res.json();
-        const mapRes = await fetch('/api/admin/program-mappings', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ programId: saved.id, countryId: Number(addMap.countryId), typeId: Number(addMap.typeId) }),
-        });
-        // 409 = this country/type is already mapped to the program - nothing to do.
-        if (!mapRes.ok && mapRes.status !== 409) {
-          const mapErr = await mapRes.json().catch(() => ({}));
-          window.toast.error(`Program saved, but country mapping failed: ${mapErr.error || 'unknown error'}`);
-        }
+        const results = await Promise.all(addMap.countryIds.map(async (countryId) => {
+          const mapRes = await fetch('/api/admin/program-mappings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ programId: saved.id, countryId: Number(countryId), typeId: Number(addMap.typeId) }),
+          });
+          // 409 = this country/type is already mapped to the program - nothing to do.
+          return mapRes.ok || mapRes.status === 409;
+        }));
+        const failed = results.filter(ok => !ok).length;
+        if (failed > 0) window.toast.error(`Program saved, but ${failed} country mapping(s) failed`);
       }
       closeForm();
       fetchServices();
@@ -536,27 +537,35 @@ export default function ProgramsManagement() {
               {(
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Country</label>
-                    <SearchableSelect
-                      value={addMap.countryId}
-                      onChange={e => setAddMap({ countryId: e.target.value, typeId: e.target.value ? addMap.typeId : '' })}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                      <option value="">{editingService ? 'Add a country mapping (optional)' : 'Select Country (optional)'}</option>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Countries{addMap.countryIds.length > 0 ? ` (${addMap.countryIds.length} selected)` : ' (optional)'}
+                    </label>
+                    <div className="max-h-40 overflow-y-auto rounded-lg border border-gray-300 p-2 space-y-1">
                       {lookup.countries.map(c => (
-                        <option key={c.id} value={c.id}>{c.name}</option>
+                        <label key={c.id} className="flex items-center gap-2 text-sm text-gray-700">
+                          <input
+                            type="checkbox"
+                            checked={addMap.countryIds.includes(String(c.id))}
+                            onChange={e => setAddMap(p => ({
+                              ...p,
+                              countryIds: e.target.checked
+                                ? [...p.countryIds, String(c.id)]
+                                : p.countryIds.filter(id => id !== String(c.id)),
+                            }))}
+                          />
+                          {c.name}
+                        </label>
                       ))}
-                    </SearchableSelect>
+                    </div>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Program Type</label>
                     <SearchableSelect
                       value={addMap.typeId}
                       onChange={e => setAddMap(p => ({ ...p, typeId: e.target.value }))}
-                      disabled={!addMap.countryId}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >
-                      <option value="">{addMap.countryId ? 'Select Program Type' : 'Select a country first'}</option>
+                      <option value="">Select Program Type</option>
                       {lookup.programTypes.map(t => (
                         <option key={t.id} value={t.id}>{t.name}</option>
                       ))}
