@@ -151,6 +151,7 @@ export default function ProgramsManagement() {
 
   const openEdit = (svc: Service) => {
     setFormData({ name: svc.name, flag: svc.flag || '', slogan_logo: svc.slogan_logo || '', status: svc.status });
+    setAddMap({ countryId: '', typeId: '' });
     setFormError('');
     setEditingService(svc);
   };
@@ -180,7 +181,7 @@ export default function ProgramsManagement() {
     setFormBusy(true);
     try {
       const isEdit = !!editingService;
-      if (!isEdit && !!addMap.countryId !== !!addMap.typeId) {
+      if (!!addMap.countryId !== !!addMap.typeId) {
         setFormError('Select both a country and a program type to map, or leave both empty');
         return;
       }
@@ -195,16 +196,17 @@ export default function ProgramsManagement() {
         setFormError(err.error || 'Failed to save');
         return;
       }
-      if (!isEdit && addMap.countryId && addMap.typeId) {
-        const created = await res.json();
+      if (addMap.countryId && addMap.typeId) {
+        const saved = await res.json();
         const mapRes = await fetch('/api/admin/program-mappings', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ programId: created.id, countryId: Number(addMap.countryId), typeId: Number(addMap.typeId) }),
+          body: JSON.stringify({ programId: saved.id, countryId: Number(addMap.countryId), typeId: Number(addMap.typeId) }),
         });
-        if (!mapRes.ok) {
+        // 409 = this country/type is already mapped to the program - nothing to do.
+        if (!mapRes.ok && mapRes.status !== 409) {
           const mapErr = await mapRes.json().catch(() => ({}));
-          window.toast.error(`Program created, but country mapping failed: ${mapErr.error || 'unknown error'}`);
+          window.toast.error(`Program saved, but country mapping failed: ${mapErr.error || 'unknown error'}`);
         }
       }
       closeForm();
@@ -531,7 +533,7 @@ export default function ProgramsManagement() {
                   <option value={0}>Inactive</option>
                 </SearchableSelect>
               </div>
-              {!editingService && (
+              {(
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Country</label>
@@ -540,7 +542,7 @@ export default function ProgramsManagement() {
                       onChange={e => setAddMap({ countryId: e.target.value, typeId: e.target.value ? addMap.typeId : '' })}
                       className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >
-                      <option value="">Select Country (optional)</option>
+                      <option value="">{editingService ? 'Add a country mapping (optional)' : 'Select Country (optional)'}</option>
                       {lookup.countries.map(c => (
                         <option key={c.id} value={c.id}>{c.name}</option>
                       ))}
