@@ -137,6 +137,13 @@ async function seedEmployees(connection) {
 
 async function run() {
   if (!database) throw new Error('DATABASE_URL must include a database name');
+  console.log(
+    'WARNING: this will DEACTIVATE (status = 0) every crm_employee whose ' +
+    `username is not in the ${newEmployees.length}-person roster hardcoded in this file - ` +
+    'including any real account created since through the CRM\'s own Add ' +
+    'Employee UI. It is no longer run automatically by db:migrate/db:setup. ' +
+    'Only run this if you specifically want to reset to that demo roster.'
+  );
   const connection = await mysql.createConnection({ ...baseConfig, database });
   const result = await seedEmployees(connection);
   await connection.end();

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { QueryTypes } from 'sequelize';
 import { sequelize, connectDB } from '@/lib/sequelize';
 import { requireAuth, isAuthError } from '@/lib/apiAuth';
-import { getModulePermissionsForRole } from '@/lib/modulePermissions';
+import { isFullAdminRole } from '@/lib/fullAdminEmployeeGuard';
 
 let dbReady = false;
 const ensureDB = async () => { if (!dbReady) { await connectDB(); dbReady = true; } };
@@ -55,8 +55,7 @@ export async function POST(request: NextRequest) {
     `SELECT name, type FROM crm_role WHERE id = :roleId LIMIT 1`,
     { replacements: { roleId: target.role }, type: QueryTypes.SELECT }
   );
-  const targetPermissions = getModulePermissionsForRole({ roleId: target.role, roleName: roleRow?.name, roleType: roleRow?.type });
-  if (targetPermissions.permissions.includes('all')) {
+  if (isFullAdminRole(roleRow)) {
     return NextResponse.json({ error: 'This user holds full admin access and cannot be restricted from here.' }, { status: 403 });
   }
 

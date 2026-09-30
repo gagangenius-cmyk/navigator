@@ -30,6 +30,15 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { isCeo } from '@/lib/roleChecks';
+import { getModulePermissionsForRole } from '@/lib/modulePermissions';
+
+// Mirrors src/lib/fullAdminEmployeeGuard.ts (server-only - it imports
+// sequelize, so it can't be pulled into this client component). Any drift
+// between the two is only ever a UI/UX gap (the button shows when it
+// shouldn't, or is hidden when it could be used) - the server route is what
+// actually enforces the protection either way.
+const isFullAdminEmployeeRow = (employee: { roleName?: string | null }) =>
+  getModulePermissionsForRole({ roleName: employee.roleName }).permissions.includes('all');
 
 type ModuleKey =
   | 'employee-data-sheet'
@@ -53,6 +62,7 @@ type Employee = {
   photo?: string | null;
   department?: number | null;
   role?: number | null;
+  roleName?: string | null;
   branch?: number | null;
   region?: number | null;
   status: number;
@@ -850,7 +860,12 @@ export default function HRModuleSuite({ activeModule = 'employee-data-sheet' }: 
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: employee.id, status: activating ? 1 : 0 }),
     });
-    if (response.ok) await refreshEmployeeData();
+    if (response.ok) {
+      await refreshEmployeeData();
+    } else {
+      const result = await response.json().catch(() => ({}));
+      alert(result.error || 'Failed to update employee status');
+    }
   };
 
   // CEO-only. The API soft-deletes (marks the employee inactive with a
@@ -1048,8 +1063,13 @@ export default function HRModuleSuite({ activeModule = 'employee-data-sheet' }: 
                       <button
                         type="button"
                         onClick={() => toggleEmployeeStatus(employee)}
-                        className={`rounded-md border border-slate-200 p-1.5 hover:bg-slate-50 ${employee.status === 1 ? 'text-slate-500 hover:text-rose-700' : 'text-slate-500 hover:text-emerald-700'}`}
-                        title={employee.status === 1 ? 'Deactivate employee' : 'Activate employee'}
+                        disabled={employee.status === 1 && isFullAdminEmployeeRow(employee)}
+                        className={`rounded-md border border-slate-200 p-1.5 hover:bg-slate-50 disabled:opacity-30 disabled:hover:bg-transparent disabled:cursor-not-allowed ${employee.status === 1 ? 'text-slate-500 hover:text-rose-700' : 'text-slate-500 hover:text-emerald-700'}`}
+                        title={
+                          employee.status === 1 && isFullAdminEmployeeRow(employee)
+                            ? 'Full-admin accounts cannot be deactivated'
+                            : employee.status === 1 ? 'Deactivate employee' : 'Activate employee'
+                        }
                       >
                         {employee.status === 1 ? <PowerOff className="h-3.5 w-3.5" /> : <Power className="h-3.5 w-3.5" />}
                       </button>
@@ -1062,7 +1082,7 @@ export default function HRModuleSuite({ activeModule = 'employee-data-sheet' }: 
                         <KeyRound className="h-3.5 w-3.5" />
                       </button>
                       </>)}
-                      {userIsCeo && (
+                      {userIsCeo && !isFullAdminEmployeeRow(employee) && (
                         <button
                           type="button"
                           onClick={() => deleteEmployee(employee)}

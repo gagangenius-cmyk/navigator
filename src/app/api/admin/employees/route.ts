@@ -7,6 +7,7 @@ import { isCeo } from '@/lib/roleChecks';
 import { requireAuth, isAuthError } from '@/lib/apiAuth';
 import { logAudit } from '@/lib/auditLog';
 import { captureError } from '@/lib/errorTracking';
+import { isFullAdminEmployeeId, FULL_ADMIN_PROTECTED_MESSAGE } from '@/lib/fullAdminEmployeeGuard';
 
 let dbReady = false;
 const ensureDB = async () => { if (!dbReady) { await connectDB(); dbReady = true; } };
@@ -132,6 +133,15 @@ export async function PUT(request: NextRequest) {
     // fields) can be diffed and audit-logged below - a plain field edit
     // (phone number, address, ...) isn't worth a log entry.
     const before = await HRService.getEmployeeById(id);
+
+    // A full-admin account (CEO/Director/Founder/Super Admin) can never be
+    // deactivated through the plain edit/toggle form - only through nothing
+    // at all. This blocks the request outright rather than silently ignoring
+    // just the status field, so the caller isn't misled into thinking it worked.
+    if (body.status !== undefined && Number(body.status) !== 1 && (await isFullAdminEmployeeId(id))) {
+      return NextResponse.json({ error: FULL_ADMIN_PROTECTED_MESSAGE }, { status: 403 });
+    }
+
     const employee = await HRService.updateEmployee({ ...body, id });
     if (!employee) return NextResponse.json({ error: 'Employee not found' }, { status: 404 });
 
@@ -174,6 +184,12 @@ export async function DELETE(request: NextRequest) {
     const id = Number.parseInt(searchParams.get('id') || '', 10);
     if (!Number.isFinite(id)) {
       return NextResponse.json({ error: 'Valid employee id is required' }, { status: 400 });
+    }
+    // Even the CEO cannot delete a full-admin account (including their own) -
+    // there must always be at least one full-admin login the CRM itself
+    // cannot lock anyone out of.
+    if (await isFullAdminEmployeeId(id)) {
+      return NextResponse.json({ error: FULL_ADMIN_PROTECTED_MESSAGE }, { status: 403 });
     }
     const result = await HRService.softDeleteEmployee(id);
     await logAudit({

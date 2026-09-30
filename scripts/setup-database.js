@@ -8,7 +8,6 @@ const { seedBranches } = require('./seed-branches');
 const { seedCurrency } = require('./seed-currency');
 const { seedCountries } = require('./seed-countries');
 const { seedFees } = require('./seed-fees');
-const { seedEmployees } = require('./seed-employees');
 const { seedProgramValidity } = require('./seed-program-validity');
 
 dotenv.config();
@@ -846,11 +845,17 @@ async function run() {
   const countrySeed = await seedCountries(db);
   const feeSeed = await seedFees(db);
   const programValiditySeed = await seedProgramValidity(db);
-  const employeeSeed = await seedEmployees(db);
+  // seedEmployees is deliberately NOT run here. It doesn't just create/update
+  // its own fixed 12-person roster - it also deactivates (status = 0) every
+  // OTHER employee in crm_employee, including any real account created later
+  // through the CRM's own Add Employee UI. Running it as part of every
+  // ordinary `db:migrate`/`db:setup` silently logged people out of accounts
+  // they never touched. Run `npm run db:seed:employees` explicitly and only
+  // when you actually want to (re)seed that specific demo roster.
 
   await db.end();
 
-  console.log(`Database ${database} is ready. Applied ${migrations.length} built-in and ${sqlMigrationCount} SQL migration files, checked ${columnMigrations.length} columns, and seeded ${rolePermissionSeed.roles} roles / ${rolePermissionSeed.permissions} permissions, ${sourceSeed.sources} lead sources, ${branchSeed.branches} branches, ${currencySeed.currencies} currencies, ${countrySeed.countries} countries, ${feeSeed.fees} fee rows / ${feeSeed.services} services, ${programValiditySeed.programValidity} program validity rows, and employees (created ${employeeSeed.created}, updated ${employeeSeed.updated}, skipped ${employeeSeed.skipped}).`);
+  console.log(`Database ${database} is ready. Applied ${migrations.length} built-in and ${sqlMigrationCount} SQL migration files, checked ${columnMigrations.length} columns, and seeded ${rolePermissionSeed.roles} roles / ${rolePermissionSeed.permissions} permissions, ${sourceSeed.sources} lead sources, ${branchSeed.branches} branches, ${currencySeed.currencies} currencies, ${countrySeed.countries} countries, ${feeSeed.fees} fee rows / ${feeSeed.services} services, ${programValiditySeed.programValidity} program validity rows. Employees were left untouched - run \`npm run db:seed:employees\` explicitly if you need to (re)seed the demo roster.`);
 }
 
 run().catch((error) => {

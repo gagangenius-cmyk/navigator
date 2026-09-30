@@ -3,6 +3,7 @@ import { QueryTypes } from 'sequelize';
 import { sequelize } from '@/lib/sequelize';
 import { HRService } from '@/services/hr-service';
 import { requireAuth, isAuthError } from '@/lib/apiAuth';
+import { findFullAdminEmployeeIds, FULL_ADMIN_PROTECTED_MESSAGE } from '@/lib/fullAdminEmployeeGuard';
 
 // Deliberately bypasses HRService.updateEmployee() for activate/deactivate: that
 // method does a full-column rewrite (every omitted field defaults to null), so
@@ -23,20 +24,46 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: 'No valid employee IDs' }, { status: 400 });
     }
 
-    if (action === 'activate' || action === 'deactivate') {
-      const status = action === 'activate' ? 1 : 0;
+    if (action === 'activate') {
       await sequelize.query(
-        'UPDATE crm_employee SET status = :status WHERE id IN (:ids)',
-        { replacements: { status, ids: numericIds }, type: QueryTypes.UPDATE }
+        'UPDATE crm_employee SET status = 1 WHERE id IN (:ids)',
+        { replacements: { ids: numericIds }, type: QueryTypes.UPDATE }
       );
       return NextResponse.json({ success: true, updated: numericIds.length });
     }
 
+    if (action === 'deactivate') {
+      // Full-admin accounts (CEO/Director/Founder/Super Admin) are excluded
+      // from a bulk deactivate rather than failing the whole batch - this is
+      // the same protection as the single-employee PUT/DELETE routes.
+      const protectedIds = await findFullAdminEmployeeIds(numericIds);
+      const targetIds = numericIds.filter((id) => !protectedIds.has(id));
+      if (targetIds.length) {
+        await sequelize.query(
+          'UPDATE crm_employee SET status = 0 WHERE id IN (:ids)',
+          { replacements: { ids: targetIds }, type: QueryTypes.UPDATE }
+        );
+      }
+      return NextResponse.json({
+        success: true,
+        updated: targetIds.length,
+        skipped: protectedIds.size,
+        ...(protectedIds.size ? { skippedReason: FULL_ADMIN_PROTECTED_MESSAGE } : {}),
+      });
+    }
+
     if (action === 'delete') {
-      for (const id of numericIds) {
+      const protectedIds = await findFullAdminEmployeeIds(numericIds);
+      const targetIds = numericIds.filter((id) => !protectedIds.has(id));
+      for (const id of targetIds) {
         await HRService.softDeleteEmployee(id);
       }
-      return NextResponse.json({ success: true, deleted: numericIds.length });
+      return NextResponse.json({
+        success: true,
+        deleted: targetIds.length,
+        skipped: protectedIds.size,
+        ...(protectedIds.size ? { skippedReason: FULL_ADMIN_PROTECTED_MESSAGE } : {}),
+      });
     }
 
     return NextResponse.json({ error: 'action must be activate, deactivate, or delete' }, { status: 400 });
