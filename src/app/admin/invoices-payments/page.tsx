@@ -38,6 +38,7 @@ interface Payment {
   dmBranchLicenseNumber: string | null; dmBranchVatGstPercent: number | string | null;
   dmBranchAbbrv?: string | null;
   remark?: string | null;
+  includeVat?: boolean;
 }
 
 interface Stats {
@@ -234,6 +235,7 @@ export default function InvoicesPaymentsPage() {
       paidAmount: p.paidAmount,
       remainingBalance: p.remainingBalance,
       remark: p.remark,
+      includeVat: p.includeVat,
     });
   };
 

@@ -4,6 +4,7 @@ import { CrmcOpportunityPayments } from '@/models';
 import { sequelize } from '@/lib/sequelize';
 import { requireAuth, isAuthError } from '@/lib/apiAuth';
 import { isBranchManagerOrCeo, isCeo } from '@/lib/roleChecks';
+import { ensurePayHistoryAdminFeeColumns } from '@/lib/ensurePayHistoryAdminFeeColumns';
 
 export async function GET(request: NextRequest) {
   const auth = requireAuth(request);
@@ -195,10 +196,11 @@ export async function GET(request: NextRequest) {
       plainPayments.map((p) => p.receiptNumber || p.paymentNumber).filter(Boolean)
     ));
     let remarkByReceiptNumber: Record<string, string | null> = {};
-    let adminFeeByReceiptNumber: Record<string, { adminFeeIncluded: boolean; adminFeeAmount: number }> = {};
+    let adminFeeByReceiptNumber: Record<string, { adminFeeIncluded: boolean; adminFeeAmount: number; includeVat: boolean }> = {};
     if (receiptNumbers.length) {
-      const payHistoryRows = await sequelize.query<{ counselor_receipt: string; remark: string | null; admin_fee_included: number; admin_fee_amount: number }>(
-        `SELECT counselor_receipt, remark, admin_fee_included, admin_fee_amount
+      await ensurePayHistoryAdminFeeColumns();
+      const payHistoryRows = await sequelize.query<{ counselor_receipt: string; remark: string | null; admin_fee_included: number; admin_fee_amount: number; vat_included: number }>(
+        `SELECT counselor_receipt, remark, admin_fee_included, admin_fee_amount, vat_included
          FROM crm_pay_history
          WHERE counselor_receipt IN (:receiptNumbers)`,
         { replacements: { receiptNumbers }, type: QueryTypes.SELECT },
@@ -210,6 +212,7 @@ export async function GET(request: NextRequest) {
         payHistoryRows.map((row) => [row.counselor_receipt, {
           adminFeeIncluded: Number(row.admin_fee_included || 0) === 1,
           adminFeeAmount: Number(row.admin_fee_amount || 0),
+          includeVat: Number(row.vat_included ?? 1) === 1,
         }]),
       );
     }
@@ -227,6 +230,7 @@ export async function GET(request: NextRequest) {
       remark: remarkByReceiptNumber[p.receiptNumber || p.paymentNumber] || null,
       adminFeeIncluded: adminFeeByReceiptNumber[p.receiptNumber || p.paymentNumber]?.adminFeeIncluded || false,
       adminFeeAmount: adminFeeByReceiptNumber[p.receiptNumber || p.paymentNumber]?.adminFeeAmount || 0,
+      includeVat: adminFeeByReceiptNumber[p.receiptNumber || p.paymentNumber]?.includeVat ?? true,
     }));
 
     if (opportunityId) {

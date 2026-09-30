@@ -65,6 +65,7 @@ interface QuickPayState {
   method: string;
   date: string;
   txnId: string;
+  includeVat: boolean;
   saving: boolean;
   msg: string;
   success: boolean;
@@ -220,6 +221,7 @@ export default function ClientsManagement() {
       method: 'cash',
       date: new Date().toISOString().split('T')[0],
       txnId: '',
+      includeVat: true,
       saving: false,
       msg: '',
       success: false,
@@ -274,6 +276,7 @@ export default function ClientsManagement() {
       previouslyPaid: qp.balance?.paidYet,
       paidAmount: qp.amount,
       remainingBalance: Math.max(0, Number(qp.balance?.payBalance || 0) - Number(qp.amount || 0)),
+      includeVat: qp.includeVat,
     });
   };
 
@@ -316,6 +319,7 @@ export default function ClientsManagement() {
                 paidAmount: amount,
                 totalAmount: quickPay.balance?.payTotal || amount,
                 amount,
+                includeVat: quickPay.includeVat,
               },
               receiptData: {
                 description: `Balance payment receipt for ${quickPay.client.first_name} ${quickPay.client.last_name}`,
@@ -726,6 +730,15 @@ export default function ClientsManagement() {
                       placeholder="Reference / transaction number"
                     />
                   </div>
+                  <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={quickPay.includeVat}
+                      onChange={e => setQuickPay(p => p ? { ...p, includeVat: e.target.checked } : null)}
+                      className="w-4 h-4"
+                    />
+                    Include VAT on receipt
+                  </label>
 
                   {quickPay.msg && (
                     <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 rounded-lg p-3">

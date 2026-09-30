@@ -59,6 +59,7 @@ interface QuickPayLeadState {
   method: string;
   date: string;
   txnId: string;
+  includeVat: boolean;
   saving: boolean;
   msg: string;
   success: boolean;
@@ -1395,6 +1396,7 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
       method: 'cash',
       date: new Date().toISOString().split('T')[0],
       txnId: '',
+      includeVat: true,
       saving: false,
       msg: '',
       success: false,
@@ -1431,6 +1433,7 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
       previouslyPaid: lead.paidYet,
       paidAmount: qp.amount,
       remainingBalance: Math.max(0, Number(lead.payBalance || 0) - Number(qp.amount || 0)),
+      includeVat: qp.includeVat,
     });
   };
 
@@ -1454,6 +1457,7 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
             paidAmount: amount,
             totalAmount: quickPayLead.lead.payTotal || amount,
             amount,
+            includeVat: quickPayLead.includeVat,
           },
           receiptData: {
             description: `Balance payment receipt for ${quickPayLead.lead.fname} ${quickPayLead.lead.lname}`,
@@ -3817,6 +3821,16 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
                       className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
                       placeholder="Reference / transaction number" />
                   </div>
+                  <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={quickPayLead.includeVat}
+                      onChange={e => setQuickPayLead(p => p ? { ...p, includeVat: e.target.checked } : null)}
+                      className="w-4 h-4"
+                    />
+                    Include VAT on receipt
+                  </label>
+
                   {quickPayLead.msg && (
                     <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 rounded-lg p-3">
                       <AlertCircle className="w-4 h-4 shrink-0" /> {quickPayLead.msg}

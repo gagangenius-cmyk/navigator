@@ -19,7 +19,7 @@ interface BranchOption { id: number; name: string; }
 
 const fmtAed = (v: number) => `AED ${Number(v || 0).toLocaleString('en', { maximumFractionDigits: 0 })}`;
 const emptyFilters = { dateFrom: '', dateTo: '', branchId: '', coaAccountId: '', approved: '' };
-const emptyForm = { branch: '', coa_account_id: '', amount: '', date: new Date().toISOString().slice(0, 10), particular: '', remark: '' };
+const emptyForm = { branch: '', coa_account_id: '', amount: '', date: new Date().toISOString().slice(0, 10), particular: '', remark: '', includeVat: true };
 
 export default function ExpensesPage() {
   const { user } = useAuth();
@@ -99,7 +99,7 @@ export default function ExpensesPage() {
     } finally {
       setLoading(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [pagination.page, pagination.limit, filters]);
 
   useEffect(() => { load(); }, [load]);
@@ -299,6 +299,12 @@ export default function ExpensesPage() {
                   onChange={(e) => setFormData((p) => ({ ...p, amount: e.target.value }))}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
                 <p className="text-xs text-gray-400 mt-1">Currency follows the selected branch. VAT is calculated automatically from the branch's tax rate.</p>
+                <label className="flex items-center gap-2 text-sm text-gray-700 mt-2 cursor-pointer">
+                  <input type="checkbox" checked={formData.includeVat}
+                    onChange={(e) => setFormData((p) => ({ ...p, includeVat: e.target.checked }))}
+                    className="w-4 h-4" />
+                  Include VAT
+                </label>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Date *</label>

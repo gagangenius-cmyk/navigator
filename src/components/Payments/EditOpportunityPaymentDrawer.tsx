@@ -37,6 +37,7 @@ export interface EditablePayment {
   remark?: string | null;
   adminFeeIncluded?: boolean;
   adminFeeAmount?: number;
+  includeVat?: boolean;
   receiptUrl?: string | null;
   accountantStatus?: string | null;
 }
@@ -99,6 +100,7 @@ export function EditOpportunityPaymentDrawer({
       description: payment.description || '',
       remark: payment.remark || '',
       adminFeeIncluded: Boolean(payment.adminFeeIncluded),
+      includeVat: payment.includeVat !== false,
       adminFeeAmount: String(payment.adminFeeAmount ?? ''),
     });
   }, [open, payment]);
@@ -158,6 +160,7 @@ export function EditOpportunityPaymentDrawer({
           description: form.description,
           remark: form.remark || null,
           adminFeeIncluded: Boolean(form.adminFeeIncluded),
+          includeVat: form.includeVat !== false,
           adminFeeAmount: Number(form.adminFeeAmount) || 0,
           ...(newReceiptUrl ? { receiptUrl: newReceiptUrl } : {}),
         }),
@@ -333,6 +336,11 @@ export function EditOpportunityPaymentDrawer({
             <input type="number" name="discountAmount" value={String(form.discountAmount || '')} onChange={handleChange} min="0" step="0.01" className={inputClass} />
           </div>
         </div>
+
+        <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+          <input type="checkbox" name="includeVat" checked={form.includeVat !== false} onChange={handleChange} className="rounded border-gray-300" />
+          Include VAT on receipt
+        </label>
 
         <div className="flex items-center gap-3">
           <label className="flex items-center gap-2 text-sm font-medium text-gray-700">

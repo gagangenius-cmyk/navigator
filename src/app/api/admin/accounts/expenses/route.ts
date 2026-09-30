@@ -103,7 +103,9 @@ export async function POST(request: NextRequest) {
 
     // VAT is derived from the branch's own admin-configured rate, never
     // trusted from the client, so it can't be under/over-stated on entry.
-    const vatPercent = Number(branch.vat_gst_percent || 0);
+    // The client only chooses whether VAT applies at all (default: yes).
+    const includeVat = body.includeVat === undefined ? true : Boolean(body.includeVat);
+    const vatPercent = includeVat ? Number(branch.vat_gst_percent || 0) : 0;
     const vat = Math.round((amount * vatPercent / 100) * 100) / 100;
 
     // Duplicate-submission guard: crm_expense has no creation-timestamp

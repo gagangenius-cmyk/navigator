@@ -11,7 +11,7 @@ import { BANK_PAYMENT_OPTIONS, CARD_PAYMENT_OPTIONS } from '@/lib/paymentOptions
 import { renderAgreementForBranch } from '@/lib/renderAgreementForBranch';
 import { uploadFileToBlob } from '@/lib/uploadToBlob';
 import { getBranchTaxInfo } from '@/lib/branchTax';
-import { getLeadBranchDetails, printReceipt, getAdminFeeAmount, getAdminFeeVatRate } from '@/lib/receiptTemplate';
+import { getLeadBranchDetails, getBranchReceiptConfig, printReceipt, getAdminFeeAmount, getAdminFeeVatRate } from '@/lib/receiptTemplate';
 import { getDiscountTier, getDiscountPercentage, DEFAULT_DISCOUNT_TIER_THRESHOLDS, type DiscountTierThresholds } from '@/lib/discountApproval';
 import {
   Search, Plus, Edit, Trash2, Download, Upload, CheckCircle, XCircle, Clock,
@@ -76,6 +76,7 @@ interface PaymentData {
   dueDate: string;
   remark: string;
   adminFeeIncluded: boolean;
+  includeVat: boolean;
 }
 
 interface DocumentData {
@@ -235,6 +236,7 @@ export default function OpportunityFlowWizard({ leadId, initialStage, initialOpp
     dueDate: '',
     remark: '',
     adminFeeIncluded: false,
+    includeVat: true,
   });
 
   const [documentData, setDocumentData] = useState<DocumentData>({
@@ -1205,6 +1207,7 @@ export default function OpportunityFlowWizard({ leadId, initialStage, initialOpp
           dueDate: effectivePaymentData.dueDate || undefined,
           remark: effectivePaymentData.remark || undefined,
           adminFeeIncluded: effectivePaymentData.adminFeeIncluded || false,
+          includeVat: effectivePaymentData.includeVat !== false,
         },
         agreementData: {
           title: agreementData.agreementTitle || `Service Agreement - ${lead?.fname || ''} ${lead?.lname || ''}`,
@@ -3042,7 +3045,12 @@ function PaymentStage({ lead, data, setData, quotationTotal, quotationTax, quota
   // server-side from the branch in /api/receipts, never trusted from here.
   const adminFeeBranchDetails = getLeadBranchDetails(lead as any);
   const adminFeeBaseAmount = getAdminFeeAmount(adminFeeBranchDetails.branchName, adminFeeBranchDetails.branchAddress, currencyCode);
-  const adminFeeVatRate = getAdminFeeVatRate(adminFeeBranchDetails.branchName, adminFeeBranchDetails.branchAddress);
+  // The VAT checkbox only applies to branches that actually charge VAT/GST.
+  const branchHasVat = getBranchReceiptConfig(
+    adminFeeBranchDetails.branchName, currencyCode, adminFeeBranchDetails.branchAddress,
+    null, null, adminFeeBranchDetails.vatGstPercent,
+  ).hasVat;
+  const adminFeeVatRate = data.includeVat === false ? 0 : getAdminFeeVatRate(adminFeeBranchDetails.branchName, adminFeeBranchDetails.branchAddress);
   const adminFeeVatPreviewAmount = adminFeeBaseAmount * (adminFeeVatRate / 100);
   const adminFeePreviewAmount = adminFeeBaseAmount + adminFeeVatPreviewAmount;
 
@@ -3126,6 +3134,7 @@ function PaymentStage({ lead, data, setData, quotationTotal, quotationTax, quota
               dueDate: data.dueDate || undefined,
               remark: data.remark || undefined,
               adminFeeIncluded: data.adminFeeIncluded || false,
+              includeVat: data.includeVat !== false,
             },
             receiptData: {
               description: `Payment receipt for ${lead.fname} ${lead.lname}`,
@@ -3185,6 +3194,7 @@ function PaymentStage({ lead, data, setData, quotationTotal, quotationTax, quota
       remark: r.remark || data.remark,
       adminFeeIncluded: r.adminFeeIncluded ?? data.adminFeeIncluded,
       adminFeeAmount: r.adminFeeAmount ?? (data.adminFeeIncluded ? getAdminFeeAmount(branchDetails.branchName, branchDetails.branchAddress, r.currency || currencyCode) : 0),
+      includeVat: r.includeVat ?? data.includeVat,
     });
     setPrintingReceipt(false);
   };
@@ -3346,6 +3356,24 @@ function PaymentStage({ lead, data, setData, quotationTotal, quotationTax, quota
           </div>
         </div>
       </div>
+
+      {branchHasVat && (
+        <div className="bg-white border border-gray-200 rounded-lg p-6">
+          <label className="flex items-center gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={data.includeVat !== false}
+              onChange={(e) => setData({ ...data, includeVat: e.target.checked })}
+              disabled={receiptLocked}
+              className="w-4 h-4"
+            />
+            <span className="text-sm font-medium text-gray-700">Include VAT on receipt</span>
+          </label>
+          <p className="text-xs text-gray-500 mt-1 ml-7">
+            Unchecked prints a plain Payment Receipt with no VAT/GST wording (also removes VAT from the admin fee).
+          </p>
+        </div>
+      )}
 
       {adminFeePreviewAmount > 0 && (
         <div className="bg-white border border-gray-200 rounded-lg p-6">
@@ -3576,6 +3604,7 @@ function AccountsStage({ lead, leadId, opportunityId, onNext, onPrevious }: any)
       remark: p.remark,
       adminFeeIncluded: p.adminFeeIncluded,
       adminFeeAmount: p.adminFeeAmount,
+      includeVat: p.includeVat,
     });
     setPrintingId(null);
   };

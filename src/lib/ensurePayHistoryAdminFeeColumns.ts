@@ -15,7 +15,7 @@ export const ensurePayHistoryAdminFeeColumns = async () => {
       const [rows] = await sequelize.query(`
         SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'crm_pay_history'
-          AND COLUMN_NAME IN ('proof_url', 'admin_fee_included', 'admin_fee_amount')
+          AND COLUMN_NAME IN ('proof_url', 'admin_fee_included', 'admin_fee_amount', 'vat_included')
       `);
       const existing = new Set(((rows as Array<{ COLUMN_NAME: string }>) || []).map((r) => r.COLUMN_NAME));
       if (!existing.has('proof_url')) {
@@ -26,6 +26,12 @@ export const ensurePayHistoryAdminFeeColumns = async () => {
       }
       if (!existing.has('admin_fee_amount')) {
         await sequelize.query(`ALTER TABLE crm_pay_history ADD COLUMN admin_fee_amount DECIMAL(10,2) NOT NULL DEFAULT 0.00`);
+      }
+      // Whether the receipt prints as a VAT/GST-inclusive Tax Invoice. Defaults
+      // to 1 so every receipt issued before this column existed keeps its
+      // current branch-driven VAT treatment on reprint.
+      if (!existing.has('vat_included')) {
+        await sequelize.query(`ALTER TABLE crm_pay_history ADD COLUMN vat_included TINYINT(1) NOT NULL DEFAULT 1`);
       }
     })().catch((error) => {
       payHistoryAdminFeeColumnsReady = null;

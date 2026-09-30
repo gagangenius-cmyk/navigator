@@ -34,6 +34,7 @@ interface PaymentRecord {
   accountantStatus: string | null;
   remark: string | null;
   adminFeeIncluded?: boolean;
+  includeVat?: boolean;
   adminFeeAmount?: number;
 }
 
@@ -119,6 +120,7 @@ export default function ReceiptPage() {
       remark: selected.remark,
       adminFeeIncluded: selected.adminFeeIncluded,
       adminFeeAmount: selected.adminFeeAmount,
+      includeVat: selected.includeVat,
     });
   }, [selected]);
 

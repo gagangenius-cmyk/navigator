@@ -5,6 +5,7 @@ import { CrmcOpportunityPayments, CrmcOpportunityActivities } from '@/models';
 import { sequelize } from '@/lib/sequelize';
 import { requireAuth, isAuthError } from '@/lib/apiAuth';
 import { isBranchManagerOrCeo, isCeo } from '@/lib/roleChecks';
+import { ensurePayHistoryAdminFeeColumns } from '@/lib/ensurePayHistoryAdminFeeColumns';
 
 // Only ever delete a blob we recognize as one of ours — never trust an
 // arbitrary stored URL string as safe to pass to a delete API.
@@ -145,9 +146,10 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     // receipt number (see the same join in GET /api/opportunity-payments) —
     // not on crm_opportunity_payments itself.
     const receiptKey = payment.get('receiptNumber') || payment.get('paymentNumber');
-    if (receiptKey && (body.remark !== undefined || body.adminFeeIncluded !== undefined || body.adminFeeAmount !== undefined)) {
-      const [payHistoryBefore] = await sequelize.query<{ remark: string | null; admin_fee_included: number; admin_fee_amount: number }>(
-        'SELECT remark, admin_fee_included, admin_fee_amount FROM crm_pay_history WHERE counselor_receipt = :receiptKey LIMIT 1',
+    if (receiptKey && (body.remark !== undefined || body.adminFeeIncluded !== undefined || body.adminFeeAmount !== undefined || body.includeVat !== undefined)) {
+      await ensurePayHistoryAdminFeeColumns();
+      const [payHistoryBefore] = await sequelize.query<{ remark: string | null; admin_fee_included: number; admin_fee_amount: number; vat_included: number }>(
+        'SELECT remark, admin_fee_included, admin_fee_amount, vat_included FROM crm_pay_history WHERE counselor_receipt = :receiptKey LIMIT 1',
         { replacements: { receiptKey }, type: QueryTypes.SELECT },
       );
 
@@ -166,6 +168,14 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         replacements.adminFeeIncluded = newVal;
         if (Number(payHistoryBefore?.admin_fee_included || 0) !== newVal) {
           changedFields.push(`adminFeeIncluded: ${Boolean(payHistoryBefore?.admin_fee_included)} → ${Boolean(newVal)}`);
+        }
+      }
+      if (body.includeVat !== undefined) {
+        const newVal = body.includeVat ? 1 : 0;
+        payHistorySet.push('vat_included = :vatIncluded');
+        replacements.vatIncluded = newVal;
+        if (Number(payHistoryBefore?.vat_included ?? 1) !== newVal) {
+          changedFields.push(`includeVat: ${Number(payHistoryBefore?.vat_included ?? 1) === 1} → ${newVal === 1}`);
         }
       }
       if (body.adminFeeAmount !== undefined) {

@@ -5,6 +5,7 @@ import { requireAuth, isAuthError } from '@/lib/apiAuth';
 import { canViewAllBranches, isBranchManagerOrCeo } from '@/lib/roleChecks';
 import { logDataAccess } from '@/lib/dataAccessAudit';
 import { captureError } from '@/lib/errorTracking';
+import { ensurePayHistoryAdminFeeColumns } from '@/lib/ensurePayHistoryAdminFeeColumns';
 
 let dbInitialized = false;
 const ensureDB = async () => { if (!dbInitialized) { await connectDB(); dbInitialized = true; } };
@@ -187,7 +188,9 @@ async function getPayments(search: string, status: string, dateFrom: string, dat
     payments.map((p) => p.receiptNumber || p.paymentNumber).filter(Boolean)
   ));
   let remarkByReceiptNumber: Record<string, string | null> = {};
+  let vatIncludedByReceiptNumber: Record<string, boolean> = {};
   if (receiptNumbers.length) {
+    await ensurePayHistoryAdminFeeColumns();
     const remarkRows = await sequelize.query<{ counselor_receipt: string; remark: string | null }>(
       `SELECT counselor_receipt, remark
        FROM crm_pay_history
@@ -195,10 +198,16 @@ async function getPayments(search: string, status: string, dateFrom: string, dat
       { replacements: { receiptNumbers }, type: QueryTypes.SELECT },
     );
     remarkByReceiptNumber = Object.fromEntries(remarkRows.map((row) => [row.counselor_receipt, row.remark]));
+    const vatRows = await sequelize.query<{ counselor_receipt: string; vat_included: number }>(
+      `SELECT counselor_receipt, vat_included FROM crm_pay_history WHERE counselor_receipt IN (:receiptNumbers)`,
+      { replacements: { receiptNumbers }, type: QueryTypes.SELECT },
+    );
+    vatIncludedByReceiptNumber = Object.fromEntries(vatRows.map((row) => [row.counselor_receipt, Number(row.vat_included ?? 1) === 1]));
   }
   const paymentsWithRemark = payments.map((p) => ({
     ...p,
     remark: remarkByReceiptNumber[p.receiptNumber || p.paymentNumber] || null,
+    includeVat: vatIncludedByReceiptNumber[p.receiptNumber || p.paymentNumber] ?? true,
   }));
 
   return NextResponse.json({

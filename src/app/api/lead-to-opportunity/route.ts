@@ -575,6 +575,7 @@ export async function POST(request: NextRequest) {
       // Admin fee amount is always derived server-side from the branch, never
       // trusted from the client — only whether the counselor checked the box.
       const adminFeeIncluded = Boolean(paymentData.adminFeeIncluded);
+      const vatIncluded = paymentData.includeVat === undefined ? true : Boolean(paymentData.includeVat);
       const adminFeeAmount = adminFeeIncluded
         ? getAdminFeeAmount(branchCurrency.branchName, branchCurrency.branchAddress, branchCurrency.currencyCode)
         : 0;
@@ -582,13 +583,13 @@ export async function POST(request: NextRequest) {
         `INSERT INTO crm_pay_history
            (leadId, amount, counselor_receipt, tabby, date, payMethod, payoption, paycardoption,
             payNextDate, payBalance, tax, payCategory, payment_remarks, remark, status, proof_url,
-            admin_fee_included, admin_fee_amount,
+            admin_fee_included, admin_fee_amount, vat_included,
             thirdPartyAmt, dmAmt, dmTax, dmRefundAmt, curValue, refNumber,
             created_by, stage, totaltillnow)
          VALUES
            (:leadId, :amount, :receiptNumber, 0, :payDate, :payMethod, :payoption, '',
             :payNextDate, :payBalance, :tax, 'payment', :remarks, :remark, 1, :proofUrl,
-            :adminFeeIncluded, :adminFeeAmount,
+            :adminFeeIncluded, :adminFeeAmount, :vatIncluded,
             0, :amount, 0, 0, 0, :refNumber,
             :createdBy, 'opportunity_conversion', :totalPaidSoFar)`,
         {
@@ -607,6 +608,7 @@ export async function POST(request: NextRequest) {
             proofUrl: paymentProofUrl || null,
             adminFeeIncluded: adminFeeIncluded ? 1 : 0,
             adminFeeAmount,
+            vatIncluded: vatIncluded ? 1 : 0,
             refNumber: paymentData.transactionId || paymentNumber,
             createdBy,
             totalPaidSoFar: paidAmount,

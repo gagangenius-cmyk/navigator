@@ -400,6 +400,10 @@ export interface ReceiptFields {
   remark?: string | null;
   adminFeeIncluded?: boolean;
   adminFeeAmount?: number | string | null;
+  // Counselor's "Include VAT" choice at receipt generation. Defaults to true
+  // (branch-driven tax treatment); false prints a plain Payment Receipt with
+  // no VAT/GST wording and no VAT on the admin fee.
+  includeVat?: boolean | number | null;
 }
 
 // Shared by every screen that prints a payment receipt so they all render
@@ -443,7 +447,9 @@ export function buildReceiptHtml(r: ReceiptFields): string {
   // (agreement totals, opportunity remaining balance), only this document's
   // own total-due line.
   const adminFeeAmount = r.adminFeeIncluded ? Math.max(0, Number(r.adminFeeAmount || 0)) : 0;
-  const adminFeeVatRate = adminFeeAmount > 0 ? getAdminFeeVatRate(companyName, branchAddress) : 0;
+  const includeVat = r.includeVat === undefined || r.includeVat === null ? true : Boolean(Number(r.includeVat));
+  const showVat = cfg.hasVat && includeVat;
+  const adminFeeVatRate = adminFeeAmount > 0 && includeVat ? getAdminFeeVatRate(companyName, branchAddress) : 0;
   const adminFeeVatAmount = adminFeeAmount * (adminFeeVatRate / 100);
   const receiptTotal = paidAmount + adminFeeAmount + adminFeeVatAmount;
 
@@ -454,8 +460,8 @@ export function buildReceiptHtml(r: ReceiptFields): string {
     : /qatar/i.test(cfg.countryLabel) ? 'Qatar Account'
     : /india/i.test(cfg.countryLabel) ? 'India Account'
     : 'UAE Account';
-  const docTitle = cfg.hasVat ? 'TAX INVOICE' : 'PAYMENT RECEIPT';
-  const totalLabel = `Total Amount Received${cfg.hasVat ? ` inclusive ${cfg.taxLabel} ${cfg.vatRate}%` : ''}`;
+  const docTitle = showVat ? 'TAX INVOICE' : 'PAYMENT RECEIPT';
+  const totalLabel = `Total Amount Received${showVat ? ` inclusive ${cfg.taxLabel} ${cfg.vatRate}%` : ''}`;
 
   return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"/>
 <title>Official Payment Receipt</title>
