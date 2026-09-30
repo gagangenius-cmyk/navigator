@@ -44,9 +44,10 @@ interface CrmEmployeeAttributes {
   employment_type: string;
   manager_id: number | null;
   must_change_password: number;
+  is_deleted: number;
 }
 
-type CrmEmployeeCreationAttributes = Optional<CrmEmployeeAttributes, 'email' | 'cemail' | 'mobile' | 'cmobile' | 'paddress' | 'address' | 'photo' | 'dob' | 'role' | 'branch' | 'region' | 'username' | 'password' | 'status' | 'ppNo' | 'visaExp' | 'department' | 'EID' | 'doj' | 'nationality' | 'dol' | 'remark' | 'labexp' | 'bounce' | 'em_local_name' | 'em_home_name' | 'em_local_number' | 'em_home_number' | 'work_location' | 'work_country' | 'work_city' | 'work_site' | 'employment_type' | 'manager_id' | 'must_change_password'>;
+type CrmEmployeeCreationAttributes = Optional<CrmEmployeeAttributes, 'email' | 'cemail' | 'mobile' | 'cmobile' | 'paddress' | 'address' | 'photo' | 'dob' | 'role' | 'branch' | 'region' | 'username' | 'password' | 'status' | 'ppNo' | 'visaExp' | 'department' | 'EID' | 'doj' | 'nationality' | 'dol' | 'remark' | 'labexp' | 'bounce' | 'em_local_name' | 'em_home_name' | 'em_local_number' | 'em_home_number' | 'work_location' | 'work_country' | 'work_city' | 'work_site' | 'employment_type' | 'manager_id' | 'must_change_password' | 'is_deleted'>;
 
 type AssociationModels = {
   CrmRole: ModelStatic<Model>;
@@ -99,6 +100,7 @@ class CrmEmployee extends Model<CrmEmployeeAttributes, CrmEmployeeCreationAttrib
   declare employment_type: string;
   declare manager_id: number | null;
   declare must_change_password: number;
+  declare is_deleted: number;
 
   // Association properties
   declare dmcForumLeadssByASSIGNTo?: CrmcForumLeads[];
@@ -290,6 +292,13 @@ CrmEmployee.init(
       allowNull: true
     },
     must_change_password: {
+      type: DataTypes.TINYINT,
+      allowNull: false,
+      defaultValue: 0
+    },
+    // CEO soft delete from the HR Employee Data Sheet: hidden from HR lists,
+    // row and history kept. Distinct from status = 0 (plain deactivation).
+    is_deleted: {
       type: DataTypes.TINYINT,
       allowNull: false,
       defaultValue: 0

@@ -37,9 +37,10 @@ interface CrmPayHistoryAttributes {
   proof_url: string | null;
   admin_fee_included: number;
   admin_fee_amount: number;
+  vat_included: number;
 }
 
-interface CrmPayHistoryCreationAttributes extends Optional<CrmPayHistoryAttributes, 'contractId' | 'amount' | 'date' | 'payMethod' | 'tax' | 'payCategory' | 'status' | 'remark' | 'canDate' | 'proof_url' | 'admin_fee_included' | 'admin_fee_amount'> {}
+interface CrmPayHistoryCreationAttributes extends Optional<CrmPayHistoryAttributes, 'contractId' | 'amount' | 'date' | 'payMethod' | 'tax' | 'payCategory' | 'status' | 'remark' | 'canDate' | 'proof_url' | 'admin_fee_included' | 'admin_fee_amount' | 'vat_included'> {}
 
 class CrmPayHistory extends Model<CrmPayHistoryAttributes, CrmPayHistoryCreationAttributes> implements CrmPayHistoryAttributes {
   declare id: number;
@@ -72,6 +73,7 @@ class CrmPayHistory extends Model<CrmPayHistoryAttributes, CrmPayHistoryCreation
   declare proof_url: string | null;
   declare admin_fee_included: number;
   declare admin_fee_amount: number;
+  declare vat_included: number;
 
   public static associate(models: any) {
     CrmPayHistory.belongsTo(models.CrmcForumLeads, { foreignKey: 'leadId', targetKey: 'id', as: 'dmcForumLeads' });
@@ -209,6 +211,12 @@ CrmPayHistory.init(
       type: DataTypes.DECIMAL(10, 2),
       allowNull: false,
       defaultValue: 0.00
+    },
+    // 1 = receipt prints with the branch's VAT/GST; 0 = plain Payment Receipt.
+    vat_included: {
+      type: DataTypes.TINYINT,
+      allowNull: false,
+      defaultValue: 1
     },
   },
   {
