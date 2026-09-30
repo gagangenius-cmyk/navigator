@@ -5,14 +5,18 @@ interface CrmSourceAttributes {
   id: number;
   name: string;
   status: number;
+  category: string | null;
+  sub_source: number;
 }
 
-interface CrmSourceCreationAttributes extends Optional<CrmSourceAttributes, 'id' | 'status'> {}
+interface CrmSourceCreationAttributes extends Optional<CrmSourceAttributes, 'id' | 'status' | 'category' | 'sub_source'> {}
 
 class CrmSource extends Model<CrmSourceAttributes, CrmSourceCreationAttributes> implements CrmSourceAttributes {
   declare id: number;
   declare name: string;
   declare status: number;
+  declare category: string | null;
+  declare sub_source: number;
 
   public static associate(models: any) {
   }
@@ -35,7 +39,16 @@ CrmSource.init(
       type: DataTypes.INTEGER,
       allowNull: false,
       defaultValue: 1
-    }
+    },
+    category: {
+      type: DataTypes.STRING(60),
+      allowNull: true
+    },
+    sub_source: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 0
+    },
   },
   {
     sequelize,

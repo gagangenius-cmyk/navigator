@@ -13,6 +13,8 @@ HrAttendanceRecord.init({
   source: { type: DataTypes.ENUM('Manual', 'Biometric', 'Import'), allowNull: false },
   notes: { type: DataTypes.TEXT, allowNull: true },
   approved_by: { type: DataTypes.CHAR(36), allowNull: true },
+  created_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
+  updated_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
 }, { sequelize, modelName: 'HrAttendanceRecord', tableName: 'crm_hr_attendance_records', timestamps: false });
 
 class HrLeaveRequest extends Model {}
@@ -33,6 +35,12 @@ HrLeaveRequest.init({
   manager_comment: { type: DataTypes.TEXT, allowNull: true },
   hr_status: { type: DataTypes.ENUM('Pending', 'Confirmed', 'Overridden'), defaultValue: 'Pending' },
   reviewed_by: { type: DataTypes.CHAR(36), allowNull: true },
+  applied_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
+  manager_reviewed_at: { type: DataTypes.DATE, allowNull: true },
+  reviewed_at: { type: DataTypes.DATE, allowNull: true },
+  review_notes: { type: DataTypes.TEXT, allowNull: true },
+  created_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
+  updated_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
 }, { sequelize, modelName: 'HrLeaveRequest', tableName: 'crm_hr_leave_requests', timestamps: false });
 
 class HrLeaveBalance extends Model {}
@@ -45,6 +53,7 @@ HrLeaveBalance.init({
   used_days: { type: DataTypes.DECIMAL(6, 2), defaultValue: 0 },
   pending_days: { type: DataTypes.DECIMAL(6, 2), defaultValue: 0 },
   remaining_days: { type: DataTypes.DECIMAL(6, 2), defaultValue: 0 },
+  updated_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
 }, { sequelize, modelName: 'HrLeaveBalance', tableName: 'crm_hr_leave_balances', timestamps: false });
 
 class HrEosbSettlement extends Model {}
@@ -81,6 +90,15 @@ HrPayslip.init({
   storage_key: { type: DataTypes.STRING(500), allowNull: false },
   signed_url: { type: DataTypes.TEXT, allowNull: false },
   signed_url_expires_at: { type: DataTypes.DATE, allowNull: false },
+  basic_salary: { type: DataTypes.DECIMAL(12, 2), allowNull: false, defaultValue: 0.00 },
+  allowances_json: { type: DataTypes.JSON, allowNull: true },
+  overtime_hours: { type: DataTypes.DECIMAL(6, 2), allowNull: false, defaultValue: 0.00 },
+  overtime_amount: { type: DataTypes.DECIMAL(12, 2), allowNull: false, defaultValue: 0.00 },
+  deductions_json: { type: DataTypes.JSON, allowNull: true },
+  bank_name: { type: DataTypes.STRING(255), allowNull: true },
+  masked_iban: { type: DataTypes.STRING(80), allowNull: true },
+  ytd_earnings: { type: DataTypes.DECIMAL(12, 2), allowNull: false, defaultValue: 0.00 },
+  created_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
 }, { sequelize, modelName: 'HrPayslip', tableName: 'crm_hr_payslips', timestamps: false });
 
 class HrExitChecklist extends Model {}
@@ -90,6 +108,10 @@ HrExitChecklist.init({
   separation_reason: { type: DataTypes.STRING(80), allowNull: true },
   last_working_day: { type: DataTypes.DATEONLY, allowNull: true },
   status: { type: DataTypes.ENUM('Open', 'Completed', 'Cancelled'), defaultValue: 'Open' },
+  exit_request_id: { type: DataTypes.CHAR(36), allowNull: true },
+  assigned_by: { type: DataTypes.CHAR(36), allowNull: true },
+  assigned_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
+  completed_at: { type: DataTypes.DATE, allowNull: true },
 }, { sequelize, modelName: 'HrExitChecklist', tableName: 'crm_hr_exit_checklists', timestamps: false });
 
 class HrExitChecklistItem extends Model {}
@@ -101,6 +123,10 @@ HrExitChecklistItem.init({
   item_text: { type: DataTypes.STRING(255), allowNull: false },
   owner_role: { type: DataTypes.STRING(100), allowNull: false },
   status: { type: DataTypes.ENUM('Pending', 'Completed', 'Waived'), defaultValue: 'Pending' },
+  completed_by: { type: DataTypes.CHAR(36), allowNull: true },
+  completed_at: { type: DataTypes.DATE, allowNull: true },
+  notes: { type: DataTypes.TEXT, allowNull: true },
+  sort_order: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
 }, { sequelize, modelName: 'HrExitChecklistItem', tableName: 'crm_hr_exit_checklist_items', timestamps: false });
 
 class HrLetterTemplate extends Model {}
@@ -110,6 +136,8 @@ HrLetterTemplate.init({
   template_name: { type: DataTypes.STRING(150), allowNull: false },
   body_template: { type: DataTypes.TEXT, allowNull: false },
   is_active: { type: DataTypes.BOOLEAN, defaultValue: true },
+  created_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
+  updated_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
 }, { sequelize, modelName: 'HrLetterTemplate', tableName: 'crm_hr_letter_templates', timestamps: false });
 
 class HrEmployeeLetter extends Model {}
@@ -121,6 +149,14 @@ HrEmployeeLetter.init({
   ref_number: { type: DataTypes.STRING(80), allowNull: false },
   issue_date: { type: DataTypes.DATEONLY, allowNull: false },
   last_working_day: { type: DataTypes.DATEONLY, allowNull: false },
+  designation: { type: DataTypes.STRING(150), allowNull: true },
+  department: { type: DataTypes.STRING(150), allowNull: true },
+  rendered_body: { type: DataTypes.TEXT, allowNull: false },
+  storage_key: { type: DataTypes.STRING(500), allowNull: false },
+  signed_url: { type: DataTypes.TEXT, allowNull: false },
+  signed_url_expires_at: { type: DataTypes.DATE, allowNull: false },
+  generated_by: { type: DataTypes.CHAR(36), allowNull: true },
+  generated_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
 }, { sequelize, modelName: 'HrEmployeeLetter', tableName: 'crm_hr_employee_letters', timestamps: false });
 
 class HrExitInterview extends Model {}
@@ -133,6 +169,16 @@ HrExitInterview.init({
   recommend_company: { type: DataTypes.BOOLEAN, allowNull: false },
   rehire_eligible: { type: DataTypes.BOOLEAN, allowNull: false },
   confidential: { type: DataTypes.BOOLEAN, defaultValue: true },
+  reason_details: { type: DataTypes.TEXT, allowNull: true },
+  job_satisfaction: { type: DataTypes.TINYINT, allowNull: false },
+  mgmt_satisfaction: { type: DataTypes.TINYINT, allowNull: false },
+  work_env_rating: { type: DataTypes.TINYINT, allowNull: false },
+  compensation_rating: { type: DataTypes.TINYINT, allowNull: false },
+  growth_rating: { type: DataTypes.TINYINT, allowNull: false },
+  feedback_text: { type: DataTypes.TEXT, allowNull: true },
+  suggestions: { type: DataTypes.TEXT, allowNull: true },
+  created_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
+  updated_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
 }, { sequelize, modelName: 'HrExitInterview', tableName: 'crm_hr_exit_interviews', timestamps: false });
 
 class HrHeadcountSnapshot extends Model {}
@@ -144,6 +190,7 @@ HrHeadcountSnapshot.init({
   active: { type: DataTypes.INTEGER, defaultValue: 0 },
   inactive: { type: DataTypes.INTEGER, defaultValue: 0 },
   on_leave: { type: DataTypes.INTEGER, defaultValue: 0 },
+  created_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
 }, { sequelize, modelName: 'HrHeadcountSnapshot', tableName: 'crm_hr_headcount_snapshots', timestamps: false });
 
 // Column names match the schema the v1 API route (src/app/api/v1/[...path]/route.ts) actually
@@ -159,6 +206,10 @@ HrEmployeeDocument.init({
   notes: { type: DataTypes.TEXT, allowNull: true },
   deleted_at: { type: DataTypes.DATE, allowNull: true },
   created_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
+  file_name: { type: DataTypes.STRING(255), allowNull: true },
+  file_url: { type: DataTypes.STRING(500), allowNull: true },
+  uploaded_by: { type: DataTypes.CHAR(36), allowNull: true },
+  uploaded_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
 }, { sequelize, modelName: 'HrEmployeeDocument', tableName: 'crm_hr_employee_documents', timestamps: false });
 
 class ProCompany extends Model {}
@@ -168,6 +219,10 @@ ProCompany.init({
   mohre_employer_code: { type: DataTypes.STRING(255), allowNull: true },
   status: { type: DataTypes.ENUM('Active', 'Inactive'), defaultValue: 'Active' },
   deleted_at: { type: DataTypes.DATE, allowNull: true },
+  gdrfa_establishment_no: { type: DataTypes.STRING(255), allowNull: true },
+  tax_registration_no: { type: DataTypes.STRING(255), allowNull: true },
+  created_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
+  updated_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
 }, { sequelize, modelName: 'ProCompany', tableName: 'crm_pro_companies', timestamps: false });
 
 class ProDocument extends Model {}
@@ -178,6 +233,21 @@ ProDocument.init({
   doc_type: { type: DataTypes.STRING(120), allowNull: true },
   expiry_date: { type: DataTypes.DATEONLY, allowNull: false },
   status: { type: DataTypes.ENUM('Valid', 'Expiring Soon', 'Expired', 'Renewal In Progress', 'Cancelled'), defaultValue: 'Valid' },
+  title: { type: DataTypes.STRING(255), allowNull: true },
+  doc_number: { type: DataTypes.STRING(255), allowNull: true },
+  issuing_authority: { type: DataTypes.STRING(255), allowNull: true },
+  category: { type: DataTypes.STRING(100), allowNull: true },
+  owner: { type: DataTypes.STRING(255), allowNull: true },
+  authority: { type: DataTypes.STRING(255), allowNull: true },
+  issue_date: { type: DataTypes.DATEONLY, allowNull: false },
+  reminder_days: { type: DataTypes.JSON, allowNull: true },
+  doc_file_url: { type: DataTypes.STRING(500), allowNull: true },
+  notes: { type: DataTypes.TEXT, allowNull: true },
+  managed_by: { type: DataTypes.CHAR(36), allowNull: true },
+  renewal_cost: { type: DataTypes.DECIMAL(12, 2), allowNull: true },
+  last_renewed: { type: DataTypes.DATEONLY, allowNull: true },
+  location: { type: DataTypes.STRING(255), allowNull: true },
+  created_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
 }, { sequelize, modelName: 'ProDocument', tableName: 'crm_pro_documents', timestamps: false });
 
 class ProEmployeeImmigration extends Model {}
@@ -190,6 +260,16 @@ ProEmployeeImmigration.init({
   visa_status: { type: DataTypes.ENUM('Active', 'Expiring', 'Expired', 'Cancelled', 'Under Processing'), defaultValue: 'Active' },
   labour_card_no: { type: DataTypes.STRING(255), allowNull: false },
   labour_card_expiry: { type: DataTypes.DATEONLY, allowNull: false },
+  visa_issue_date: { type: DataTypes.DATEONLY, allowNull: false },
+  contract_type: { type: DataTypes.ENUM('Limited', 'Unlimited'), allowNull: false },
+  mohre_contract_ref: { type: DataTypes.STRING(255), allowNull: true },
+  medical_fitness: { type: DataTypes.DATEONLY, allowNull: true },
+  health_insurance_no: { type: DataTypes.STRING(255), allowNull: true },
+  insurance_expiry: { type: DataTypes.DATEONLY, allowNull: true },
+  entry_permit_no: { type: DataTypes.STRING(255), allowNull: true },
+  status_change_log: { type: DataTypes.JSON, allowNull: true },
+  created_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
+  updated_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
 }, { sequelize, modelName: 'ProEmployeeImmigration', tableName: 'crm_pro_employee_immigration', timestamps: false });
 
 class ProWpsRecord extends Model {}
@@ -202,6 +282,13 @@ ProWpsRecord.init({
   total_amount: { type: DataTypes.DECIMAL(12, 2), defaultValue: 0 },
   status: { type: DataTypes.ENUM('Draft', 'Generated', 'Submitted', 'Confirmed', 'Rejected'), defaultValue: 'Draft' },
   processed_by: { type: DataTypes.CHAR(36), allowNull: false },
+  sif_file_url: { type: DataTypes.STRING(500), allowNull: true },
+  submission_date: { type: DataTypes.DATEONLY, allowNull: true },
+  submission_ref: { type: DataTypes.STRING(255), allowNull: true },
+  rejection_reason: { type: DataTypes.TEXT, allowNull: true },
+  salary_records: { type: DataTypes.JSON, allowNull: true },
+  created_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
+  updated_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
 }, { sequelize, modelName: 'ProWpsRecord', tableName: 'crm_pro_wps_records', timestamps: false });
 
 class ProInsuranceRecord extends Model {}
@@ -214,6 +301,14 @@ ProInsuranceRecord.init({
   policy_start: { type: DataTypes.DATEONLY, allowNull: false },
   policy_expiry: { type: DataTypes.DATEONLY, allowNull: false },
   status: { type: DataTypes.ENUM('Active', 'Expiring', 'Expired', 'Cancelled'), defaultValue: 'Active' },
+  employee_id: { type: DataTypes.CHAR(36), allowNull: true },
+  coverage_amount: { type: DataTypes.DECIMAL(12, 2), allowNull: true },
+  premium_amount: { type: DataTypes.DECIMAL(12, 2), allowNull: true },
+  dependents: { type: DataTypes.JSON, allowNull: true },
+  network_code: { type: DataTypes.STRING(100), allowNull: true },
+  card_url: { type: DataTypes.STRING(500), allowNull: true },
+  created_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
+  updated_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
 }, { sequelize, modelName: 'ProInsuranceRecord', tableName: 'crm_pro_insurance_records', timestamps: false });
 
 class ProGccBranchDocument extends Model {}
@@ -227,6 +322,14 @@ ProGccBranchDocument.init({
   licence_type: { type: DataTypes.STRING(255), allowNull: false },
   licence_expiry: { type: DataTypes.DATEONLY, allowNull: false },
   status: { type: DataTypes.ENUM('Active', 'Inactive', 'Renewal Pending'), defaultValue: 'Active' },
+  bank_account: { type: DataTypes.STRING(255), allowNull: true },
+  bank_name: { type: DataTypes.STRING(255), allowNull: true },
+  branch_manager: { type: DataTypes.STRING(255), allowNull: true },
+  contact_phone: { type: DataTypes.STRING(100), allowNull: true },
+  documents: { type: DataTypes.JSON, allowNull: true },
+  notes: { type: DataTypes.TEXT, allowNull: true },
+  created_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
+  updated_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
 }, { sequelize, modelName: 'ProGccBranchDocument', tableName: 'crm_pro_gcc_branch_documents', timestamps: false });
 
 class ProOwnerDocument extends Model {}
@@ -239,6 +342,18 @@ ProOwnerDocument.init({
   passport_expiry: { type: DataTypes.DATEONLY, allowNull: false },
   access_level: { type: DataTypes.ENUM('Restricted'), defaultValue: 'Restricted' },
   deleted_at: { type: DataTypes.DATE, allowNull: true },
+  emirates_id: { type: DataTypes.STRING(255), allowNull: true },
+  emirates_id_expiry: { type: DataTypes.DATEONLY, allowNull: true },
+  residence_visa_no: { type: DataTypes.STRING(255), allowNull: true },
+  visa_expiry: { type: DataTypes.DATEONLY, allowNull: true },
+  share_percentage: { type: DataTypes.DECIMAL(6, 2), allowNull: true },
+  poa_document: { type: DataTypes.STRING(500), allowNull: true },
+  poa_expiry: { type: DataTypes.DATEONLY, allowNull: true },
+  signature_specimen: { type: DataTypes.STRING(500), allowNull: true },
+  bank_signatories: { type: DataTypes.JSON, allowNull: true },
+  documents: { type: DataTypes.JSON, allowNull: true },
+  created_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
+  updated_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
 }, { sequelize, modelName: 'ProOwnerDocument', tableName: 'crm_pro_owner_documents', timestamps: false });
 
 class ProMonthlyTask extends Model {}
@@ -253,6 +368,13 @@ ProMonthlyTask.init({
   expiry_date: { type: DataTypes.DATEONLY, allowNull: false },
   status: { type: DataTypes.ENUM('To Do', 'In Progress', 'Renewal Applied', 'Completed', 'On Hold'), defaultValue: 'To Do' },
   due_date: { type: DataTypes.DATEONLY, allowNull: false },
+  est_cost_aed: { type: DataTypes.DECIMAL(12, 2), allowNull: true },
+  assigned_to: { type: DataTypes.CHAR(36), allowNull: true },
+  notes: { type: DataTypes.TEXT, allowNull: true },
+  completed_at: { type: DataTypes.DATE, allowNull: true },
+  completed_by: { type: DataTypes.CHAR(36), allowNull: true },
+  created_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
+  updated_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
 }, { sequelize, modelName: 'ProMonthlyTask', tableName: 'crm_pro_monthly_tasks', timestamps: false });
 
 class NotificationLog extends Model {}
@@ -264,6 +386,14 @@ NotificationLog.init({
   threshold_days: { type: DataTypes.INTEGER, allowNull: false },
   expiry_date: { type: DataTypes.DATEONLY, allowNull: false },
   status: { type: DataTypes.ENUM('Sent', 'Skipped', 'Failed'), defaultValue: 'Sent' },
+  employee_id: { type: DataTypes.CHAR(36), allowNull: true },
+  company_id: { type: DataTypes.CHAR(36), allowNull: true },
+  notified_parties: { type: DataTypes.JSON, allowNull: true },
+  title: { type: DataTypes.STRING(255), allowNull: false },
+  message: { type: DataTypes.TEXT, allowNull: false },
+  channels: { type: DataTypes.JSON, allowNull: true },
+  error_message: { type: DataTypes.TEXT, allowNull: true },
+  sent_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
 }, { sequelize, modelName: 'NotificationLog', tableName: 'notification_log', timestamps: false });
 
 export {

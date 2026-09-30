@@ -41,11 +41,13 @@ CrmClientUploadPortal.init(
       autoIncrement: true
     },
     clientId: {
+      field: 'client_id',
       type: DataTypes.STRING(40),
       allowNull: false,
       unique: true
     },
     leadId: {
+      field: 'lead_id',
       type: DataTypes.INTEGER,
       allowNull: false,
       references: {
@@ -54,6 +56,7 @@ CrmClientUploadPortal.init(
       }
     },
     opportunityId: {
+      field: 'opportunity_id',
       type: DataTypes.INTEGER,
       allowNull: true,
       references: {
@@ -62,10 +65,12 @@ CrmClientUploadPortal.init(
       }
     },
     agreementNumber: {
+      field: 'agreement_number',
       type: DataTypes.STRING(100),
       allowNull: true
     },
     accessToken: {
+      field: 'access_token',
       type: DataTypes.CHAR(64),
       allowNull: false,
       unique: true
@@ -76,10 +81,12 @@ CrmClientUploadPortal.init(
       defaultValue: 'active'
     },
     expiresAt: {
+      field: 'expires_at',
       type: DataTypes.DATE,
       allowNull: true
     },
     createdAt: {
+      field: 'created_at',
       type: DataTypes.DATE,
       allowNull: false,
       defaultValue: DataTypes.NOW

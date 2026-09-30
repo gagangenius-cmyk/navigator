@@ -44,9 +44,10 @@ interface CrmcOpportunityPaymentsAttributes {
   accountantRemarks: string | null;
   accountantId: number | null;
   accountantVerifiedAt: Date | null;
+  leadId: number | null;
 }
 
-interface CrmcOpportunityPaymentsCreationAttributes extends Optional<CrmcOpportunityPaymentsAttributes, 'id' | 'receiptNumber' | 'paymentType' | 'amount' | 'balanceAmount' | 'transactionId' | 'installmentNumber' | 'totalInstallments' | 'milestoneName' | 'gateway' | 'gatewayTransactionId' | 'receiptUrl' | 'description' | 'receiptType' | 'clientName' | 'clientEmail' | 'clientPhone' | 'clientAddress' | 'serviceName' | 'branchName' | 'consultantName' | 'taxAmount' | 'discountAmount' | 'notes' | 'accountantStatus' | 'accountantRemarks' | 'accountantId' | 'accountantVerifiedAt'> {}
+interface CrmcOpportunityPaymentsCreationAttributes extends Optional<CrmcOpportunityPaymentsAttributes, 'id' | 'receiptNumber' | 'paymentType' | 'amount' | 'balanceAmount' | 'transactionId' | 'installmentNumber' | 'totalInstallments' | 'milestoneName' | 'gateway' | 'gatewayTransactionId' | 'receiptUrl' | 'description' | 'receiptType' | 'clientName' | 'clientEmail' | 'clientPhone' | 'clientAddress' | 'serviceName' | 'branchName' | 'consultantName' | 'taxAmount' | 'discountAmount' | 'notes' | 'accountantStatus' | 'accountantRemarks' | 'accountantId' | 'accountantVerifiedAt' | 'leadId'> {}
 
 class CrmcOpportunityPayments extends Model<CrmcOpportunityPaymentsAttributes, CrmcOpportunityPaymentsCreationAttributes> implements CrmcOpportunityPaymentsAttributes {
   declare id: number;
@@ -91,6 +92,7 @@ class CrmcOpportunityPayments extends Model<CrmcOpportunityPaymentsAttributes, C
   declare accountantRemarks: string | null;
   declare accountantId: number | null;
   declare accountantVerifiedAt: Date | null;
+  declare leadId: number | null;
 
   public static associate(models: any) {
     CrmcOpportunityPayments.belongsTo(models.CrmcOpportunities, { foreignKey: 'opportunityId', targetKey: 'id', as: 'dmcOpportunity' });
@@ -289,6 +291,10 @@ CrmcOpportunityPayments.init(
     },
     accountantVerifiedAt: {
       type: DataTypes.DATE,
+      allowNull: true
+    },
+    leadId: {
+      type: DataTypes.INTEGER,
       allowNull: true
     },
   },

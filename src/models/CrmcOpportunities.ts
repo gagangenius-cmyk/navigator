@@ -47,9 +47,12 @@ interface CrmcOpportunitiesAttributes {
   isDeleted: boolean;
   deletedAt: Date | null;
   deletedBy: number | null;
+  operations_status: string;
+  operations_status_updated_by: number | null;
+  operations_status_updated_at: Date | null;
 }
 
-interface CrmcOpportunitiesCreationAttributes extends Optional<CrmcOpportunitiesAttributes, 'id' | 'opportunityType' | 'serviceType' | 'productType' | 'actualValue' | 'actualCloseDate' | 'source' | 'campaign' | 'leadSource' | 'branchId' | 'lostReason' | 'competitor' | 'nextActionDate' | 'conversionDate' | 'retentionAmount' | 'retentionStatus' | 'retentionDate' | 'agreementId' | 'isDeleted' | 'deletedAt' | 'deletedBy'> {}
+interface CrmcOpportunitiesCreationAttributes extends Optional<CrmcOpportunitiesAttributes, 'id' | 'opportunityType' | 'serviceType' | 'productType' | 'actualValue' | 'actualCloseDate' | 'source' | 'campaign' | 'leadSource' | 'branchId' | 'lostReason' | 'competitor' | 'nextActionDate' | 'conversionDate' | 'retentionAmount' | 'retentionStatus' | 'retentionDate' | 'agreementId' | 'isDeleted' | 'deletedAt' | 'deletedBy' | 'operations_status' | 'operations_status_updated_by' | 'operations_status_updated_at'> {}
 
 class CrmcOpportunities extends Model<CrmcOpportunitiesAttributes, CrmcOpportunitiesCreationAttributes> implements CrmcOpportunitiesAttributes {
   declare id: number;
@@ -97,6 +100,9 @@ class CrmcOpportunities extends Model<CrmcOpportunitiesAttributes, CrmcOpportuni
   declare isDeleted: boolean;
   declare deletedAt: Date | null;
   declare deletedBy: number | null;
+  declare operations_status: string;
+  declare operations_status_updated_by: number | null;
+  declare operations_status_updated_at: Date | null;
 
   public static associate(models: any) {
     CrmcOpportunities.belongsTo(models.CrmcForumLeads, { foreignKey: 'leadId', targetKey: 'id', as: 'dmcForumLead' });
@@ -336,6 +342,19 @@ CrmcOpportunities.init(
       type: DataTypes.INTEGER,
       allowNull: true,
       field: 'deleted_by',
+    },
+    operations_status: {
+      type: DataTypes.ENUM('Active', 'Closed', 'Refund', 'On Hold', 'Visa Approved'),
+      allowNull: false,
+      defaultValue: 'Active'
+    },
+    operations_status_updated_by: {
+      type: DataTypes.INTEGER,
+      allowNull: true
+    },
+    operations_status_updated_at: {
+      type: DataTypes.DATE,
+      allowNull: true
     },
   },
   {

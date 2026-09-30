@@ -42,6 +42,7 @@ CrmClientUploadChecklistItem.init(
       autoIncrement: true
     },
     portalId: {
+      field: 'portal_id',
       type: DataTypes.INTEGER,
       allowNull: false,
       references: {
@@ -50,6 +51,7 @@ CrmClientUploadChecklistItem.init(
       }
     },
     itemName: {
+      field: 'item_name',
       type: DataTypes.STRING(255),
       allowNull: false
     },
@@ -64,14 +66,17 @@ CrmClientUploadChecklistItem.init(
       defaultValue: 'pending'
     },
     fileUrl: {
+      field: 'file_url',
       type: DataTypes.STRING(500),
       allowNull: true
     },
     uploadedAt: {
+      field: 'uploaded_at',
       type: DataTypes.DATE,
       allowNull: true
     },
     verifiedBy: {
+      field: 'verified_by',
       type: DataTypes.INTEGER,
       allowNull: true,
       references: {
@@ -80,6 +85,7 @@ CrmClientUploadChecklistItem.init(
       }
     },
     verifiedAt: {
+      field: 'verified_at',
       type: DataTypes.DATE,
       allowNull: true
     },

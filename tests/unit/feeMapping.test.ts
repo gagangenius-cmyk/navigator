@@ -15,6 +15,8 @@ vi.mock('@/models/CrmFee', () => ({
 }));
 vi.mock('@/lib/apiAuth', () => ({ requireAuth: () => ({ id: 7 }), isAuthError: () => false }));
 vi.mock('@/lib/roleChecks', () => ({ isCeo: () => true }));
+// The route lazily adds crm_fee.premium_fee_* before touching the model; irrelevant to mapping logic.
+vi.mock('@/lib/ensureFeePremiumColumns', () => ({ ensureFeePremiumColumns: async () => undefined }));
 
 import { POST, PUT } from '@/app/api/admin/fees/route';
 

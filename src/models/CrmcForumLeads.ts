@@ -131,9 +131,29 @@ interface CrmcForumLeadsAttributes {
   opportunity_notes: string | null;
   opportunity_draft_data: Record<string, unknown> | null;
   tags: string | null;
+  opportunity_stage: string | null;
+  salutation: string | null;
+  suffix: string | null;
+  state: string | null;
+  postal_code: string | null;
+  age: number | null;
+  utm_source: string | null;
+  utm_medium: string | null;
+  gclid: string | null;
+  re_enquiry: number;
+  re_enquiry_counter: number;
+  call_attempt_1: Date | null;
+  call_back_attempts: number;
+  call_attempts_deadline: Date | null;
+  watnot_bot: number;
+  roundrobin: number;
+  whatsapp: number;
+  client_actual_name: string | null;
+  opportunity_id: number | null;
+  pool_entered_at: Date | null;
 }
 
-interface CrmcForumLeadsCreationAttributes extends Optional<CrmcForumLeadsAttributes, 'id' | 'dob' | 'appointment' | 'followup' | 'folowuptime' | 'followupstat' | 'stepComplete' | 'payType' | 'payTotal' | 'discount' | 'paidYet' | 'payBalance' | 'feeAgreeDate' | 'demandAmt' | 'dueDate' | 'demdRemark' | 'agreeDate' | 'renDate' | 'renExpiryDate' | 'renew_type' | 'status' | 'notf' | 'password' | 'novat' | 'i_p' | 'escalation' | 'transfer_date' | 'transfered' | 'otp_status' | 'otp' | 'otp_date' | 'otp_email' | 'browser' | 'hostname' | 'digital_signature' | 'lead_import_by' | 'lead_import' | 'education' | 'profession' | 'whatsapp_number' | 'passport_number'> { }
+interface CrmcForumLeadsCreationAttributes extends Optional<CrmcForumLeadsAttributes, 'id' | 'dob' | 'appointment' | 'followup' | 'folowuptime' | 'followupstat' | 'stepComplete' | 'payType' | 'payTotal' | 'discount' | 'paidYet' | 'payBalance' | 'feeAgreeDate' | 'demandAmt' | 'dueDate' | 'demdRemark' | 'agreeDate' | 'renDate' | 'renExpiryDate' | 'renew_type' | 'status' | 'notf' | 'password' | 'novat' | 'i_p' | 'escalation' | 'transfer_date' | 'transfered' | 'otp_status' | 'otp' | 'otp_date' | 'otp_email' | 'browser' | 'hostname' | 'digital_signature' | 'lead_import_by' | 'lead_import' | 'education' | 'profession' | 'whatsapp_number' | 'passport_number' | 'opportunity_stage' | 'salutation' | 'suffix' | 'state' | 'postal_code' | 'age' | 'utm_source' | 'utm_medium' | 'gclid' | 're_enquiry' | 're_enquiry_counter' | 'call_attempt_1' | 'call_back_attempts' | 'call_attempts_deadline' | 'watnot_bot' | 'roundrobin' | 'whatsapp' | 'client_actual_name' | 'opportunity_id' | 'pool_entered_at'> { }
 
 class CrmcForumLeads extends Model<CrmcForumLeadsAttributes, CrmcForumLeadsCreationAttributes> implements CrmcForumLeadsAttributes {
   declare id: number;
@@ -248,6 +268,26 @@ class CrmcForumLeads extends Model<CrmcForumLeadsAttributes, CrmcForumLeadsCreat
   declare meta_leadgen_id: string | null;
   declare old_branch: number;
   declare sf: number;
+  declare opportunity_stage: string | null;
+  declare salutation: string | null;
+  declare suffix: string | null;
+  declare state: string | null;
+  declare postal_code: string | null;
+  declare age: number | null;
+  declare utm_source: string | null;
+  declare utm_medium: string | null;
+  declare gclid: string | null;
+  declare re_enquiry: number;
+  declare re_enquiry_counter: number;
+  declare call_attempt_1: Date | null;
+  declare call_back_attempts: number;
+  declare call_attempts_deadline: Date | null;
+  declare watnot_bot: number;
+  declare roundrobin: number;
+  declare whatsapp: number;
+  declare client_actual_name: string | null;
+  declare opportunity_id: number | null;
+  declare pool_entered_at: Date | null;
   // Opportunity conversion fields
   declare opportunity_status: string | null;
   declare conversion_date: Date | null;
@@ -841,7 +881,93 @@ CrmcForumLeads.init(
     tags: {
       type: DataTypes.STRING(500),
       allowNull: true
-    }
+    },
+    opportunity_stage: {
+      type: DataTypes.STRING(30),
+      allowNull: true
+    },
+    salutation: {
+      type: DataTypes.STRING(10),
+      allowNull: true
+    },
+    suffix: {
+      type: DataTypes.STRING(20),
+      allowNull: true
+    },
+    state: {
+      type: DataTypes.STRING(100),
+      allowNull: true
+    },
+    postal_code: {
+      type: DataTypes.STRING(20),
+      allowNull: true
+    },
+    age: {
+      type: DataTypes.INTEGER,
+      allowNull: true
+    },
+    utm_source: {
+      type: DataTypes.STRING(255),
+      allowNull: true
+    },
+    utm_medium: {
+      type: DataTypes.STRING(255),
+      allowNull: true
+    },
+    gclid: {
+      type: DataTypes.STRING(255),
+      allowNull: true
+    },
+    re_enquiry: {
+      type: DataTypes.TINYINT,
+      allowNull: false,
+      defaultValue: 0
+    },
+    re_enquiry_counter: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 0
+    },
+    call_attempt_1: {
+      type: DataTypes.DATE,
+      allowNull: true
+    },
+    call_back_attempts: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 0
+    },
+    call_attempts_deadline: {
+      type: DataTypes.DATE,
+      allowNull: true
+    },
+    watnot_bot: {
+      type: DataTypes.TINYINT,
+      allowNull: false,
+      defaultValue: 0
+    },
+    roundrobin: {
+      type: DataTypes.TINYINT,
+      allowNull: false,
+      defaultValue: 0
+    },
+    whatsapp: {
+      type: DataTypes.TINYINT,
+      allowNull: false,
+      defaultValue: 0
+    },
+    client_actual_name: {
+      type: DataTypes.STRING(255),
+      allowNull: true
+    },
+    opportunity_id: {
+      type: DataTypes.INTEGER,
+      allowNull: true
+    },
+    pool_entered_at: {
+      type: DataTypes.DATE,
+      allowNull: true
+    },
   },
   {
     sequelize,
