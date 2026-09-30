@@ -24,7 +24,9 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get('status') || '';
     const offset = (page - 1) * limit;
 
-    const conditions: string[] = [];
+    // Soft-deleted employees (CEO delete) never appear in the list.
+    await HRService.ensureEmployeeCoreColumns();
+    const conditions: string[] = ['COALESCE(e.is_deleted, 0) = 0'];
     const replacements: Record<string, unknown> = { limit, offset };
 
     if (search) {

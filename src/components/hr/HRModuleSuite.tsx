@@ -29,6 +29,7 @@ import {
   Users,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { isCeo } from '@/lib/roleChecks';
 
 type ModuleKey =
   | 'employee-data-sheet'
@@ -392,7 +393,8 @@ const statusBadge = (status: string) => {
 };
 
 export default function HRModuleSuite({ activeModule = 'employee-data-sheet' }: { activeModule?: ModuleKey }) {
-  const { hasPermission, currencyCode } = useAuth();
+  const { user, hasPermission, currencyCode } = useAuth();
+  const userIsCeo = isCeo(user as any);
   // Shadows the module-level formatMoney so it shows the logged-in user's own
   // branch currency instead of a hardcoded 'AED'.
   const formatMoney = (value: number, targetCurrency = currencyCode) => {
@@ -556,7 +558,7 @@ export default function HRModuleSuite({ activeModule = 'employee-data-sheet' }: 
       })
       .catch(() => {});
     return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [payslipForm.employee_id]);
   const [exitChecklistForm, setExitChecklistForm] = useState({
     employee_id: '',
@@ -851,6 +853,20 @@ export default function HRModuleSuite({ activeModule = 'employee-data-sheet' }: 
     if (response.ok) await refreshEmployeeData();
   };
 
+  // CEO-only. The API soft-deletes (marks the employee inactive with a
+  // leaving date) rather than removing the row, so payroll/attendance history
+  // tied to the employee stays intact.
+  const deleteEmployee = async (employee: Employee) => {
+    if (!confirm(`Delete ${employee.name}? They will be removed from the active list and marked inactive with today as the leaving date.`)) return;
+    const response = await fetch(`/api/admin/employees?id=${encodeURIComponent(employee.id)}`, { method: 'DELETE' });
+    if (response.ok) {
+      await refreshEmployeeData();
+    } else {
+      const result = await response.json().catch(() => ({}));
+      alert(result.error || 'Failed to delete employee');
+    }
+  };
+
   const resetEmployeePassword = async (employee: Employee) => {
     if (!confirm(`Reset the login password for ${employee.name}? A new password will be generated and emailed to their company email.`)) return;
     const response = await fetch('/api/admin/employees/reset-password', {
@@ -990,7 +1006,7 @@ export default function HRModuleSuite({ activeModule = 'employee-data-sheet' }: 
               <SortableTh label="Contact" sortKey="contact" activeKey={employeeSortKey} direction={employeeSortDirection} onSort={toggleEmployeeSort} className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-500" />
               <SortableTh label="Visa Expiry" sortKey="visaExpiry" activeKey={employeeSortKey} direction={employeeSortDirection} onSort={toggleEmployeeSort} className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-500" />
               <SortableTh label="Status" sortKey="status" activeKey={employeeSortKey} direction={employeeSortDirection} onSort={toggleEmployeeSort} className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-500" />
-              {canUpdate && <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-500">Actions</th>}
+              {(canUpdate || userIsCeo) && <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-500">Actions</th>}
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -1017,9 +1033,10 @@ export default function HRModuleSuite({ activeModule = 'employee-data-sheet' }: 
                 <td className="px-4 py-3 text-sm text-slate-700">{employee.mobile || employee.email || 'Not set'}</td>
                 <td className="px-4 py-3 text-sm text-slate-700">{formatDate(employee.visaExp)}</td>
                 <td className="px-4 py-3">{statusBadge(employee.status === 1 ? 'Active' : 'Inactive')}</td>
-                {canUpdate && (
+                {(canUpdate || userIsCeo) && (
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
+                      {canUpdate && (<>
                       <button
                         type="button"
                         onClick={() => openEditEmployee(employee)}
@@ -1044,6 +1061,17 @@ export default function HRModuleSuite({ activeModule = 'employee-data-sheet' }: 
                       >
                         <KeyRound className="h-3.5 w-3.5" />
                       </button>
+                      </>)}
+                      {userIsCeo && (
+                        <button
+                          type="button"
+                          onClick={() => deleteEmployee(employee)}
+                          className="rounded-md border border-slate-200 p-1.5 text-slate-500 hover:bg-slate-50 hover:text-rose-700"
+                          title="Delete employee"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      )}
                     </div>
                   </td>
                 )}

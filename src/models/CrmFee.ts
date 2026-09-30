@@ -18,10 +18,12 @@ interface CrmFeeAttributes {
   forthStage: number;
   fifthStage: number;
   prof_fee_stage: number;
+  premium_fee_1: number;
+  premium_fee_2: number;
   status: number;
 }
 
-interface CrmFeeCreationAttributes extends Optional<CrmFeeAttributes, 'service' | 'country' | 'branch' | 'currency' | 'upfront' | 'prof_fee' | 'firstMonth' | 'secondMonth' | 'thirdMonth' | 'prof_fee_month' | 'firstStage' | 'secondStage' | 'thirdStage' | 'forthStage' | 'prof_fee_stage' | 'status'> {}
+interface CrmFeeCreationAttributes extends Optional<CrmFeeAttributes, 'service' | 'country' | 'branch' | 'currency' | 'upfront' | 'prof_fee' | 'firstMonth' | 'secondMonth' | 'thirdMonth' | 'prof_fee_month' | 'firstStage' | 'secondStage' | 'thirdStage' | 'forthStage' | 'prof_fee_stage' | 'premium_fee_1' | 'premium_fee_2' | 'status'> {}
 
 class CrmFee extends Model<CrmFeeAttributes, CrmFeeCreationAttributes> implements CrmFeeAttributes {
   declare id: number;
@@ -41,6 +43,8 @@ class CrmFee extends Model<CrmFeeAttributes, CrmFeeCreationAttributes> implement
   declare forthStage: number;
   declare fifthStage: number;
   declare prof_fee_stage: number;
+  declare premium_fee_1: number;
+  declare premium_fee_2: number;
   declare status: number;
 
   public static associate(models: any) {
@@ -130,6 +134,16 @@ CrmFee.init(
       allowNull: false
     },
     prof_fee_stage: {
+      type: DataTypes.DECIMAL(10,2),
+      allowNull: false,
+      defaultValue: 0.00
+    },
+    premium_fee_1: {
+      type: DataTypes.DECIMAL(10,2),
+      allowNull: false,
+      defaultValue: 0.00
+    },
+    premium_fee_2: {
       type: DataTypes.DECIMAL(10,2),
       allowNull: false,
       defaultValue: 0.00

@@ -157,6 +157,21 @@ export async function PUT(request: NextRequest) {
     if (rest.remark !== undefined) updateData.remark = String(rest.remark);
     if (rest.coa_account_id !== undefined) updateData.coa_account_id = rest.coa_account_id ? Number(rest.coa_account_id) : null;
 
+    // Add/remove VAT on an existing expense. The amount is always recomputed
+    // from the branch's own rate (never taken from the client), and only while
+    // the expense is still pending so an approved figure can't shift silently.
+    if (rest.includeVat !== undefined) {
+      if (!canManage(auth)) {
+        return NextResponse.json({ error: 'Only CEO or Accounts can change VAT on an expense' }, { status: 403 });
+      }
+      if (Number(expense.is_approval) === 1 && Number(expense.mgmt_approval) === 1) {
+        return NextResponse.json({ error: 'Revoke the approval before changing VAT on this expense' }, { status: 409 });
+      }
+      const branch = await CrmBranch.findByPk(Number(expense.branch));
+      const vatPercent = rest.includeVat ? Number(branch?.vat_gst_percent || 0) : 0;
+      updateData.vat = Math.round((Number(expense.amount) * vatPercent / 100) * 100) / 100;
+    }
+
     // Only CEO/Accounts can approve or reject - anyone with expense access
     // can edit the description/COA tagging, but not sign off on it.
     if (rest.mgmt_approval !== undefined || rest.is_approval !== undefined) {

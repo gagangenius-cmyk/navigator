@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { sequelize, connectDB } from '@/lib/sequelize';
 import { QueryTypes } from 'sequelize';
 import { requireAuth, isAuthError } from '@/lib/apiAuth';
+import { ensureFeePremiumColumns } from '@/lib/ensureFeePremiumColumns';
 
 let dbInitialized = false;
 const ensureDB = async () => {
@@ -49,12 +50,15 @@ export async function GET(request: NextRequest) {
     baseConditions.push('f.service = :service');
     if (branch) { baseConditions.push('f.branch = :branch'); baseReplacements.branch = Number(branch); }
 
+    await ensureFeePremiumColumns();
+
     const selectSql = (conditions: string[]) => `
       SELECT
         f.id, f.service, f.country, f.branch, f.currency,
         f.upfront, f.prof_fee,
         f.firstMonth, f.secondMonth, f.thirdMonth, f.prof_fee_month,
         f.firstStage, f.secondStage, f.thirdStage, f.forthStage, f.fifthStage, f.prof_fee_stage,
+        f.premium_fee_1, f.premium_fee_2,
         c.currency_code AS currencyCode,
         s.name          AS serviceName,
         co.name         AS countryName,

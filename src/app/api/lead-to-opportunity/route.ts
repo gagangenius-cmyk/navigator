@@ -13,6 +13,7 @@ import { logAudit } from '@/lib/auditLog';
 import { deriveProductTypeFromLabel } from '@/lib/clientPortalProducts';
 import { getAdminFeeAmount } from '@/lib/receiptTemplate';
 import { ensurePayHistoryAdminFeeColumns } from '@/lib/ensurePayHistoryAdminFeeColumns';
+import { ensureFeePremiumColumns } from '@/lib/ensureFeePremiumColumns';
 import { ensureClientActualNameColumn } from '@/lib/ensureClientActualNameColumn';
 import crypto from 'crypto';
 
@@ -180,7 +181,7 @@ const AGREEMENT_FLOW_ATTRIBUTES = [
 ];
 
 export async function POST(request: NextRequest) {
-  await Promise.all([ensurePayHistoryAdminFeeColumns(), ensureClientActualNameColumn()]);
+  await Promise.all([ensurePayHistoryAdminFeeColumns(), ensureClientActualNameColumn(), ensureFeePremiumColumns()]);
   const transaction = await sequelize.transaction();
 
   try {
@@ -1486,15 +1487,15 @@ async function findNextId(table: string, transaction: Transaction): Promise<numb
 }
 
 // Package amounts must come from crm_fee for the lead's selected program, not an
-// arbitrary client-submitted number. crm_fee stores three payable structures per
-// service/country(/branch) row — upfront-only, staged, or monthly — the wizard
-// lets the counsellor pick one, so this returns all three totals for validation.
+// arbitrary client-submitted number. crm_fee stores four payable structures per
+// service/country(/branch) row — upfront-only, staged, monthly, or premium — the wizard
+// lets the counsellor pick one, so this returns all four totals for validation.
 async function resolveFeePackageTotals(
   serviceId: number | null,
   countryId: number | null,
   branchId: number | null,
   transaction: Transaction
-): Promise<{ upfront: number; stage: number; monthly: number } | null> {
+): Promise<{ upfront: number; stage: number; monthly: number; premium: number } | null> {
   if (!serviceId) return null;
 
   const runLookup = async (withBranch: boolean) => {
@@ -1505,7 +1506,8 @@ async function resolveFeePackageTotals(
 
     const rows = await sequelize.query<any>(
       `SELECT f.upfront, f.prof_fee, f.firstMonth, f.secondMonth, f.thirdMonth, f.prof_fee_month,
-              f.firstStage, f.secondStage, f.thirdStage, f.forthStage, f.fifthStage, f.prof_fee_stage
+              f.firstStage, f.secondStage, f.thirdStage, f.forthStage, f.fifthStage, f.prof_fee_stage,
+              f.premium_fee_1, f.premium_fee_2
        FROM crm_fee f
        WHERE ${conditions.join(' AND ')}
        ORDER BY f.id DESC
@@ -1524,6 +1526,8 @@ async function resolveFeePackageTotals(
     upfront: base,
     stage: n(fee.firstStage) + n(fee.secondStage) + n(fee.thirdStage) + n(fee.forthStage) + n(fee.fifthStage),
     monthly: n(fee.firstMonth) + n(fee.secondMonth) + n(fee.thirdMonth),
+    // Premium is paid as two 50/50 installments; the package is their sum.
+    premium: n(fee.premium_fee_1) + n(fee.premium_fee_2),
   };
 }
 

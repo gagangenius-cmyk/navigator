@@ -7,7 +7,7 @@ import { SearchableSelect } from '@/components/ui/searchable-select';
 import { useAuth } from '@/contexts/AuthContext';
 import { isCeo, isFinanceOrAccounts } from '@/lib/roleChecks';
 import { uploadFileToBlob } from '@/lib/uploadToBlob';
-import { Receipt, CheckCircle, RotateCcw, Trash2 } from 'lucide-react';
+import { Receipt, CheckCircle, RotateCcw, Trash2, Percent } from 'lucide-react';
 
 interface ExpenseRow {
   id: number; date: string; particular: string; amount: number; vat: number; total: number;
@@ -155,6 +155,22 @@ export default function ExpensesPage() {
     load();
   };
 
+  const handleToggleVat = async (row: ExpenseRow) => {
+    const removing = row.vat > 0;
+    if (!confirm(removing ? 'Remove VAT from this expense?' : "Add VAT to this expense at the branch's VAT rate?")) return;
+    const res = await fetch('/api/admin/accounts/expenses', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: row.id, includeVat: !removing }),
+    });
+    if (!res.ok) {
+      const result = await res.json().catch(() => ({}));
+      setError(result.error || 'Failed to update VAT');
+      return;
+    }
+    load();
+  };
+
   const handleDelete = async (id: number) => {
     if (!confirm('Delete this expense?')) return;
     const res = await fetch(`/api/admin/accounts/expenses?id=${id}`, { method: 'DELETE' });
@@ -246,6 +262,7 @@ export default function ExpensesPage() {
                   ]}
                   actions={[
                     { key: 'approve', icon: CheckCircle, label: 'Approve', onClick: () => handleApprove(r.id, true), colorClass: 'bg-green-50 text-green-700 hover:bg-green-100', hidden: !(canManage && !r.approved) },
+                    { key: 'vat', icon: Percent, label: r.vat > 0 ? 'Remove VAT' : 'Add VAT', onClick: () => handleToggleVat(r), colorClass: 'bg-orange-50 text-orange-700 hover:bg-orange-100', hidden: !(canManage && !r.approved) },
                     { key: 'revoke', icon: RotateCcw, label: 'Revoke', onClick: () => handleApprove(r.id, false), colorClass: 'bg-yellow-50 text-yellow-700 hover:bg-yellow-100', hidden: !(canManage && r.approved) },
                     { key: 'delete', icon: Trash2, label: 'Delete', onClick: () => handleDelete(r.id), colorClass: 'bg-red-50 text-red-700 hover:bg-red-100', hidden: !isCeo(user as any) },
                   ]}

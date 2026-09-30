@@ -6,6 +6,7 @@ import type { CrmFeeAttributes } from '@/models/CrmFee';
 import { ForeignKeyConstraintError, Op } from 'sequelize';
 import { sequelize } from '@/lib/sequelize';
 import { ensureCountryProgramMapping, programTypeIsActive } from '@/lib/countryProgramMapping';
+import { ensureFeePremiumColumns } from '@/lib/ensureFeePremiumColumns';
 
 // crm_fee has foreign keys to service, country, branch and currency; a stale form
 // (something was deleted in another tab) should read as a fixable input problem.
@@ -27,6 +28,7 @@ export async function GET(request: NextRequest) {
   const auth = requireAuth(request, ['fees.manage']);
   if (isAuthError(auth)) return auth;
   try {
+    await ensureFeePremiumColumns();
     const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '10');
@@ -94,6 +96,7 @@ export async function POST(request: NextRequest) {
   const auth = requireAuth(request, ['fees.manage']);
   if (isAuthError(auth)) return auth;
   try {
+    await ensureFeePremiumColumns();
     // programType isn't a crm_fee column — it only exists to key the
     // crm_countries_type_program mapping below, so a fee can't be added
     // against a country/program pair that has no corresponding mapping row.
@@ -135,6 +138,7 @@ export async function PUT(request: NextRequest) {
   const auth = requireAuth(request, ['fees.manage']);
   if (isAuthError(auth)) return auth;
   try {
+    await ensureFeePremiumColumns();
     const { id, programType, ...updateData } = await request.json();
 
     const fee = await CrmFee.findByPk(id);
@@ -175,6 +179,7 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ error: 'Only the CEO can delete records' }, { status: 403 });
   }
   try {
+    await ensureFeePremiumColumns();
     const { searchParams } = new URL(request.url);
     const id = parseInt(searchParams.get('id') || '');
 

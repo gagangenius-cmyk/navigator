@@ -203,6 +203,8 @@ export default function OpportunityFlowWizard({ leadId, initialStage, initialOpp
     forthStage: number;
     fifthStage: number;
     prof_fee_stage: number;
+    premium_fee_1: number;
+    premium_fee_2: number;
   }
   const [feeData, setFeeData] = useState<FeeRecord | null>(null);
   const [feeLoading, setFeeLoading] = useState(false);
@@ -498,14 +500,16 @@ export default function OpportunityFlowWizard({ leadId, initialStage, initialOpp
   }, [leadId]);
 
   // ── Payment type for package selection ──
-  const [paymentType, setPaymentType] = useState<'upfront' | 'monthly' | 'stage'>('stage');
+  const [paymentType, setPaymentType] = useState<'upfront' | 'monthly' | 'stage' | 'premium'>('stage');
 
   // ── Helper: compute package totals from a fee record ──
   const getFeePackageTotals = (fee: FeeRecord) => {
     const upfrontTotal  = Number(fee.upfront);
     const monthlyTotal  = Number(fee.firstMonth) + Number(fee.secondMonth) + Number(fee.thirdMonth);
     const stageTotal    = Number(fee.firstStage) + Number(fee.secondStage) + Number(fee.thirdStage) + Number(fee.forthStage) + Number(fee.fifthStage);
-    return { upfrontTotal, monthlyTotal, stageTotal };
+    // Premium package: two 50/50 installments (crm_fee.premium_fee_1 + premium_fee_2).
+    const premiumTotal  = Number(fee.premium_fee_1 || 0) + Number(fee.premium_fee_2 || 0);
+    return { upfrontTotal, monthlyTotal, stageTotal, premiumTotal };
   };
 
   // ── Auto-fetch fee: service + country from lead (branch as enhancement; falls back without it) ──
@@ -2391,7 +2395,7 @@ function ProspectStage({ lead, data, setData, onLeadUpdated, onSaveProspect, onN
       )}
 
       {feeData && !feeLoading && (() => {
-        const { upfrontTotal, monthlyTotal, stageTotal } = getFeePackageTotals(feeData);
+        const { upfrontTotal, monthlyTotal, stageTotal, premiumTotal } = getFeePackageTotals(feeData);
         const cur = feeData.currencyCode || 'AED';
         const fmt = (n: number) => n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -2403,7 +2407,7 @@ function ProspectStage({ lead, data, setData, onLeadUpdated, onSaveProspect, onN
         const stageExtra = Number(feeData.firstStage) + Number(feeData.secondStage) + Number(feeData.thirdStage) + Number(feeData.forthStage) + Number(feeData.fifthStage);
         const monthlyExtra = Number(feeData.firstMonth) + Number(feeData.secondMonth) + Number(feeData.thirdMonth);
 
-        const packages: Array<{ key: 'upfront' | 'monthly' | 'stage'; label: string; total: number; rows: Array<{ label: string; amount: number }> }> = ([
+        const packages: Array<{ key: 'upfront' | 'monthly' | 'stage' | 'premium'; label: string; total: number; rows: Array<{ label: string; amount: number }> }> = ([
           {
             key: 'upfront' as const,
             label: 'Upfront Package',
@@ -2437,7 +2441,17 @@ function ProspectStage({ lead, data, setData, onLeadUpdated, onSaveProspect, onN
             ].filter(r => r.amount > 0),
             include: monthlyExtra > 0,
           },
-        ] as Array<{ key: 'upfront' | 'monthly' | 'stage'; label: string; total: number; rows: Array<{ label: string; amount: number }>; include: boolean }>).filter(pkg => pkg.include);
+          {
+            key: 'premium' as const,
+            label: 'Premium Package (50/50)',
+            total: premiumTotal,
+            rows: [
+              { label: 'Premium Fee 1 (50%)', amount: Number(feeData.premium_fee_1 || 0) },
+              { label: 'Premium Fee 2 (50%)', amount: Number(feeData.premium_fee_2 || 0) },
+            ].filter(r => r.amount > 0),
+            include: premiumTotal > 0,
+          },
+        ] as Array<{ key: 'upfront' | 'monthly' | 'stage' | 'premium'; label: string; total: number; rows: Array<{ label: string; amount: number }>; include: boolean }>).filter(pkg => pkg.include);
 
         return (
           <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-5">
@@ -2451,7 +2465,7 @@ function ProspectStage({ lead, data, setData, onLeadUpdated, onSaveProspect, onN
               <span className="px-2 py-1 bg-emerald-100 text-emerald-800 rounded text-xs font-medium">{cur}</span>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
               {packages.map(pkg => {
                 const isSelected = paymentType === pkg.key;
                 return (
@@ -2583,11 +2597,12 @@ function QuotationStage({ lead, data, setData, feeData, feeLoading, retentionDat
   // internal fee-tier breakdown — so this collapses upfront/prof/monthly or
   // stage amounts into a single item described by the selected program
   // (crm_service.name, via feeData.serviceName), priced at the full package total.
-  const buildFeeItems = (fee: any, type: 'upfront' | 'monthly' | 'stage') => {
+  const buildFeeItems = (fee: any, type: 'upfront' | 'monthly' | 'stage' | 'premium') => {
     const upfrontBase = Number(fee.upfront);
     const monthlyExtra = Number(fee.firstMonth) + Number(fee.secondMonth) + Number(fee.thirdMonth);
     const stageExtra = Number(fee.firstStage) + Number(fee.secondStage) + Number(fee.thirdStage) + Number(fee.forthStage) + Number(fee.fifthStage);
-    const total = type === 'upfront' ? upfrontBase : type === 'monthly' ? monthlyExtra : stageExtra;
+    const premiumTotal = Number(fee.premium_fee_1 || 0) + Number(fee.premium_fee_2 || 0);
+    const total = type === 'upfront' ? upfrontBase : type === 'monthly' ? monthlyExtra : type === 'premium' ? premiumTotal : stageExtra;
     if (total <= 0) return [];
     return [{ description: fee.serviceName || 'Program Fee', quantity: 1, unitPrice: String(total), total: String(total) }];
   };
@@ -2692,12 +2707,14 @@ function QuotationStage({ lead, data, setData, feeData, feeLoading, retentionDat
 
       {/* ── Payment Package (read-only here — chosen on the Prospect stage) ── */}
       {feeData && (() => {
-        const packageLabel = paymentType === 'stage' ? 'Stage-wise' : paymentType === 'monthly' ? 'Monthly' : 'Upfront Only';
+        const packageLabel = paymentType === 'stage' ? 'Stage-wise' : paymentType === 'monthly' ? 'Monthly' : paymentType === 'premium' ? 'Premium (50/50)' : 'Upfront Only';
         const packageTotal = paymentType === 'stage'
           ? Number(feeData.firstStage) + Number(feeData.secondStage) + Number(feeData.thirdStage) + Number(feeData.forthStage) + Number(feeData.fifthStage)
           : paymentType === 'monthly'
             ? Number(feeData.firstMonth) + Number(feeData.secondMonth) + Number(feeData.thirdMonth)
-            : Number(feeData.upfront);
+            : paymentType === 'premium'
+              ? Number(feeData.premium_fee_1 || 0) + Number(feeData.premium_fee_2 || 0)
+              : Number(feeData.upfront);
         return (
           <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
             <div className="flex items-center justify-between flex-wrap gap-3">

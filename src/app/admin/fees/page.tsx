@@ -313,6 +313,8 @@ export default function FeesManagement() {
                 { label: 'Currency', value: currencyName(fee.currency) },
                 { label: 'Upfront', value: fee.upfront },
                 { label: 'Prof Fee', value: fee.prof_fee },
+                { label: 'Premium Fee 1', value: fee.premium_fee_1 || 0 },
+                { label: 'Premium Fee 2', value: fee.premium_fee_2 || 0 },
               ]}
               actions={[
                 { key: 'view', icon: Eye, label: 'View', onClick: () => handleViewFee(fee) },
@@ -393,6 +395,8 @@ export default function FeesManagement() {
                     <p><span className="font-medium">Fourth Stage:</span> {selectedFee.forthStage}</p>
                     <p><span className="font-medium">Fifth Stage:</span> {selectedFee.fifthStage || 0}</p>
                     <p><span className="font-medium">Prof Fee Stage:</span> {selectedFee.prof_fee_stage}</p>
+                    <p><span className="font-medium">Premium Fee 1:</span> {selectedFee.premium_fee_1 || 0}</p>
+                    <p><span className="font-medium">Premium Fee 2:</span> {selectedFee.premium_fee_2 || 0}</p>
                   </div>
                 </div>
               </div>
@@ -464,6 +468,8 @@ function FeeFormModal({ title, initialData, lookup, onSubmit, onClose }: FeeForm
     forthStage: initialData?.forthStage ?? 0,
     fifthStage: initialData?.fifthStage ?? 0,
     prof_fee_stage: initialData?.prof_fee_stage ?? 0,
+    premium_fee_1: initialData?.premium_fee_1 ?? 0,
+    premium_fee_2: initialData?.premium_fee_2 ?? 0,
     status: initialData?.status ?? 1,
   });
 
@@ -633,6 +639,19 @@ function FeeFormModal({ title, initialData, lookup, onSubmit, onClose }: FeeForm
                 onChange={e => setFormData(prev => ({ ...prev, prof_fee_stage: parseFloat(e.target.value) || 0 }))}
                 className={inp} />
             </div>
+            <div>
+              <label className={lbl}>Premium Fee 1 (50%)</label>
+              <input type="number" step="0.01" value={formData.premium_fee_1}
+                onChange={e => { const v = parseFloat(e.target.value) || 0; setFormData(prev => ({ ...prev, premium_fee_1: v, premium_fee_2: v })); }}
+                className={inp} />
+            </div>
+            <div>
+              <label className={lbl}>Premium Fee 2 (50%)</label>
+              <input type="number" step="0.01" value={formData.premium_fee_2}
+                onChange={e => { const v = parseFloat(e.target.value) || 0; setFormData(prev => ({ ...prev, premium_fee_2: v })); }}
+                className={inp} />
+            </div>
+            <p className="md:col-span-3 -mt-2 text-xs text-gray-500">Premium fee is paid in two 50/50 installments. Premium Fee 2 fills in automatically with the same amount as Premium Fee 1; edit it only if the split differs.</p>
             <div>
               <label className={lbl}>Status *</label>
               <SearchableSelect required value={formData.status}

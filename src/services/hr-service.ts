@@ -3253,7 +3253,7 @@ export class HRService {
     const params = typeof options === 'number' ? { limit: options } : options;
     const limit = Math.max(1, Math.min(Number(params.limit || 100), 500));
     const page = Math.max(1, Number(params.page || 1));
-    const conditions: string[] = [];
+    const conditions: string[] = ['COALESCE(e.is_deleted, 0) = 0'];
     const replacements: Record<string, string | number> = { limit, offset: (page - 1) * limit };
 
     if (params.search) {
@@ -3520,7 +3520,7 @@ export class HRService {
     await sequelize.query(
       `
         UPDATE crm_employee
-        SET status = 0, dol = COALESCE(dol, CURRENT_DATE())
+        SET status = 0, is_deleted = 1, dol = COALESCE(dol, CURRENT_DATE())
         WHERE id = :id
       `,
       { replacements: { id } }
@@ -3623,6 +3623,10 @@ export class HRService {
     await this.addColumnIfMissing('crm_employee', 'work_site', 'VARCHAR(255) NULL');
     await this.addColumnIfMissing('crm_employee', 'employment_type', "ENUM('Full-time', 'Contract', 'Freelance', 'Part-time') NOT NULL DEFAULT 'Full-time'");
     await this.addColumnIfMissing('crm_employee', 'must_change_password', 'TINYINT(1) NOT NULL DEFAULT 0');
+    // CEO "delete" from the Employee Data Sheet: hidden from HR lists but the row
+    // (and its payroll/attendance history) is kept. Distinct from status = 0,
+    // which is a plain deactivation that still shows as Inactive.
+    await this.addColumnIfMissing('crm_employee', 'is_deleted', 'TINYINT(1) NOT NULL DEFAULT 0');
 
     await sequelize.query(`
       CREATE TABLE IF NOT EXISTS crm_hr_headcount_snapshots (
@@ -3663,6 +3667,7 @@ export class HRService {
             AND CURRENT_DATE() BETWEEN start_date AND end_date
           GROUP BY employee_id
         ) active_leave ON CAST(active_leave.employee_id AS CHAR) COLLATE utf8mb4_general_ci = CAST(crm_employee.id AS CHAR) COLLATE utf8mb4_general_ci
+        WHERE COALESCE(crm_employee.is_deleted, 0) = 0
       `,
       { type: QueryTypes.SELECT }
     );
@@ -3738,6 +3743,7 @@ export class HRService {
           SUM(CASE WHEN e.status = 1 AND COALESCE(e.employment_type, 'Full-time') = 'Part-time' THEN 1 ELSE 0 END) AS partTime
         FROM crm_employee e
         LEFT JOIN crm_department d ON d.id = e.department
+        WHERE COALESCE(e.is_deleted, 0) = 0
         GROUP BY e.department, d.name
         ORDER BY total DESC
       `,
