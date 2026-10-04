@@ -597,8 +597,8 @@ function RuleEditorModal({
             {editing.assignmentMode === 'round_robin' && (
               <p className="mt-2 text-xs text-[var(--dmc-muted)]">
                 The number next to each name is their share of the rotation (default 1 each) - e.g. 2 means
-                roughly double the turns of someone left at 1. The ⚡ toggle marks someone "always available" -
-                they stay eligible for this rule's rotation 24/7 even if nobody marks them present that day,
+                roughly double the turns of someone left at 1. The ⚡ toggle marks someone &ldquo;always
+                available&rdquo; - they stay eligible for this rule&apos;s rotation 24/7 even if nobody marks them present that day,
                 while everyone else in the queue still needs to check in.
               </p>
             )}
