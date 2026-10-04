@@ -4,6 +4,7 @@ import { resolveLeadAutoAssignment, LeadAutoAssignmentResult } from './leadAutoA
 import { ensureEmployeeAttendanceTable, CHECKED_IN_TODAY_SQL } from './employeeAttendanceTable';
 import { HRService } from '@/services/hr-service';
 import { getAssignmentSettings } from './assignmentSettings';
+import { pickSmoothWeighted } from './roundRobinSelection';
 
 // Enterprise-style "Assignment Rules" engine (the concept Zoho calls Assignment
 // Rules / Rule Entries and Salesforce calls Lead Assignment Rules): an ordered
@@ -609,28 +610,6 @@ async function loadRuleCandidates(
 // with no weights set), SWRR's own well-known property is that it degrades
 // to a plain round-robin cycling through candidates in list order, so
 // unweighted rules behave exactly as they did before this existed.
-function pickWeighted<T extends { id: number }>(
-  candidates: T[],
-  weightOf: (candidate: T) => number,
-  priorCurrent: Record<number, number>
-): { selected: T; nextCurrent: Record<number, number> } {
-  const weights = candidates.map((c) => Math.max(1, Math.round(weightOf(c)) || 1));
-  const total = weights.reduce((sum, w) => sum + w, 0);
-  const current = candidates.map((c) => priorCurrent[c.id] ?? 0);
-
-  let bestIndex = 0;
-  let bestScore = -Infinity;
-  for (let i = 0; i < candidates.length; i++) {
-    current[i] += weights[i];
-    if (current[i] > bestScore) { bestScore = current[i]; bestIndex = i; }
-  }
-  current[bestIndex] -= total;
-
-  const nextCurrent: Record<number, number> = {};
-  candidates.forEach((c, i) => { nextCurrent[c.id] = current[i]; });
-  return { selected: candidates[bestIndex], nextCurrent };
-}
-
 async function getNextRuleRoundRobinCandidate(
   ruleId: number,
   candidates: RuleCandidate[],
@@ -638,15 +617,17 @@ async function getNextRuleRoundRobinCandidate(
   transaction: Transaction,
   consumeRoundRobin: boolean
 ): Promise<RuleCandidate> {
-  await sequelize.query(
-    `INSERT INTO crm_assignment_rule_state (rule_id, last_employee_id, current_weights, created_at, updated_at)
-     VALUES (:ruleId, NULL, NULL, NOW(), NOW())
-     ON DUPLICATE KEY UPDATE rule_id = rule_id`,
-    { replacements: { ruleId }, transaction }
-  );
+  if (consumeRoundRobin) {
+    await sequelize.query(
+      `INSERT INTO crm_assignment_rule_state (rule_id, last_employee_id, current_weights, created_at, updated_at)
+       VALUES (:ruleId, NULL, NULL, NOW(), NOW())
+       ON DUPLICATE KEY UPDATE rule_id = rule_id`,
+      { replacements: { ruleId }, transaction }
+    );
+  }
 
-  const stateRows = await sequelize.query<{ current_weights: string | null }>(
-    'SELECT current_weights FROM crm_assignment_rule_state WHERE rule_id = :ruleId FOR UPDATE',
+  const stateRows = await sequelize.query<{ last_employee_id: number | null; current_weights: string | null }>(
+    `SELECT last_employee_id, current_weights FROM crm_assignment_rule_state WHERE rule_id = :ruleId ${consumeRoundRobin ? 'FOR UPDATE' : ''}`,
     { replacements: { ruleId }, type: QueryTypes.SELECT, transaction }
   );
 
@@ -655,7 +636,12 @@ async function getNextRuleRoundRobinCandidate(
     priorCurrent = stateRows[0]?.current_weights ? JSON.parse(stateRows[0].current_weights) : {};
   } catch { priorCurrent = {}; }
 
-  const { selected, nextCurrent } = pickWeighted(candidates, (c) => weights[c.id] ?? 1, priorCurrent);
+  const { selected, nextCurrent } = pickSmoothWeighted(
+    candidates,
+    (c) => weights[c.id] ?? 1,
+    priorCurrent,
+    stateRows[0]?.last_employee_id ?? null
+  );
 
   if (consumeRoundRobin) {
     await sequelize.query(

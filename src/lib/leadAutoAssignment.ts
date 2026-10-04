@@ -2,6 +2,7 @@ import { QueryTypes, Transaction } from 'sequelize';
 import { sequelize } from './sequelize';
 import { ensureEmployeeAttendanceTable, CHECKED_IN_TODAY_SQL } from './employeeAttendanceTable';
 import { HRService } from '@/services/hr-service';
+import { pickNextCandidate } from './roundRobinSelection';
 
 export interface LeadAutoAssignmentInput {
   branchId: number;
@@ -84,11 +85,17 @@ const getAllocatedEmployeeIds = async (branchId: number, transaction?: Transacti
   return parseIdList(rows[0]?.counsilors);
 };
 
-const loadCandidates = async (branchId: number, allocatedEmployeeIds: number[], transaction?: Transaction): Promise<AssignmentCandidate[]> => {
+const loadCandidates = async (
+  branchId: number,
+  allocatedEmployeeIds: number[],
+  requireCheckedIn: boolean,
+  transaction?: Transaction
+): Promise<AssignmentCandidate[]> => {
   const hasAllocations = allocatedEmployeeIds.length > 0;
   const orderClause = hasAllocations
     ? `sourceRank ASC, FIELD(e.id, ${allocatedEmployeeIds.join(',')}) ASC`
     : 'sourceRank ASC, e.id ASC';
+  const attendanceClause = requireCheckedIn ? `AND ${CHECKED_IN_TODAY_SQL}` : '';
 
   return sequelize.query<AssignmentCandidate>(
     `SELECT
@@ -105,7 +112,7 @@ const loadCandidates = async (branchId: number, allocatedEmployeeIds: number[], 
         ON l.assignTo = e.id
         AND COALESCE(l.status, '') NOT IN ('Converted', 'Closed', 'Lost', 'client', 'retained')
       WHERE e.status = 1
-        AND ${CHECKED_IN_TODAY_SQL}
+        ${attendanceClause}
         AND (
           (:hasAllocations = 1 AND e.id IN (:allocatedEmployeeIds))
           OR (:hasAllocations = 0 AND e.branch = :branchId)
@@ -130,21 +137,23 @@ const getNextRoundRobinCandidate = async (
   transaction: Transaction,
   consumeRoundRobin: boolean
 ): Promise<AssignmentCandidate> => {
-  await sequelize.query(
-    `INSERT INTO crm_lead_round_robin_state (branch_id, last_employee_id, created_at, updated_at)
-     VALUES (:branchId, NULL, NOW(), NOW())
-     ON DUPLICATE KEY UPDATE branch_id = branch_id`,
-    {
-      replacements: { branchId },
-      transaction,
-    }
-  );
+  if (consumeRoundRobin) {
+    await sequelize.query(
+      `INSERT INTO crm_lead_round_robin_state (branch_id, last_employee_id, created_at, updated_at)
+       VALUES (:branchId, NULL, NOW(), NOW())
+       ON DUPLICATE KEY UPDATE branch_id = branch_id`,
+      {
+        replacements: { branchId },
+        transaction,
+      }
+    );
+  }
 
   const stateRows = await sequelize.query<{ last_employee_id: number | null }>(
     `SELECT last_employee_id
      FROM crm_lead_round_robin_state
      WHERE branch_id = :branchId
-     FOR UPDATE`,
+     ${consumeRoundRobin ? 'FOR UPDATE' : ''}`,
     {
       replacements: { branchId },
       type: QueryTypes.SELECT,
@@ -152,10 +161,7 @@ const getNextRoundRobinCandidate = async (
     }
   );
 
-  const lastEmployeeId = stateRows[0]?.last_employee_id || null;
-  const lastIndex = lastEmployeeId ? candidates.findIndex((candidate) => candidate.id === lastEmployeeId) : -1;
-  const nextIndex = (lastIndex + 1) % candidates.length;
-  const selected = candidates[nextIndex];
+  const selected = pickNextCandidate(candidates, stateRows[0]?.last_employee_id ?? null);
 
   if (consumeRoundRobin) {
     await sequelize.query(
@@ -201,37 +207,38 @@ export const resolveLeadAutoAssignment = async ({
 
   return sequelize.transaction(async (transaction) => {
     const allocatedEmployeeIds = await getAllocatedEmployeeIds(normalizedBranchId, transaction);
-    const candidates = await loadCandidates(normalizedBranchId, allocatedEmployeeIds, transaction);
+    // Prefer checked-in employees, but if nobody is present keep rotating
+    // across the active configured queue. Previously this path repeatedly
+    // chose the lowest-id branch employee and ignored counselor allocations.
+    let candidates = await loadCandidates(normalizedBranchId, allocatedEmployeeIds, true, transaction);
+    if (candidates.length === 0) {
+      candidates = await loadCandidates(normalizedBranchId, allocatedEmployeeIds, false, transaction);
+    }
+    let usingAllocatedQueue = allocatedEmployeeIds.length > 0 && candidates.length > 0;
+
+    // A stale allocation roster (all configured employees inactive/deleted)
+    // must not block an otherwise staffed branch. Fall back to the branch's
+    // active queue, while still using the same fair cursor-based rotation.
+    if (candidates.length === 0 && allocatedEmployeeIds.length > 0) {
+      candidates = await loadCandidates(normalizedBranchId, [], true, transaction);
+      if (candidates.length === 0) {
+        candidates = await loadCandidates(normalizedBranchId, [], false, transaction);
+      }
+      usingAllocatedQueue = false;
+    }
     const selected = candidates.length > 0 && roundRobin
       ? await getNextRoundRobinCandidate(normalizedBranchId, candidates, transaction, consumeRoundRobin)
       : candidates[0];
 
     if (!selected) {
-      // No checked-in employees today — fall back to any active employee in the branch.
-      const fallbackRows = await sequelize.query<{ id: number; branch: number | null }>(
-        `SELECT id, branch FROM crm_employee WHERE status = 1 AND branch = :branchId ORDER BY id ASC LIMIT 1`,
-        { replacements: { branchId: normalizedBranchId }, type: QueryTypes.SELECT, transaction }
-      );
-
-      if (!fallbackRows[0]) {
-        throw new Error(`No active employees are available for branch ${normalizedBranchId}`);
-      }
-
-      return {
-        assignedEmployeeId: fallbackRows[0].id,
-        counselorId: fallbackRows[0].id,
-        branchId: fallbackRows[0].branch || normalizedBranchId,
-        strategy: 'fallback_employee',
-        candidateCount: 0,
-        currentLeadCount: 0,
-      };
+      throw new Error(`No active employees are available for branch ${normalizedBranchId}`);
     }
 
     return {
       assignedEmployeeId: selected.id,
       counselorId: selected.id,
       branchId: selected.branch || normalizedBranchId,
-      strategy: allocatedEmployeeIds.length > 0 ? 'branch_allocation_round_robin' : 'branch_active_employee_round_robin',
+      strategy: usingAllocatedQueue ? 'branch_allocation_round_robin' : 'branch_active_employee_round_robin',
       candidateCount: candidates.length,
       currentLeadCount: Number(selected.openLeadCount || 0),
     };
