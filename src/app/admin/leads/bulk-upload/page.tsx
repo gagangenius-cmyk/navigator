@@ -114,7 +114,9 @@ export default function BulkLeadUploadPage() {
             campaign, campaign_group, remarks, campaign_name, regdate
           </p>
           <p className="text-sm text-gray-500 mt-2">
-            <strong>counselor</strong> is matched by name against employees and sets the lead&apos;s assigned counselor.{' '}
+            <strong>counselor</strong> is matched by name against employees and sets the lead&apos;s assigned counselor;
+            leave it blank (or an unmatched name) and the row is routed automatically through{' '}
+            <a href="/admin/leads/assignment-rules" className="text-blue-600 hover:underline">Assignment Rules</a> instead.{' '}
             <strong>market_source</strong> is matched by name against Market Sources.{' '}
             <strong>campaign_name</strong> is matched by name against Campaigns.
             Unmatched values are left blank on the lead and reported as warnings below rather than blocking the row.

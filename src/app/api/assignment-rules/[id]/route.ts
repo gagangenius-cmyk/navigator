@@ -6,6 +6,9 @@ import { getAssignmentRuleById, updateAssignmentRule, deleteAssignmentRule } fro
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = requireAuth(request, ['transfers.manage']);
   if (isAuthError(auth)) return auth;
+  if (!isCeo(auth)) {
+    return NextResponse.json({ success: false, error: 'Only the CEO can manage lead assignment rules' }, { status: 403 });
+  }
   try {
     const { id } = await params;
     const rule = await getAssignmentRuleById(Number.parseInt(id, 10));
@@ -20,6 +23,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = requireAuth(request, ['transfers.manage']);
   if (isAuthError(auth)) return auth;
+  if (!isCeo(auth)) {
+    return NextResponse.json({ success: false, error: 'Only the CEO can manage lead assignment rules' }, { status: 403 });
+  }
   try {
     const { id } = await params;
     const body = await request.json();
@@ -36,6 +42,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       serviceInterestIds: body.serviceInterestIds,
       assignmentMode: body.assignmentMode,
       employeeIds: body.employeeIds,
+      employeeWeights: body.employeeWeights,
+      maxOpenLeadsPerEmployee: body.maxOpenLeadsPerEmployee,
     }, auth.id);
     return NextResponse.json({ success: true, rule });
   } catch (error) {

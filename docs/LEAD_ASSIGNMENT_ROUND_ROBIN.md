@@ -109,7 +109,7 @@ future call site too.
 | Entry point | File | Behavior |
 |---|---|---|
 | Manual "Add Lead" form (round robin/auto-assign checkbox) | `src/app/api/leads/route.ts` (`POST`) | Only FOE/Branch Manager/CEO can request auto-assign; a plain counselor's lead is always self-assigned, bypassing rules entirely. |
-| Excel bulk upload | `src/app/api/leads/bulk-upload/route.ts` | Assigns by literal "Counselor" column match only; **does not** call the rule engine (left unassigned when no name matches). Candidate for future extension - see §8. |
+| Excel bulk upload | `src/app/api/leads/bulk-upload/route.ts` | A literal "Counselor" column match always wins (same manual-pick precedence as everywhere else). Otherwise falls through to the rule engine per row, same as every other entry point. |
 | Public lead-intake webhook (Meta/Instagram/LinkedIn/website forms) | `src/app/api/lead-intake/route.ts` (`POST`/`PUT`) | Resolves the inbound `source` string to a `crm_source.id` first, then calls the rule engine - this is the main entry point source-based rules are built for. |
 | Admin-triggered "Auto-Assign" button on an existing lead | `src/app/api/lead-auto-assignment/route.ts` (`GET` preview / `POST` apply) | Loads the lead's own branch/source/priority/quality from the DB so the rule match is based on the lead's real attributes, not just its branch. |
 | Assignment Rules admin UI | `src/app/admin/leads/assignment-rules/page.tsx` | Create/edit/reorder/delete rules, and a non-consuming "Test a lead" preview panel. |
@@ -140,8 +140,23 @@ lead is created or the admin UI is opened.
 | `service_interest_ids` | VARCHAR(255) NULL | CSV of `crm_forum_leads.service_interest` FK values |
 | `assignment_mode` | VARCHAR(20) | `round_robin` or `specific_employee` |
 | `employee_ids` | VARCHAR(1000) | CSV of `crm_employee.id` - the queue (or the single fixed owner) |
+| `employee_weights` | VARCHAR(2000) NULL | CSV of integers parallel-indexed to `employee_ids` - each member's share of the rotation. Missing/invalid entries default to 1, so an unweighted rule is identical to before this existed. |
+| `max_open_leads_per_employee` | INT NULL | Skip a queue member once their open-lead count reaches this. `NULL` = unlimited. |
 | `created_at` / `updated_at` | DATETIME | |
 | `created_by` / `updated_by` | INT NULL | `crm_employee.id` of the admin who last touched the rule |
+
+### `crm_assignment_settings` (new)
+
+Single row (`id = 1`), the same self-provisioning pattern as
+`crm_discount_tier_config` - CEO-editable from the Automation Settings card
+at the top of the admin UI:
+
+| Column | Type | Meaning |
+|---|---|---|
+| `round_robin_enabled` | TINYINT | Global kill-switch. `0` makes every automatic-assignment call (rule engine, branch fallback, the admin Auto-Assign button, the SLA sweep) throw the same "No active employees are available" signal every call site already treats as "leave unassigned, don't fail" - new leads land straight in the Lead Pool for manual claim. Never affects an explicit manual pick. |
+| `sla_sweep_enabled` | TINYINT | The 5-minute cron keeps ticking regardless (so re-enabling takes effect on the next tick with no restart); when `0`, each tick no-ops and logs a `skipped` run instead of sweeping. |
+| `pool_sla_minutes` | INT | Replaces the old `LEAD_POOL_SLA_MINUTES` env var at runtime - that var now only seeds this table's very first row on a fresh install. |
+| `updated_at` / `updated_by` | DATETIME / INT NULL | |
 
 ### `crm_assignment_rule_state` (new)
 
@@ -192,14 +207,42 @@ stays checked in, go to: `19 → 12 → 7 → 19`. If employee `12` checks out
 partway through, the candidate list shrinks to `[7, 19]` and the rotation
 continues correctly from whichever of those two was picked last.
 
+### Weighted rotation
+
+Setting `employee_weights` (e.g. `12 → 1, 7 → 2, 19 → 1`) switches step 4
+above to true smooth weighted round-robin (SWRR) - the same algorithm
+Nginx/HAProxy use for weighted load balancing. `crm_assignment_rule_state`
+carries a `current_weights` column (JSON, `{employeeId: counter}`) alongside
+`last_employee_id`: each pick adds every candidate's weight to its counter,
+selects whoever's counter is now highest, then subtracts the total weight
+from only the winner. This interleaves `7` roughly every other turn (e.g.
+`7, 12, 7, 19, 7, 12, ...`), never clumped as `7, 7, 12, 19`. An earlier
+version of this tried to avoid the extra column by expanding candidates
+into a precomputed sequence and indexing by "where was the last pick" - that
+silently broke (collapsed back to an even split) whenever the last pick's
+employee appeared more than once in the sequence, which is exactly the
+common case for any weight > 1. SWRR's own counter-based approach has no
+such ambiguity, which is why the state table does carry this one extra
+column. Every member defaults to weight 1, and SWRR's well-known property is
+that an all-1-weights queue degenerates to a plain round robin in list
+order, so a rule with no weighting configured is unaffected.
+
+### Capacity caps
+
+Setting `max_open_leads_per_employee` filters the candidate list (after the
+checked-in/active gates, before rotation) to exclude anyone already at or
+over that many currently-open leads. If that empties the list, the rule
+produces no candidate - same "fall through to the branch fallback" behavior
+as an empty/all-checked-out queue.
+
 ## 7. API reference
 
-All routes require the `transfers.manage` permission (the same gate the
-sibling `auto-reassignment` rules feature uses) except where noted -
-practically this means CEO, Director, Director of Sales, Super Admin, IT,
-and Founder; **not** Branch Manager (company-wide routing policy is treated
-as a director-level configuration, matching how the inactivity-reassignment
-rules feature is already scoped).
+Every `/api/assignment-rules*` route requires the `transfers.manage`
+permission **and** `isCeo(auth)` - CEO only, tightened from the broader
+`transfers.manage` group (Director, Director of Sales, Super Admin, IT,
+Founder) the sibling `auto-reassignment` rules feature still uses, at the
+CEO's explicit request. The sidebar nav entry is hidden from everyone else
+(`ceoOnly: true` in `DashboardLayout.tsx`).
 
 | Method | Path | Purpose |
 |---|---|---|
@@ -207,9 +250,10 @@ rules feature is already scoped).
 | `POST` | `/api/assignment-rules` | Create a rule. |
 | `GET` | `/api/assignment-rules/:id` | Fetch one rule. |
 | `PUT` | `/api/assignment-rules/:id` | Update a rule (partial - only sent fields change). |
-| `DELETE` | `/api/assignment-rules/:id` | Delete a rule. **CEO only**, on top of the base permission check. |
+| `DELETE` | `/api/assignment-rules/:id` | Delete a rule. |
 | `POST` | `/api/assignment-rules/reorder` | Body `{ orderedIds: number[] }` - rewrites `sort_order` to match array order. |
-| `POST` | `/api/assignment-rules/preview` | Body `{ branchId, sourceId?, priority?, leadQuality?, countryInterestId?, serviceInterestId? }` → `{ matchedRule, assignment }`. Non-consuming. |
+| `POST` | `/api/assignment-rules/preview` | Body `{ branchId, sourceId?, priority?, leadQuality?, countryInterestId?, serviceInterestId? }` → `{ matchedRule, assignment }`. Non-consuming. Also reflects `round_robin_enabled = false` (throws the same signal a real lead would), so this doubles as a way to confirm the kill-switch is working without creating a real lead. |
+| `GET` / `PUT` | `/api/assignment-rules/settings` | Read/update `crm_assignment_settings` (round-robin on/off, SLA sweep on/off, SLA threshold minutes). |
 | `GET` | `/api/assignment-rules/reference-data` | `{ branches, sources, employees }` for populating the admin UI's pickers in one request. |
 | `GET` | `/api/lead-auto-assignment?leadId=&branchId=` | Existing manual "who's next" preview, now rule-aware; pass `leadId` for an accurate match against that lead's real attributes. |
 | `POST` | `/api/lead-auto-assignment` | Existing manual "Auto-Assign" action on an existing lead, now rule-aware. |
@@ -217,15 +261,23 @@ rules feature is already scoped).
 ## 8. Admin UI
 
 `/admin/leads/assignment-rules` (linked from the sidebar as **Assignment
-Rules**, next to the existing **Lead Assignment** availability page):
+Rules**, CEO-only, next to the existing **Lead Assignment** availability
+page):
 
+- **Automation Settings** card at the top - the `round_robin_enabled` /
+  `sla_sweep_enabled` toggles and the SLA threshold, saved on change, with a
+  link through to the System Jobs page (`/admin/system-jobs`) for the cron's
+  run history rather than duplicating it here.
 - An ordered list of rules with up/down re-order buttons, an active/inactive
-  toggle, condition chips, and the queue's member names.
+  toggle, condition chips, the queue's member names (with their weight shown
+  as `×N` when not 1), and the capacity cap when set.
 - **New Rule** opens a form: name/description, condition builder (branch and
   source as multi-select chips; priority and lead quality as comma-separated
   text, since those columns are free text rather than enums in this schema),
-  and an assignment section (round robin queue vs. one fixed owner), with
-  employees grouped by their own branch for easy scanning.
+  and an assignment section (round robin queue vs. one fixed owner) with
+  employees grouped by their own branch. In round-robin mode, each selected
+  employee gets a small weight stepper (default 1) next to their chip, and
+  an optional "max open leads per agent" field below the queue.
 - **Test a lead** - pick a branch/source/priority/quality combination and see
   which rule (if any) would fire and who would receive it right now, without
   moving any rotation cursor. Falls back to reporting the branch round robin
@@ -260,11 +312,14 @@ it lives in the one shared hook every assignment path already called.
 
 ## 11. Known gaps / future extension points
 
-- Bulk Excel upload (`bulk-upload/route.ts`) still only assigns by literal
-  counselor-name column match; it does not consult assignment rules. Wiring
-  it in would mean deciding whether each row should be evaluated against the
-  rule engine individually (likely correct, but slower for large files) or
-  once for the whole batch.
+Closed since the sections above were first written: bulk Excel upload now
+consults the rule engine per row (§4), weighted round robin and per-agent
+capacity caps exist per rule (§5, §6), and the SLA sweep's threshold plus a
+global on/off switch are CEO-editable from the admin UI instead of a
+deploy-time env var (§5's `crm_assignment_settings`).
+
+Still open:
+
 - No territory/region-level rule dimension yet - only branch, not region, is
   a condition. `crm_forum_leads.region` and `crm_employee.region` already
   exist and could be added as a seventh condition column the same way the
@@ -274,5 +329,12 @@ it lives in the one shared hook every assignment path already called.
   escalation if nobody responds (that concern is handled separately, and
   only by inactive-hours, by the existing `crm_auto_reassignment_rules`
   engine in `src/app/api/auto-reassignment`).
-- No weighted round robin (e.g. senior counselors getting 2x the leads of
-  junior ones) - every queue member gets exactly one turn per rotation.
+- Weighting and capacity caps apply only inside a rule's own queue, not the
+  branch-level fallback engine (`leadAutoAssignment.ts`) - that stays a
+  simple, uniform, always-available default on purpose. Extending either
+  concept to the fallback itself would be a separate, deliberate change.
+- `round_robin_enabled = false` also pauses the admin "Test a lead" preview
+  and the admin-triggered "Auto-Assign" button on an existing lead, not just
+  automatic routing of brand-new leads - a deliberate simplification (one
+  switch, one meaning everywhere) rather than an oversight; see
+  `resolveLeadAssignment` in `assignmentRuleEngine.ts`.

@@ -1,16 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, isAuthError } from '@/lib/apiAuth';
+import { isCeo } from '@/lib/roleChecks';
 import { listAssignmentRules, createAssignmentRule, AssignmentRuleInput } from '@/lib/assignmentRuleEngine';
 
 // CRUD for enterprise-style Lead Assignment Rules (Zoho/Salesforce concept):
 // an ordered list of condition -> owner rules evaluated by
-// src/lib/assignmentRuleEngine.ts whenever a new lead is created. Gated by
-// the same 'transfers.manage' permission already used for the sibling
-// auto-reassignment-rules feature (src/app/api/auto-reassignment/route.ts).
+// src/lib/assignmentRuleEngine.ts whenever a new lead is created. CEO-only -
+// company-wide routing policy, tightened from the broader 'transfers.manage'
+// group (Director/Director of Sales/Super Admin/IT/Founder) this sibling
+// auto-reassignment-rules feature uses, at the CEO's explicit request.
 
 export async function GET(request: NextRequest) {
   const auth = requireAuth(request, ['transfers.manage']);
   if (isAuthError(auth)) return auth;
+  if (!isCeo(auth)) {
+    return NextResponse.json({ success: false, error: 'Only the CEO can manage lead assignment rules' }, { status: 403 });
+  }
   try {
     const rules = await listAssignmentRules();
     return NextResponse.json({ success: true, rules });
@@ -23,6 +28,9 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const auth = requireAuth(request, ['transfers.manage']);
   if (isAuthError(auth)) return auth;
+  if (!isCeo(auth)) {
+    return NextResponse.json({ success: false, error: 'Only the CEO can manage lead assignment rules' }, { status: 403 });
+  }
   try {
     const body = await request.json();
     const input: AssignmentRuleInput = {
@@ -38,6 +46,8 @@ export async function POST(request: NextRequest) {
       serviceInterestIds: body.serviceInterestIds,
       assignmentMode: body.assignmentMode,
       employeeIds: body.employeeIds,
+      employeeWeights: body.employeeWeights,
+      maxOpenLeadsPerEmployee: body.maxOpenLeadsPerEmployee,
     };
     const rule = await createAssignmentRule(input, auth.id);
     return NextResponse.json({ success: true, rule }, { status: 201 });

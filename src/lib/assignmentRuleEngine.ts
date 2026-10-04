@@ -3,6 +3,7 @@ import { sequelize } from './sequelize';
 import { resolveLeadAutoAssignment, LeadAutoAssignmentResult } from './leadAutoAssignment';
 import { ensureEmployeeAttendanceTable, CHECKED_IN_TODAY_SQL } from './employeeAttendanceTable';
 import { HRService } from '@/services/hr-service';
+import { getAssignmentSettings } from './assignmentSettings';
 
 // Enterprise-style "Assignment Rules" engine (the concept Zoho calls Assignment
 // Rules / Rule Entries and Salesforce calls Lead Assignment Rules): an ordered
@@ -29,6 +30,14 @@ export interface AssignmentRule {
   serviceInterestIds: number[];
   assignmentMode: AssignmentMode;
   employeeIds: number[];
+  // Per-employee share of the rotation within this rule's queue - keyed by
+  // employee id, default 1 for anyone not listed (or when the rule has no
+  // weighting configured at all, every member is an equal 1). Round-robin
+  // only; meaningless for 'specific_employee' mode.
+  employeeWeights: Record<number, number>;
+  // Skip a queue member once their open-lead count reaches this, instead of
+  // assigning them more than they can realistically handle. null = unlimited.
+  maxOpenLeadsPerEmployee: number | null;
   createdAt?: string;
   updatedAt?: string;
   createdBy?: number | null;
@@ -48,6 +57,8 @@ export interface AssignmentRuleInput {
   serviceInterestIds?: number[];
   assignmentMode: AssignmentMode;
   employeeIds: number[];
+  employeeWeights?: Record<number, number>;
+  maxOpenLeadsPerEmployee?: number | null;
 }
 
 export interface LeadAssignmentContext {
@@ -83,6 +94,8 @@ interface RuleRow {
   service_interest_ids: string | null;
   assignment_mode: AssignmentMode;
   employee_ids: string;
+  employee_weights: string | null;
+  max_open_leads_per_employee: number | null;
   created_at: string;
   updated_at: string;
   created_by: number | null;
@@ -92,32 +105,57 @@ interface RuleRow {
 let rulesTableReady: Promise<void> | null = null;
 let ruleStateTableReady: Promise<void> | null = null;
 
+// crm_next and every other already-deployed install created this table before
+// employee_weights/max_open_leads_per_employee existed - CREATE TABLE IF NOT
+// EXISTS alone never adds columns to an existing table, so this lazily ALTERs
+// them in, same pattern as every other "ensure column" helper added this
+// session (vat_included, is_deleted, premium_fee_1/2).
+const ensureWeightingColumns = async () => {
+  const [rows] = await sequelize.query(`
+    SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'crm_assignment_rules'
+      AND COLUMN_NAME IN ('employee_weights', 'max_open_leads_per_employee')
+  `);
+  const existing = new Set(((rows as Array<{ COLUMN_NAME: string }>) || []).map((r) => r.COLUMN_NAME));
+  if (!existing.has('employee_weights')) {
+    await sequelize.query(`ALTER TABLE crm_assignment_rules ADD COLUMN employee_weights VARCHAR(2000) NULL`);
+  }
+  if (!existing.has('max_open_leads_per_employee')) {
+    await sequelize.query(`ALTER TABLE crm_assignment_rules ADD COLUMN max_open_leads_per_employee INT NULL`);
+  }
+};
+
 const ensureAssignmentRulesTable = async () => {
   if (!rulesTableReady) {
-    rulesTableReady = sequelize.query(`
-      CREATE TABLE IF NOT EXISTS crm_assignment_rules (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        name VARCHAR(150) NOT NULL,
-        description TEXT NULL,
-        is_active TINYINT NOT NULL DEFAULT 1,
-        sort_order INT NOT NULL DEFAULT 0,
-        branch_ids VARCHAR(255) NULL,
-        source_ids VARCHAR(255) NULL,
-        priorities VARCHAR(150) NULL,
-        lead_qualities VARCHAR(255) NULL,
-        country_interest_ids VARCHAR(255) NULL,
-        service_interest_ids VARCHAR(255) NULL,
-        assignment_mode VARCHAR(20) NOT NULL DEFAULT 'round_robin',
-        employee_ids VARCHAR(1000) NOT NULL,
-        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        created_by INT NULL,
-        updated_by INT NULL,
-        INDEX idx_assignment_rules_active_order (is_active, sort_order),
-        CONSTRAINT fk_assignment_rules_created_by FOREIGN KEY (created_by) REFERENCES crm_employee(id) ON DELETE SET NULL,
-        CONSTRAINT fk_assignment_rules_updated_by FOREIGN KEY (updated_by) REFERENCES crm_employee(id) ON DELETE SET NULL
-      )
-    `).then(() => undefined).catch((error) => {
+    rulesTableReady = (async () => {
+      await sequelize.query(`
+        CREATE TABLE IF NOT EXISTS crm_assignment_rules (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          name VARCHAR(150) NOT NULL,
+          description TEXT NULL,
+          is_active TINYINT NOT NULL DEFAULT 1,
+          sort_order INT NOT NULL DEFAULT 0,
+          branch_ids VARCHAR(255) NULL,
+          source_ids VARCHAR(255) NULL,
+          priorities VARCHAR(150) NULL,
+          lead_qualities VARCHAR(255) NULL,
+          country_interest_ids VARCHAR(255) NULL,
+          service_interest_ids VARCHAR(255) NULL,
+          assignment_mode VARCHAR(20) NOT NULL DEFAULT 'round_robin',
+          employee_ids VARCHAR(1000) NOT NULL,
+          employee_weights VARCHAR(2000) NULL,
+          max_open_leads_per_employee INT NULL,
+          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          created_by INT NULL,
+          updated_by INT NULL,
+          INDEX idx_assignment_rules_active_order (is_active, sort_order),
+          CONSTRAINT fk_assignment_rules_created_by FOREIGN KEY (created_by) REFERENCES crm_employee(id) ON DELETE SET NULL,
+          CONSTRAINT fk_assignment_rules_updated_by FOREIGN KEY (updated_by) REFERENCES crm_employee(id) ON DELETE SET NULL
+        )
+      `);
+      await ensureWeightingColumns();
+    })().catch((error) => {
       rulesTableReady = null;
       throw error;
     });
@@ -127,16 +165,26 @@ const ensureAssignmentRulesTable = async () => {
 
 const ensureRuleStateTable = async () => {
   if (!ruleStateTableReady) {
-    ruleStateTableReady = sequelize.query(`
-      CREATE TABLE IF NOT EXISTS crm_assignment_rule_state (
-        rule_id INT NOT NULL PRIMARY KEY,
-        last_employee_id INT NULL,
-        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        CONSTRAINT fk_assignment_rule_state_rule FOREIGN KEY (rule_id) REFERENCES crm_assignment_rules(id) ON DELETE CASCADE,
-        CONSTRAINT fk_assignment_rule_state_employee FOREIGN KEY (last_employee_id) REFERENCES crm_employee(id) ON DELETE SET NULL
-      )
-    `).then(() => undefined).catch((error) => {
+    ruleStateTableReady = (async () => {
+      await sequelize.query(`
+        CREATE TABLE IF NOT EXISTS crm_assignment_rule_state (
+          rule_id INT NOT NULL PRIMARY KEY,
+          last_employee_id INT NULL,
+          current_weights TEXT NULL,
+          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          CONSTRAINT fk_assignment_rule_state_rule FOREIGN KEY (rule_id) REFERENCES crm_assignment_rules(id) ON DELETE CASCADE,
+          CONSTRAINT fk_assignment_rule_state_employee FOREIGN KEY (last_employee_id) REFERENCES crm_employee(id) ON DELETE SET NULL
+        )
+      `);
+      const [rows] = await sequelize.query(`
+        SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'crm_assignment_rule_state' AND COLUMN_NAME = 'current_weights'
+      `);
+      if (!(rows as Array<{ COLUMN_NAME: string }>).length) {
+        await sequelize.query(`ALTER TABLE crm_assignment_rule_state ADD COLUMN current_weights TEXT NULL`);
+      }
+    })().catch((error) => {
       ruleStateTableReady = null;
       throw error;
     });
@@ -163,6 +211,29 @@ const parseStringList = (value: unknown): string[] => {
 const toCsv = (values: Array<string | number> | undefined | null): string | null => {
   if (!values || values.length === 0) return null;
   return values.map((v) => String(v).trim()).filter(Boolean).join(',');
+};
+
+// employee_weights is a CSV of integers parallel-indexed to employee_ids
+// (e.g. employee_ids="12,7,19", employee_weights="1,2,1" -> employee 7 gets
+// double the share). A missing, shorter, or non-numeric entry defaults to 1,
+// so a rule saved before weighting existed (or with no weights set) behaves
+// as a plain, perfectly uniform round robin - weighting is purely additive.
+const parseWeights = (value: string | null, employeeIds: number[]): Record<number, number> => {
+  const parts = (value || '').split(',');
+  const weights: Record<number, number> = {};
+  employeeIds.forEach((id, index) => {
+    const parsed = Number.parseInt((parts[index] || '').trim(), 10);
+    weights[id] = Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
+  });
+  return weights;
+};
+
+const weightsToCsv = (weights: Record<number, number> | undefined, employeeIds: number[]): string | null => {
+  if (!weights) return null;
+  return employeeIds.map((id) => {
+    const w = weights[id];
+    return Number.isFinite(w) && w > 0 ? Math.round(w) : 1;
+  }).join(',');
 };
 
 // sequelize.query()'s raw return shape for an INSERT varies by how the
@@ -196,6 +267,8 @@ const rowToRule = (row: RuleRow): AssignmentRule => ({
   serviceInterestIds: parseIdList(row.service_interest_ids),
   assignmentMode: row.assignment_mode,
   employeeIds: parseIdList(row.employee_ids),
+  employeeWeights: parseWeights(row.employee_weights, parseIdList(row.employee_ids)),
+  maxOpenLeadsPerEmployee: row.max_open_leads_per_employee ?? null,
   createdAt: row.created_at,
   updatedAt: row.updated_at,
   createdBy: row.created_by,
@@ -233,6 +306,12 @@ function validateRuleInput(input: AssignmentRuleInput) {
   if (input.assignmentMode === 'specific_employee' && input.employeeIds.length !== 1) {
     throw new Error('"specific_employee" mode requires exactly one employee');
   }
+  if (
+    input.maxOpenLeadsPerEmployee !== undefined && input.maxOpenLeadsPerEmployee !== null
+    && (!Number.isFinite(input.maxOpenLeadsPerEmployee) || input.maxOpenLeadsPerEmployee < 1)
+  ) {
+    throw new Error('Max open leads per agent must be a positive number, or left blank for unlimited');
+  }
 }
 
 export async function createAssignmentRule(input: AssignmentRuleInput, actorId?: number | null): Promise<AssignmentRule> {
@@ -252,10 +331,10 @@ export async function createAssignmentRule(input: AssignmentRuleInput, actorId?:
     `INSERT INTO crm_assignment_rules
       (name, description, is_active, sort_order, branch_ids, source_ids, priorities,
        lead_qualities, country_interest_ids, service_interest_ids, assignment_mode,
-       employee_ids, created_by, updated_by)
+       employee_ids, employee_weights, max_open_leads_per_employee, created_by, updated_by)
      VALUES (:name, :description, :isActive, :sortOrder, :branchIds, :sourceIds, :priorities,
        :leadQualities, :countryInterestIds, :serviceInterestIds, :assignmentMode,
-       :employeeIds, :actorId, :actorId)`,
+       :employeeIds, :employeeWeights, :maxOpenLeadsPerEmployee, :actorId, :actorId)`,
     {
       replacements: {
         name: input.name.trim(),
@@ -270,6 +349,8 @@ export async function createAssignmentRule(input: AssignmentRuleInput, actorId?:
         serviceInterestIds: toCsv(input.serviceInterestIds),
         assignmentMode: input.assignmentMode,
         employeeIds: toCsv(input.employeeIds),
+        employeeWeights: weightsToCsv(input.employeeWeights, input.employeeIds),
+        maxOpenLeadsPerEmployee: input.maxOpenLeadsPerEmployee ?? null,
         actorId: actorId ?? null,
       },
       type: QueryTypes.INSERT,
@@ -300,6 +381,8 @@ export async function updateAssignmentRule(id: number, input: Partial<Assignment
     serviceInterestIds: input.serviceInterestIds ?? existing.serviceInterestIds,
     assignmentMode: input.assignmentMode ?? existing.assignmentMode,
     employeeIds: input.employeeIds ?? existing.employeeIds,
+    employeeWeights: input.employeeWeights ?? existing.employeeWeights,
+    maxOpenLeadsPerEmployee: input.maxOpenLeadsPerEmployee !== undefined ? input.maxOpenLeadsPerEmployee : existing.maxOpenLeadsPerEmployee,
   };
   validateRuleInput(merged);
 
@@ -309,7 +392,8 @@ export async function updateAssignmentRule(id: number, input: Partial<Assignment
        branch_ids = :branchIds, source_ids = :sourceIds, priorities = :priorities,
        lead_qualities = :leadQualities, country_interest_ids = :countryInterestIds,
        service_interest_ids = :serviceInterestIds, assignment_mode = :assignmentMode,
-       employee_ids = :employeeIds, updated_by = :actorId
+       employee_ids = :employeeIds, employee_weights = :employeeWeights,
+       max_open_leads_per_employee = :maxOpenLeadsPerEmployee, updated_by = :actorId
      WHERE id = :id`,
     {
       replacements: {
@@ -326,6 +410,8 @@ export async function updateAssignmentRule(id: number, input: Partial<Assignment
         serviceInterestIds: toCsv(merged.serviceInterestIds),
         assignmentMode: merged.assignmentMode,
         employeeIds: toCsv(merged.employeeIds),
+        employeeWeights: weightsToCsv(merged.employeeWeights, merged.employeeIds),
+        maxOpenLeadsPerEmployee: merged.maxOpenLeadsPerEmployee ?? null,
         actorId: actorId ?? null,
       },
     }
@@ -419,33 +505,75 @@ async function loadRuleCandidates(employeeIds: number[], requireCheckedIn: boole
   );
 }
 
+// True smooth weighted round-robin (SWRR) - the same algorithm Nginx/HAProxy
+// use for weighted load balancing. Each candidate carries a persisted
+// "current" counter (crm_assignment_rule_state.current_weights, a JSON map
+// keyed by employee id); every pick: add each candidate's weight to its
+// counter, select whoever's counter is now highest (first in list order on
+// a tie), then subtract the total weight from only the selected candidate's
+// counter. This - unlike indexing into a precomputed sequence by "find the
+// last-picked employee's position" - handles a weight > 1 candidate being
+// picked on consecutive turns of the underlying math correctly, since it
+// never needs to locate a past pick in a list that can contain duplicates.
+// A candidate list that shrinks/grows between calls (someone checks out, a
+// new rule candidate becomes active) just starts that id's counter at 0,
+// the correct SWRR initialization - no special-casing needed. When every
+// weight is 1 (the default - every rule saved before weighting existed, or
+// with no weights set), SWRR's own well-known property is that it degrades
+// to a plain round-robin cycling through candidates in list order, so
+// unweighted rules behave exactly as they did before this existed.
+function pickWeighted<T extends { id: number }>(
+  candidates: T[],
+  weightOf: (candidate: T) => number,
+  priorCurrent: Record<number, number>
+): { selected: T; nextCurrent: Record<number, number> } {
+  const weights = candidates.map((c) => Math.max(1, Math.round(weightOf(c)) || 1));
+  const total = weights.reduce((sum, w) => sum + w, 0);
+  const current = candidates.map((c) => priorCurrent[c.id] ?? 0);
+
+  let bestIndex = 0;
+  let bestScore = -Infinity;
+  for (let i = 0; i < candidates.length; i++) {
+    current[i] += weights[i];
+    if (current[i] > bestScore) { bestScore = current[i]; bestIndex = i; }
+  }
+  current[bestIndex] -= total;
+
+  const nextCurrent: Record<number, number> = {};
+  candidates.forEach((c, i) => { nextCurrent[c.id] = current[i]; });
+  return { selected: candidates[bestIndex], nextCurrent };
+}
+
 async function getNextRuleRoundRobinCandidate(
   ruleId: number,
   candidates: RuleCandidate[],
+  weights: Record<number, number>,
   transaction: Transaction,
   consumeRoundRobin: boolean
 ): Promise<RuleCandidate> {
   await sequelize.query(
-    `INSERT INTO crm_assignment_rule_state (rule_id, last_employee_id, created_at, updated_at)
-     VALUES (:ruleId, NULL, NOW(), NOW())
+    `INSERT INTO crm_assignment_rule_state (rule_id, last_employee_id, current_weights, created_at, updated_at)
+     VALUES (:ruleId, NULL, NULL, NOW(), NOW())
      ON DUPLICATE KEY UPDATE rule_id = rule_id`,
     { replacements: { ruleId }, transaction }
   );
 
-  const stateRows = await sequelize.query<{ last_employee_id: number | null }>(
-    'SELECT last_employee_id FROM crm_assignment_rule_state WHERE rule_id = :ruleId FOR UPDATE',
+  const stateRows = await sequelize.query<{ current_weights: string | null }>(
+    'SELECT current_weights FROM crm_assignment_rule_state WHERE rule_id = :ruleId FOR UPDATE',
     { replacements: { ruleId }, type: QueryTypes.SELECT, transaction }
   );
 
-  const lastEmployeeId = stateRows[0]?.last_employee_id || null;
-  const lastIndex = lastEmployeeId ? candidates.findIndex((c) => c.id === lastEmployeeId) : -1;
-  const nextIndex = (lastIndex + 1) % candidates.length;
-  const selected = candidates[nextIndex];
+  let priorCurrent: Record<number, number> = {};
+  try {
+    priorCurrent = stateRows[0]?.current_weights ? JSON.parse(stateRows[0].current_weights) : {};
+  } catch { priorCurrent = {}; }
+
+  const { selected, nextCurrent } = pickWeighted(candidates, (c) => weights[c.id] ?? 1, priorCurrent);
 
   if (consumeRoundRobin) {
     await sequelize.query(
-      'UPDATE crm_assignment_rule_state SET last_employee_id = :employeeId, updated_at = NOW() WHERE rule_id = :ruleId',
-      { replacements: { ruleId, employeeId: selected.id }, transaction }
+      'UPDATE crm_assignment_rule_state SET last_employee_id = :employeeId, current_weights = :currentWeights, updated_at = NOW() WHERE rule_id = :ruleId',
+      { replacements: { ruleId, employeeId: selected.id, currentWeights: JSON.stringify(nextCurrent) }, transaction }
     );
   }
 
@@ -489,9 +617,18 @@ async function resolveRuleAssignment(
     if (candidates.length === 0) {
       candidates = await loadRuleCandidates(rule.employeeIds, false, transaction);
     }
+
+    // Capacity cap: drop anyone already carrying rule.maxOpenLeadsPerEmployee
+    // or more open leads, rather than piling still more onto someone over
+    // their limit. If this empties the pool, resolveRuleAssignment returns
+    // null exactly like "nobody checked in" does - the caller falls through
+    // to the branch-level fallback engine, never blocking lead creation.
+    if (rule.maxOpenLeadsPerEmployee !== null) {
+      candidates = candidates.filter((c) => c.openLeadCount < rule.maxOpenLeadsPerEmployee!);
+    }
     if (candidates.length === 0) return null;
 
-    const selected = await getNextRuleRoundRobinCandidate(rule.id, candidates, transaction, consumeRoundRobin);
+    const selected = await getNextRuleRoundRobinCandidate(rule.id, candidates, rule.employeeWeights, transaction, consumeRoundRobin);
     return {
       assignedEmployeeId: selected.id,
       counselorId: selected.id,
@@ -520,6 +657,9 @@ export async function resolveLeadAssignment(context: LeadAssignmentContext): Pro
   const { preferredEmployeeId, forceAutoAssign = false, roundRobin = true, consumeRoundRobin = true } = context;
 
   if (preferredEmployeeId && !forceAutoAssign) {
+    // An explicit manual pick always wins outright - never gated by the
+    // company-wide automatic-assignment toggle below, same as it's never
+    // gated by anything else in this precedence chain.
     return resolveLeadAutoAssignment({
       branchId: context.branchId,
       preferredEmployeeId,
@@ -527,6 +667,18 @@ export async function resolveLeadAssignment(context: LeadAssignmentContext): Pro
       roundRobin,
       consumeRoundRobin,
     });
+  }
+
+  // CEO-level kill-switch (crm_assignment_settings, edited from the
+  // Assignment Rules admin UI). Reuses the exact message substring every
+  // real caller (leads/route.ts, lead-intake, webToLeadsIngest,
+  // workflowRuntime, leadPool's SLA sweep, the admin Auto-Assign button)
+  // already treats as "leave this lead unassigned in the pool, don't fail
+  // the request" for an empty branch roster - so disabling automatic
+  // assignment company-wide needs zero changes at any of those call sites.
+  const settings = await getAssignmentSettings();
+  if (!settings.roundRobinEnabled) {
+    throw new Error('No active employees are available (automatic lead assignment is currently disabled)');
   }
 
   await ensureAssignmentRulesTable();

@@ -2,15 +2,19 @@ import { NextRequest, NextResponse } from 'next/server';
 import { QueryTypes } from 'sequelize';
 import { sequelize } from '@/lib/sequelize';
 import { requireAuth, isAuthError } from '@/lib/apiAuth';
+import { isCeo } from '@/lib/roleChecks';
 
 // One-shot bundle of everything the Assignment Rules admin UI needs to
 // populate its condition builder (branches, sources) and queue picker
 // (active employees with their branch, for at-a-glance queue composition) -
-// self-contained under the same 'transfers.manage' gate as the rest of this
-// feature, rather than depending on branches.manage/employees.manage too.
+// self-contained under the same CEO-only gate as the rest of this feature,
+// rather than depending on branches.manage/employees.manage too.
 export async function GET(request: NextRequest) {
   const auth = requireAuth(request, ['transfers.manage']);
   if (isAuthError(auth)) return auth;
+  if (!isCeo(auth)) {
+    return NextResponse.json({ success: false, error: 'Only the CEO can manage lead assignment rules' }, { status: 403 });
+  }
   try {
     const [branches, sources, employees] = await Promise.all([
       sequelize.query('SELECT id, name, abbrv FROM crm_branch WHERE status = 1 ORDER BY name ASC', { type: QueryTypes.SELECT }),

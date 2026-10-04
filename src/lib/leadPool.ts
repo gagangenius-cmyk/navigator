@@ -3,6 +3,7 @@ import { sequelize } from '@/lib/sequelize';
 import { recordLeadAssignment } from '@/lib/leadRemarks';
 import { resolveLeadAssignment } from '@/lib/assignmentRuleEngine';
 import { pushLeadPoolEvent } from '@/lib/pusherServer';
+import { getAssignmentSettings } from '@/lib/assignmentSettings';
 
 // Core "Lead Pool" mechanics: a lead with no owner (assignTo IS NULL) is
 // poolable - visible to every active agent in its branch, claimable by
@@ -13,9 +14,12 @@ import { pushLeadPoolEvent } from '@/lib/pusherServer';
 
 export const DEFAULT_SLA_MINUTES = 30;
 
-export function getSlaMinutes(): number {
-  const raw = Number(process.env.LEAD_POOL_SLA_MINUTES);
-  return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_SLA_MINUTES;
+// CEO-editable from the Assignment Rules admin UI (crm_assignment_settings) -
+// LEAD_POOL_SLA_MINUTES only seeds that table's very first row on a fresh
+// install (see assignmentSettings.ts) and is never read again after that.
+export async function getSlaMinutes(): Promise<number> {
+  const settings = await getAssignmentSettings();
+  return settings.poolSlaMinutes;
 }
 
 export type ClaimResult =
@@ -133,7 +137,7 @@ export interface SlaSweepResult {
 // gets everyone routed eventually instead of aging forever. Invoked on a
 // schedule by src/lib/lead-pool-sla-cron.ts.
 export async function runSlaSweep(limit = 200): Promise<SlaSweepResult> {
-  const slaMinutes = getSlaMinutes();
+  const slaMinutes = await getSlaMinutes();
   const overdueLeads = await sequelize.query<{ id: number; branch: number | null; priority: string | null }>(
     `SELECT id, branch, priority
      FROM crm_forum_leads

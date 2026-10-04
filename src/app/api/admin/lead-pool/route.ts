@@ -188,7 +188,7 @@ export async function GET(request: NextRequest) {
       branches,
       roleCategory: cat,
       userBranch,
-      slaMinutes: getSlaMinutes(),
+      slaMinutes: await getSlaMinutes(),
       canClaim: cat === 'agent',
       canBulkTransfer: cat === 'admin' || cat === 'branch_manager',
       canRelease: cat === 'admin' || cat === 'branch_manager',

@@ -1,4 +1,5 @@
 import { runSlaSweep, getSlaMinutes } from '@/lib/leadPool';
+import { getAssignmentSettings } from '@/lib/assignmentSettings';
 import { withCronRunLog } from '@/lib/cronRunLog';
 
 type CronTask = {
@@ -48,8 +49,20 @@ export async function startLeadPoolSlaCron() {
     SCHEDULE_EXPRESSION,
     async () => {
       try {
-        const result = await withCronRunLog('lead_pool_sla_sweep', () => runSlaSweep());
-        if (result.scanned > 0) {
+        // The cron keeps ticking every 5 minutes regardless of the CEO-set
+        // toggle (crm_assignment_settings.sla_sweep_enabled) so re-enabling
+        // it takes effect on the very next tick, with no server restart
+        // needed. Still recorded via withCronRunLog when skipped, so the
+        // System Jobs page shows *why* nothing happened rather than looking
+        // like the cron silently stopped running.
+        const result = await withCronRunLog('lead_pool_sla_sweep', async () => {
+          const settings = await getAssignmentSettings();
+          if (!settings.slaSweepEnabled) {
+            return { skipped: true, reason: 'disabled_by_admin' } as const;
+          }
+          return runSlaSweep();
+        });
+        if ('scanned' in result && result.scanned > 0) {
           console.log(`Lead pool SLA sweep: ${result.autoAssigned} auto-assigned, ${result.stillUnassignable} still unassignable (of ${result.scanned} overdue).`);
         }
       } catch (error) {
@@ -61,6 +74,7 @@ export async function startLeadPoolSlaCron() {
 
   task.start();
   globalThis.__dmLeadPoolSlaCronStarted = true;
-  console.log(`Lead pool SLA sweep cron scheduled: ${SCHEDULE_EXPRESSION} (threshold ${getSlaMinutes()}m)`);
+  const currentSlaMinutes = await getSlaMinutes();
+  console.log(`Lead pool SLA sweep cron scheduled: ${SCHEDULE_EXPRESSION} (threshold ${currentSlaMinutes}m)`);
   return { started: true, schedule: SCHEDULE_EXPRESSION };
 }

@@ -1,13 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, isAuthError } from '@/lib/apiAuth';
+import { isCeo } from '@/lib/roleChecks';
 import { previewLeadAssignment, findMatchingRule } from '@/lib/assignmentRuleEngine';
 
 // "Test this rule" panel in the admin UI: given a hypothetical lead's
 // attributes, report which rule (if any) would fire and who would receive
-// it right now, without consuming a round-robin turn.
+// it right now, without consuming a round-robin turn. CEO-only, matching
+// every other assignment-rules route.
 export async function POST(request: NextRequest) {
   const auth = requireAuth(request, ['transfers.manage']);
   if (isAuthError(auth)) return auth;
+  if (!isCeo(auth)) {
+    return NextResponse.json({ success: false, error: 'Only the CEO can manage lead assignment rules' }, { status: 403 });
+  }
   try {
     const body = await request.json();
     const context = {

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ArrowDown, ArrowUp, Plus, Route, Shuffle, Target, Trash2, Users, X } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { isCeo } from '@/lib/roleChecks';
 
 type AssignmentMode = 'round_robin' | 'specific_employee';
 
@@ -20,6 +21,14 @@ interface AssignmentRule {
   serviceInterestIds: number[];
   assignmentMode: AssignmentMode;
   employeeIds: number[];
+  employeeWeights: Record<number, number>;
+  maxOpenLeadsPerEmployee: number | null;
+}
+
+interface AssignmentSettings {
+  roundRobinEnabled: boolean;
+  slaSweepEnabled: boolean;
+  poolSlaMinutes: number;
 }
 
 interface RefBranch { id: number; name: string; abbrv: string | null }
@@ -39,6 +48,8 @@ const emptyForm = (sortOrder: number): Omit<AssignmentRule, 'id'> => ({
   serviceInterestIds: [],
   assignmentMode: 'round_robin',
   employeeIds: [],
+  employeeWeights: {},
+  maxOpenLeadsPerEmployee: null,
 });
 
 function csvToList(value: string): string[] {
@@ -46,8 +57,8 @@ function csvToList(value: string): string[] {
 }
 
 export default function AssignmentRulesPage() {
-  const { hasPermission } = useAuth();
-  const canManage = hasPermission('transfers.manage') || hasPermission('all');
+  const { user } = useAuth();
+  const canManage = isCeo(user as any);
 
   const [rules, setRules] = useState<AssignmentRule[]>([]);
   const [branches, setBranches] = useState<RefBranch[]>([]);
@@ -63,6 +74,9 @@ export default function AssignmentRulesPage() {
   const [previewResult, setPreviewResult] = useState<any>(null);
   const [previewing, setPreviewing] = useState(false);
 
+  const [settings, setSettings] = useState<AssignmentSettings | null>(null);
+  const [savingSettings, setSavingSettings] = useState(false);
+
   const employeeName = (id: number) => employees.find((e) => e.id === id)?.name || `#${id}`;
   const branchName = (id: number) => branches.find((b) => b.id === id)?.name || `#${id}`;
   const sourceName = (id: number) => sources.find((s) => s.id === id)?.name || `#${id}`;
@@ -70,18 +84,22 @@ export default function AssignmentRulesPage() {
   const load = async () => {
     setLoading(true); setError('');
     try {
-      const [rulesRes, refRes] = await Promise.all([
+      const [rulesRes, refRes, settingsRes] = await Promise.all([
         fetch('/api/assignment-rules'),
         fetch('/api/assignment-rules/reference-data'),
+        fetch('/api/assignment-rules/settings'),
       ]);
       const rulesJson = await rulesRes.json();
       const refJson = await refRes.json();
+      const settingsJson = await settingsRes.json();
       if (!rulesRes.ok || !rulesJson.success) throw new Error(rulesJson.error || 'Failed to load assignment rules');
       if (!refRes.ok || !refJson.success) throw new Error(refJson.error || 'Failed to load reference data');
+      if (!settingsRes.ok || !settingsJson.success) throw new Error(settingsJson.error || 'Failed to load automation settings');
       setRules(rulesJson.rules || []);
       setBranches(refJson.branches || []);
       setSources(refJson.sources || []);
       setEmployees(refJson.employees || []);
+      setSettings(settingsJson.settings);
       if (!preview.branchId && refJson.branches?.[0]) {
         setPreview((p) => ({ ...p, branchId: refJson.branches[0].id }));
       }
@@ -90,7 +108,26 @@ export default function AssignmentRulesPage() {
     } finally { setLoading(false); }
   };
 
-  useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
+  const saveSettings = async (patch: Partial<AssignmentSettings>) => {
+    if (!settings) return;
+    const next = { ...settings, ...patch };
+    setSettings(next); // optimistic - matches toggleActive's pattern below
+    setSavingSettings(true); setError('');
+    try {
+      const res = await fetch('/api/assignment-rules/settings', {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(next),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) throw new Error(json.error || 'Failed to save automation settings');
+      setSettings(json.settings);
+    } catch (err) {
+      setSettings(settings); // roll back the optimistic update
+      setError(err instanceof Error ? err.message : 'Failed to save automation settings');
+    } finally { setSavingSettings(false); }
+  };
+
+  useEffect(() => { load();   }, []);
 
   const move = async (index: number, direction: -1 | 1) => {
     const target = index + direction;
@@ -203,6 +240,42 @@ export default function AssignmentRulesPage() {
         {error && <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
         {notice && <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">{notice}</div>}
 
+        {settings && (
+          <section className="rounded-2xl border border-[var(--dmc-border)] bg-white p-5 shadow-sm">
+            <h2 className="mb-1 font-semibold text-[var(--dmc-ink)]">Automation Settings</h2>
+            <p className="mb-4 text-sm text-[var(--dmc-muted)]">
+              Controls the engine above and its cron safety net - a lead left unassigned past the SLA window
+              below is swept into round robin automatically, every 5 minutes.
+            </p>
+            <div className="flex flex-wrap items-center gap-6">
+              <label className="flex items-center gap-2 text-sm text-[var(--dmc-ink)]">
+                <input type="checkbox" checked={settings.roundRobinEnabled} disabled={savingSettings}
+                  onChange={(e) => saveSettings({ roundRobinEnabled: e.target.checked })} />
+                Automatic lead assignment enabled
+              </label>
+              <label className="flex items-center gap-2 text-sm text-[var(--dmc-ink)]">
+                <input type="checkbox" checked={settings.slaSweepEnabled} disabled={savingSettings}
+                  onChange={(e) => saveSettings({ slaSweepEnabled: e.target.checked })} />
+                SLA safety-net sweep enabled
+              </label>
+              <label className="flex items-center gap-2 text-sm text-[var(--dmc-ink)]">
+                SLA threshold (minutes)
+                <input type="number" min={1} className="w-20 rounded-lg border border-[var(--dmc-border)] p-1.5 text-sm"
+                  value={settings.poolSlaMinutes} disabled={savingSettings}
+                  onChange={(e) => setSettings((s) => s && { ...s, poolSlaMinutes: Number(e.target.value) })}
+                  onBlur={(e) => saveSettings({ poolSlaMinutes: Number(e.target.value) })} />
+              </label>
+              <a href="/admin/system-jobs" className="text-sm text-[var(--dmc-green-dark)] hover:underline">View cron run history →</a>
+            </div>
+            {!settings.roundRobinEnabled && (
+              <p className="mt-3 text-xs text-amber-700">
+                Automatic assignment is OFF - every new lead now lands unassigned in the Lead Pool for manual
+                claim, regardless of the rules below, until this is turned back on.
+              </p>
+            )}
+          </section>
+        )}
+
         <section className="rounded-2xl border border-[var(--dmc-border)] bg-white shadow-sm">
           {loading ? (
             <p className="p-6 text-sm text-[var(--dmc-muted)]">Loading rules…</p>
@@ -247,7 +320,16 @@ export default function AssignmentRulesPage() {
                         )}
                       </div>
                       <div className="mt-2 flex items-center gap-1.5 text-xs text-[var(--dmc-muted)]">
-                        <Users className="h-3.5 w-3.5" /> {rule.employeeIds.map(employeeName).join(', ')}
+                        <Users className="h-3.5 w-3.5" />
+                        {rule.employeeIds.map((id) => {
+                          const w = rule.employeeWeights?.[id] ?? 1;
+                          return w > 1 ? `${employeeName(id)} ×${w}` : employeeName(id);
+                        }).join(', ')}
+                        {rule.maxOpenLeadsPerEmployee != null && (
+                          <span className="ml-1 rounded-full bg-slate-100 px-2 py-0.5 text-slate-600">
+                            Cap: {rule.maxOpenLeadsPerEmployee}/agent
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -409,24 +491,55 @@ function RuleEditorModal({
                     {list.map((emp) => {
                       const selected = editing.employeeIds.includes(emp.id);
                       return (
-                        <label key={emp.id} className={`cursor-pointer rounded-full border px-3 py-1 text-xs ${selected ? 'border-[var(--dmc-green)] bg-[var(--dmc-green-soft)] text-[var(--dmc-green-dark)]' : 'border-[var(--dmc-border)] text-[var(--dmc-muted)]'}`}>
-                          <input
-                            type={editing.assignmentMode === 'specific_employee' ? 'radio' : 'checkbox'}
-                            className="hidden"
-                            checked={selected}
-                            onChange={() => setEditing({
-                              ...editing,
-                              employeeIds: editing.assignmentMode === 'specific_employee' ? [emp.id] : toggleId(editing.employeeIds, emp.id),
-                            })}
-                          />
-                          {emp.name}
-                        </label>
+                        <span key={emp.id} className="inline-flex items-center gap-1">
+                          <label className={`cursor-pointer rounded-full border px-3 py-1 text-xs ${selected ? 'border-[var(--dmc-green)] bg-[var(--dmc-green-soft)] text-[var(--dmc-green-dark)]' : 'border-[var(--dmc-border)] text-[var(--dmc-muted)]'}`}>
+                            <input
+                              type={editing.assignmentMode === 'specific_employee' ? 'radio' : 'checkbox'}
+                              className="hidden"
+                              checked={selected}
+                              onChange={() => setEditing({
+                                ...editing,
+                                employeeIds: editing.assignmentMode === 'specific_employee' ? [emp.id] : toggleId(editing.employeeIds, emp.id),
+                              })}
+                            />
+                            {emp.name}
+                          </label>
+                          {selected && editing.assignmentMode === 'round_robin' && (
+                            <input
+                              type="number" min={1} title={`${emp.name}'s share of the rotation (default 1)`}
+                              className="w-12 rounded border border-[var(--dmc-border)] p-0.5 text-center text-xs"
+                              value={editing.employeeWeights[emp.id] ?? 1}
+                              onChange={(e) => setEditing({
+                                ...editing,
+                                employeeWeights: { ...editing.employeeWeights, [emp.id]: Math.max(1, Number(e.target.value) || 1) },
+                              })}
+                            />
+                          )}
+                        </span>
                       );
                     })}
                   </div>
                 </div>
               ))}
             </div>
+            {editing.assignmentMode === 'round_robin' && (
+              <p className="mt-2 text-xs text-[var(--dmc-muted)]">
+                The number next to each name is their share of the rotation (default 1 each) - e.g. 2 means
+                roughly double the turns of someone left at 1.
+              </p>
+            )}
+            {editing.assignmentMode === 'round_robin' && (
+              <label className="mt-3 block text-xs font-medium text-[var(--dmc-muted)]">
+                Max open leads per agent (optional - leave blank for unlimited)
+                <input
+                  type="number" min={1}
+                  className="mt-1 block w-32 rounded-lg border border-[var(--dmc-border)] p-2 text-sm"
+                  value={editing.maxOpenLeadsPerEmployee ?? ''}
+                  placeholder="Unlimited"
+                  onChange={(e) => setEditing({ ...editing, maxOpenLeadsPerEmployee: e.target.value === '' ? null : Math.max(1, Number(e.target.value) || 1) })}
+                />
+              </label>
+            )}
           </div>
         </div>
 

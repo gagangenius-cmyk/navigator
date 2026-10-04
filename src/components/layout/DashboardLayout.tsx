@@ -180,7 +180,7 @@ const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
         { name: 'Compliance Approvals', href: '/admin/compliance-approvals', icon: Shield, permissions: ['leads.view', 'admin.access'] },
         { name: 'Lead Pool', href: '/admin/lead-pool', icon: Users, permissions: ['leads.view', 'transfers.manage'] },
         { name: 'Lead Assignment', href: '/admin/lead-assignment-availability', icon: UserPlus, permissions: ['sales.view', 'sales.update', 'admin.access'] },
-        { name: 'Assignment Rules', href: '/admin/leads/assignment-rules', icon: Route, permission: 'transfers.manage' },
+        { name: 'Assignment Rules', href: '/admin/leads/assignment-rules', icon: Route, permission: 'transfers.manage', ceoOnly: true },
         { name: 'Targets', href: '/admin/targets', icon: Target, permissions: ['transfers.manage', 'sales.view'] },
         { name: 'Lead Transfers', href: '/admin/lead-transfers', icon: RefreshCw, permission: 'transfers.manage' },
         { name: 'B2B', href: '/admin/b2b', icon: Briefcase, permission: 'b2b.manage' },

@@ -7,6 +7,7 @@ import { resolveLeadReferenceId } from '@/lib/leadReferenceResolver';
 import { checkForDuplicate, normalizePhone } from '@/lib/duplicateLeadCheck';
 import { recordLeadAssignment } from '@/lib/leadRemarks';
 import { fireLeadCreatedTrigger } from '@/lib/workflowTriggers';
+import { resolveLeadAssignment } from '@/lib/assignmentRuleEngine';
 
 const SAMPLE_ROWS = [
   {
@@ -169,6 +170,36 @@ export async function POST(request: NextRequest) {
           }
         }
 
+        // No literal counselor-column match (or none given): fall through to
+        // the same Assignment Rules engine every other lead-creation path
+        // uses (src/lib/assignmentRuleEngine.ts), instead of leaving the row
+        // permanently unassigned. An explicit "counselor" column value is a
+        // deliberate instruction and always wins outright above, matching
+        // manual-pick precedence everywhere else in this system.
+        if (!assignToId) {
+          try {
+            const assignment = await resolveLeadAssignment({
+              branchId,
+              sourceId: marketSourceId,
+              forceAutoAssign: true,
+              roundRobin: true,
+            });
+            assignToId = assignment.assignedEmployeeId;
+            branchId = assignment.branchId || branchId;
+            const [assignedEmployee] = await sequelize.query<{ region: number | null }>(
+              'SELECT region FROM crm_employee WHERE id = :id LIMIT 1',
+              { replacements: { id: assignToId }, type: QueryTypes.SELECT }
+            );
+            regionId = Number(assignedEmployee?.region || 0) || fallbackRegionId;
+          } catch (error) {
+            const message = error instanceof Error ? error.message : '';
+            if (!message.includes('No active employees are available')) throw error;
+            // No rule matched (or its queue/the branch is empty right now) -
+            // leave the row unassigned in the pool, same as every other
+            // auto-assignment call site in this codebase already does.
+          }
+        }
+
         // Campaign name -> crm_campaigns.id
         let campaignId = 0;
         if (campaignName) {
@@ -219,9 +250,10 @@ export async function POST(request: NextRequest) {
           market_source: marketSourceId,
           sub_market_source: 0,
           priority: 'Medium',
-          // Unassigned unless a matching counselor name resolved above —
-          // 'untouched' so an unassigned import row is findable separately
-          // from a 'New' lead someone already owns.
+          // Unassigned unless a counselor name matched or the Assignment
+          // Rules engine resolved an owner above — 'untouched' so an
+          // unassigned import row is findable separately from a 'New' lead
+          // someone already owns.
           status: assignToId ? 'New' : 'untouched',
           lead_quality: 'Warm',
           enquiry: 'Bulk import',

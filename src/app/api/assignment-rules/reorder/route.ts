@@ -1,13 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, isAuthError } from '@/lib/apiAuth';
+import { isCeo } from '@/lib/roleChecks';
 import { reorderAssignmentRules } from '@/lib/assignmentRuleEngine';
 
 // Drag-and-drop reordering in the admin UI - rule evaluation order matters
 // (first active match wins), so this is a distinct action from editing a
-// single rule's own fields.
+// single rule's own fields. CEO-only, matching every other assignment-rules route.
 export async function POST(request: NextRequest) {
   const auth = requireAuth(request, ['transfers.manage']);
   if (isAuthError(auth)) return auth;
+  if (!isCeo(auth)) {
+    return NextResponse.json({ success: false, error: 'Only the CEO can manage lead assignment rules' }, { status: 403 });
+  }
   try {
     const body = await request.json();
     const orderedIds = Array.isArray(body.orderedIds) ? body.orderedIds.map((id: unknown) => Number(id)) : [];
