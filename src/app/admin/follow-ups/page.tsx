@@ -129,16 +129,22 @@ export default function FollowUpsPage() {
     }
   };
 
+  // A rescheduled follow-up still has a real future due date that needs
+  // action - it must keep behaving like 'pending' (re-evaluated for overdue,
+  // still actionable below), not become a dead end. Previously this returned
+  // the literal 'rescheduled' status unconditionally, which both hid the
+  // Complete/Reschedule/Cancel buttons (see isPending below) and made the
+  // reminder permanently invisible to the Pending/Overdue/Upcoming counts.
   const getDisplayStatus = (fu: FollowUp): string => {
-    if (fu.status !== 'pending') return fu.status;
+    if (fu.status !== 'pending' && fu.status !== 'rescheduled') return fu.status;
     if (new Date(fu.reminder_date) < new Date()) return 'overdue';
-    return 'pending';
+    return fu.status;
   };
 
   const { sorted: sortedFollowUps, sortKey: followUpSortKey, sortDirection: followUpSortDirection, toggleSort: toggleFollowUpSort } = useSortableData(
     followUps,
     {
-      lead: (fu) => `${fu.fname || ''} ${fu.lname || ''}`.trim() || `Lead #${fu.lead_id}`,
+      lead: (fu) => `${fu.fname || ''} ${fu.lname || ''}`.trim() || 'Unnamed lead',
       counselor: (fu) => fu.employeeName || fu.user_id,
       branch: (fu) => fu.branchName || '',
       dueDate: (fu) => fu.reminder_date,
@@ -286,10 +292,10 @@ export default function FollowUpsPage() {
           emptyDescription="Try changing filters or search terms."
         >
           {sortedFollowUps.map(fu => {
-            const leadName = `${fu.fname || ''} ${fu.lname || ''}`.trim() || `Lead #${fu.lead_id}`;
+            const leadName = `${fu.fname || ''} ${fu.lname || ''}`.trim() || 'Unnamed lead';
             const displayStatus = getDisplayStatus(fu);
             const isExpanded = expandedId === fu.id;
-            const isPending = fu.status === 'pending';
+            const isPending = fu.status === 'pending' || fu.status === 'rescheduled';
             const dueDate = new Date(fu.reminder_date);
             const isOverdue = displayStatus === 'overdue';
 
@@ -321,7 +327,7 @@ export default function FollowUpsPage() {
                   metaItems={[
                     fu.email ? { icon: Mail, text: fu.email, key: 'email' } : null,
                     fu.phone ? { icon: Phone, text: fu.phone, key: 'phone' } : null,
-                    { icon: User, text: fu.employeeName || `Employee #${fu.user_id}`, key: 'counselor' },
+                    { icon: User, text: fu.employeeName || 'Unknown counselor', key: 'counselor' },
                     fu.branchName ? { icon: Building2, text: fu.branchName, key: 'branch' } : null,
                   ].filter((item): item is { icon: typeof Mail; text: string; key: string } => item !== null)}
                   stats={[

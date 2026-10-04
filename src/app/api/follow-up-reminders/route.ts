@@ -71,10 +71,16 @@ export async function GET(request: NextRequest) {
     if (employeeId) { conditions.push('r.user_id = :employeeId'); replacements.employeeId = Number(employeeId); }
     if (leadId) { conditions.push('r.lead_id = :leadId'); replacements.leadId = Number(leadId); }
     if (status) {
+      // A rescheduled reminder still has a real future due date and must
+      // keep counting as open/actionable here too - otherwise it both hides
+      // its own action buttons (see isPending in follow-ups/page.tsx) and
+      // silently disappears from "Overdue"/"Upcoming" filtering and the
+      // summary cards below, even though it's exactly the kind of item they
+      // exist to surface.
       if (status === 'overdue') {
-        conditions.push("r.status = 'pending' AND r.reminder_date < NOW()");
+        conditions.push("r.status IN ('pending', 'rescheduled') AND r.reminder_date < NOW()");
       } else if (status === 'upcoming') {
-        conditions.push("r.status = 'pending' AND r.reminder_date >= NOW()");
+        conditions.push("r.status IN ('pending', 'rescheduled') AND r.reminder_date >= NOW()");
       } else {
         conditions.push('r.status = :status');
         replacements.status = status;
@@ -118,15 +124,18 @@ export async function GET(request: NextRequest) {
       ORDER BY r.reminder_date ASC
     `, { replacements, type: QueryTypes.SELECT });
 
-    // Get overdue reminders
+    // A rescheduled reminder is still open/actionable (see the `status`
+    // query-param handling above for why) - treated the same as 'pending'
+    // for overdue/upcoming/pending counting throughout this summary.
+    const isOpen = (r: { status: string }) => r.status === 'pending' || r.status === 'rescheduled';
     const now = new Date();
-    const overdueReminders = (reminders as any[]).filter(r => r.status === 'pending' && new Date(r.reminder_date) < now);
+    const overdueReminders = (reminders as any[]).filter(r => isOpen(r) && new Date(r.reminder_date) < now);
 
     // Get upcoming reminders (next 7 days)
     const nextWeek = new Date(now.getTime() + (7 * 24 * 60 * 60 * 1000));
     const upcomingReminders = (reminders as any[]).filter(r => {
       const date = new Date(r.reminder_date);
-      return r.status === 'pending' && date >= now && date <= nextWeek;
+      return isOpen(r) && date >= now && date <= nextWeek;
     });
 
     const total = reminders.length;
@@ -141,7 +150,7 @@ export async function GET(request: NextRequest) {
         overdue: overdueReminders.length,
         upcoming: upcomingReminders.length,
         completed: (reminders as any[]).filter(r => r.status === 'completed').length,
-        pending: (reminders as any[]).filter(r => r.status === 'pending').length
+        pending: (reminders as any[]).filter(isOpen).length
       }
     });
 

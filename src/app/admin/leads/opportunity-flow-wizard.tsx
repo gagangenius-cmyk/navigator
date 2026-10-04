@@ -2113,7 +2113,7 @@ function ProspectStage({ lead, data, setData, onLeadUpdated, onSaveProspect, onN
     try {
       // Save status and priority to lead record
       if (lead?.id && (leadDraft.status || leadDraft.priority)) {
-        await fetch(`/api/leads/${lead.id}`, {
+        const leadUpdateRes = await fetch(`/api/leads/${lead.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -2121,8 +2121,17 @@ function ProspectStage({ lead, data, setData, onLeadUpdated, onSaveProspect, onN
             priority: leadDraft.priority || undefined,
           }),
         });
+        if (!leadUpdateRes.ok) {
+          const err = await leadUpdateRes.json().catch(() => ({}));
+          throw new Error(err.error || 'Failed to save status/priority');
+        }
       }
-      await onSaveProspect();
+      // onSaveProspect (saveStageData) already shows its own error toast and
+      // returns false - rather than throwing - on failure, so a plain
+      // `await` here used to fall through to the success toast below even
+      // when the save failed. Bail out the same way moveToNextStage does.
+      const saved = await onSaveProspect();
+      if (!saved) return;
       window.toast.success('Prospect data saved successfully.');
     } catch (error) {
       console.error('Error saving:', error);
@@ -3858,34 +3867,40 @@ function DocumentsStage({ lead, leadId, onLeadUpdated, data, setData, opportunit
         }
       }
 
-      if (oppId) {
-        // Upload mandatory documents (ID proof, passport)
-        for (const { key, category } of mandatoryDocs) {
-          const file = data[key];
-          if (file instanceof File) {
-            setUploadProgress(p => ({ ...p, [key]: 'uploading' }));
-            try {
-              await uploadFileToServer(file, category, oppId as number);
-              setUploadProgress(p => ({ ...p, [key]: 'done' }));
-            } catch (err) {
-              setUploadProgress(p => ({ ...p, [key]: 'error' }));
-              throw err;
-            }
-          }
-        }
-        // Also upload proof of payment if provided from payment stage
-        if (paymentProofFile instanceof File) {
-          setUploadProgress(p => ({ ...p, proofOfPayment: 'uploading' }));
+      if (!oppId) {
+        // Nothing durable to attach these files to yet. The selected File
+        // objects only exist in this component's local state - they can't
+        // survive a page reload - so claiming "saved" and advancing here
+        // used to let the user navigate away believing the documents were
+        // safe when they were never actually uploaded anywhere.
+        window.toast.error('Documents could not be saved — no opportunity exists for this lead yet. Complete the Payment stage first, then try again.');
+        return;
+      }
+
+      // Upload mandatory documents (ID proof, passport)
+      for (const { key, category } of mandatoryDocs) {
+        const file = data[key];
+        if (file instanceof File) {
+          setUploadProgress(p => ({ ...p, [key]: 'uploading' }));
           try {
-            await uploadFileToServer(paymentProofFile, 'proof_of_payment', oppId as number);
-            setUploadProgress(p => ({ ...p, proofOfPayment: 'done' }));
+            await uploadFileToServer(file, category, oppId as number);
+            setUploadProgress(p => ({ ...p, [key]: 'done' }));
           } catch (err) {
-            console.warn('Proof of payment upload failed (non-blocking):', err);
-            setUploadProgress(p => ({ ...p, proofOfPayment: 'error' }));
+            setUploadProgress(p => ({ ...p, [key]: 'error' }));
+            throw err;
           }
         }
-      } else {
-        console.warn('No opportunity ID available — documents saved to state only, will upload after opportunity creation.');
+      }
+      // Also upload proof of payment if provided from payment stage
+      if (paymentProofFile instanceof File) {
+        setUploadProgress(p => ({ ...p, proofOfPayment: 'uploading' }));
+        try {
+          await uploadFileToServer(paymentProofFile, 'proof_of_payment', oppId as number);
+          setUploadProgress(p => ({ ...p, proofOfPayment: 'done' }));
+        } catch (err) {
+          console.warn('Proof of payment upload failed (non-blocking):', err);
+          setUploadProgress(p => ({ ...p, proofOfPayment: 'error' }));
+        }
       }
 
       window.toast.success('Documents saved successfully!');

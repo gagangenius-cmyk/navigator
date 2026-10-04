@@ -115,7 +115,7 @@ function mapAppointment(appointment: ApiAppointment): Appointment {
   return {
     id: Number(appointment.id),
     leadId: Number(appointment.leadid || 0),
-    leadName: clientName || (appointment.leadid ? `Lead #${appointment.leadid}` : 'Walk-in Client'),
+    leadName: clientName || (appointment.leadid ? 'Unnamed lead' : 'Walk-in Client'),
     leadEmail: appointment.leadEmail || '',
     leadPhone: appointment.leadPhone || appointment.leadMobile || '',
     date: appointment.date || '',
@@ -124,9 +124,9 @@ function mapAppointment(appointment: ApiAppointment): Appointment {
     type: 'Consultation',
     status,
     counsilorId: Number(appointment.counsilorid || 0),
-    counsilorName: appointment.counselorName || (appointment.counsilorid ? `Counselor #${appointment.counsilorid}` : 'Unassigned'),
-    branch: appointment.branchName || (appointment.branch ? `Branch #${appointment.branch}` : 'No branch'),
-    region: appointment.regionName || (appointment.region ? `Region #${appointment.region}` : 'No region'),
+    counsilorName: appointment.counselorName || (appointment.counsilorid ? 'Unknown counselor' : 'Unassigned'),
+    branch: appointment.branchName || (appointment.branch ? 'Unknown branch' : 'No branch'),
+    region: appointment.regionName || (appointment.region ? 'Unknown region' : 'No region'),
     location: appointment.branchName || 'Office',
     notes: '',
     reminderSent: Number(appointment.booked || 0) === 1,
@@ -143,6 +143,90 @@ function mapAppointment(appointment: ApiAppointment): Appointment {
     assignedByName: appointment.assignedByName || '',
     acknowledged: Number(appointment.acknowledged || 0) === 1,
   };
+}
+
+interface LeadSearchResult { id: number; title: string; subtitle?: string | null }
+
+// Type-ahead lead search for the appointment forms — previously these forms
+// made staff type a raw crm_forum_leads.id number by hand (no way to know it
+// without looking it up elsewhere first). Mirrors the debounced
+// /api/global-search pattern already used by LeadPicker.tsx (Immigration
+// Tools), filtered to type 'Lead', but kept local here since that component
+// is coupled to ImmigrationToolsContext.
+function LeadSearchField({
+  value, label, onSelect, onClear, disabled,
+}: {
+  value: string;
+  label: string;
+  onSelect: (lead: LeadSearchResult) => void;
+  onClear: () => void;
+  disabled?: boolean;
+}) {
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState<LeadSearchResult[]>([]);
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const term = query.trim();
+    if (term.length < 2) { setResults([]); return; }
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      setLoading(true);
+      try {
+        const res = await fetch(`/api/global-search?q=${encodeURIComponent(term)}`, { signal: controller.signal });
+        const data = await res.json();
+        setResults((data.results || []).filter((r: { type: string }) => r.type === 'Lead'));
+      } catch { setResults([]); } finally { setLoading(false); }
+    }, 250);
+    return () => { window.clearTimeout(timer); controller.abort(); };
+  }, [query]);
+
+  if (value && label) {
+    return (
+      <div className="flex items-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-sm">
+        <span className="flex-1 truncate font-medium text-gray-900">{label}</span>
+        {!disabled && (
+          <button type="button" onClick={onClear} className="text-gray-400 hover:text-gray-600" title="Change lead">
+            <XCircle className="w-4 h-4" />
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative">
+      <input
+        type="text"
+        value={query}
+        disabled={disabled}
+        onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
+        onFocus={() => setOpen(true)}
+        onBlur={() => window.setTimeout(() => setOpen(false), 150)}
+        placeholder="Search by name, email or phone…"
+        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+      />
+      {open && query.trim().length >= 2 && (
+        <div className="absolute left-0 right-0 top-full z-20 mt-1 max-h-56 overflow-y-auto rounded-md border border-gray-200 bg-white shadow-lg">
+          {loading && <div className="px-4 py-2 text-sm text-gray-500">Searching…</div>}
+          {!loading && results.length === 0 && <div className="px-4 py-2 text-sm text-gray-500">No leads found</div>}
+          {!loading && results.map((lead) => (
+            <button
+              key={lead.id}
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => { onSelect(lead); setQuery(''); setOpen(false); }}
+              className="block w-full px-4 py-2 text-left text-sm hover:bg-gray-50"
+            >
+              <span className="font-medium text-gray-900">{lead.title}</span>
+              {lead.subtitle && <span className="ml-2 text-xs text-gray-500">{lead.subtitle}</span>}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function getAppointmentStatus(appointment: ApiAppointment): Appointment['status'] {
@@ -175,12 +259,17 @@ export default function AppointmentScheduler({ onAppointmentSelect, showActions 
   });
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [formData, setFormData] = useState<AppointmentForm>(emptyAppointmentForm);
+  const [formLeadLabel, setFormLeadLabel] = useState('');
 
   // View / Edit / Delete state
   const [viewingAppt, setViewingAppt] = useState<Appointment | null>(null);
   const [editingAppt, setEditingAppt] = useState<Appointment | null>(null);
   const [editForm, setEditForm] = useState<AppointmentForm>(emptyAppointmentForm);
+  const [editLeadLabel, setEditLeadLabel] = useState('');
+  const [branchOptions, setBranchOptions] = useState<Array<{ value: string; label: string }>>([]);
+  const [regionOptions, setRegionOptions] = useState<Array<{ value: string; label: string }>>([]);
   const [deleteId, setDeleteId] = useState<number | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Appointment | null>(null);
   const [actionBusy, setActionBusy] = useState(false);
   const [actionError, setActionError] = useState('');
   const [acknowledgingId, setAcknowledgingId] = useState<number | null>(null);
@@ -257,6 +346,22 @@ export default function AppointmentScheduler({ onAppointmentSelect, showActions 
     })();
   }, [user]);
 
+  // Branch/region name options for the Create/Edit forms (same lists the
+  // Leads page filters use) — populated once rather than per-modal-open.
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch('/api/lead-filter-options');
+        if (!res.ok) return;
+        const data = await res.json();
+        setBranchOptions(data.branches || []);
+        setRegionOptions(data.regions || []);
+      } catch (error) {
+        console.error('Error loading branch/region options:', error);
+      }
+    })();
+  }, []);
+
   const openEdit = (appt: Appointment) => {
     setEditingAppt(appt);
     setEditForm({
@@ -268,6 +373,7 @@ export default function AppointmentScheduler({ onAppointmentSelect, showActions 
       region: '',
       booked: appt.reminderSent,
     });
+    setEditLeadLabel(appt.leadId ? appt.leadName : '');
     setActionError('');
   };
 
@@ -451,6 +557,7 @@ export default function AppointmentScheduler({ onAppointmentSelect, showActions 
       const res = await fetch(`/api/appointments/${deleteId}`, { method: 'DELETE' });
       if (!res.ok) { const j = await res.json(); throw new Error(j.error || 'Delete failed'); }
       setDeleteId(null);
+      setDeleteTarget(null);
       await fetchAppointments();
     } catch (e) {
       setActionError(e instanceof Error ? e.message : 'Failed to delete');
@@ -484,6 +591,7 @@ export default function AppointmentScheduler({ onAppointmentSelect, showActions 
 
       setShowCreateModal(false);
       setFormData(emptyAppointmentForm());
+      setFormLeadLabel('');
       await fetchAppointments();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create appointment');
@@ -575,7 +683,7 @@ export default function AppointmentScheduler({ onAppointmentSelect, showActions 
 
         {showActions && (
           <button
-            onClick={() => setShowCreateModal(true)}
+            onClick={() => { setFormData(emptyAppointmentForm()); setFormLeadLabel(''); setShowCreateModal(true); }}
             className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
           >
             <Plus className="w-4 h-4 mr-2" />
@@ -883,7 +991,7 @@ export default function AppointmentScheduler({ onAppointmentSelect, showActions 
                       {isCeo(user as any) && (
                         <button
                           title="Delete"
-                          onClick={() => { setDeleteId(appointment.id); setActionError(''); }}
+                          onClick={() => { setDeleteId(appointment.id); setDeleteTarget(appointment); setActionError(''); }}
                           className="p-1.5 text-red-600 hover:text-red-900 hover:bg-red-50 rounded"
                         >
                           <Trash2 className="w-4 h-4" />
@@ -946,28 +1054,28 @@ export default function AppointmentScheduler({ onAppointmentSelect, showActions 
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Lead ID</label>
-                  <input
-                    type="number"
-                    min="1"
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Lead (optional)</label>
+                  <LeadSearchField
                     value={formData.leadid}
-                    onChange={(e) => setFormData({ ...formData, leadid: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                    placeholder="Optional"
+                    label={formLeadLabel}
+                    onSelect={(lead) => { setFormData({ ...formData, leadid: String(lead.id) }); setFormLeadLabel(lead.title); }}
+                    onClear={() => { setFormData({ ...formData, leadid: '' }); setFormLeadLabel(''); }}
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Counselor ID</label>
-                  <input
-                    type="number"
-                    min="1"
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Counselor (optional)</label>
+                  <SearchableSelect
                     value={formData.counsilorid}
                     onChange={(e) => setFormData({ ...formData, counsilorid: e.target.value })}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                    placeholder="Optional"
-                  />
+                  >
+                    <option value="">Unassigned</option>
+                    {counselorOptions.map((option) => (
+                      <option key={option.id} value={String(option.id)}>{option.name}</option>
+                    ))}
+                  </SearchableSelect>
                 </div>
 
                 <div>
@@ -991,27 +1099,31 @@ export default function AppointmentScheduler({ onAppointmentSelect, showActions 
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Branch ID</label>
-                  <input
-                    type="number"
-                    min="0"
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Branch</label>
+                  <SearchableSelect
                     value={formData.branch}
                     onChange={(e) => setFormData({ ...formData, branch: e.target.value })}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                    placeholder="0"
-                  />
+                  >
+                    <option value="">No branch</option>
+                    {branchOptions.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </SearchableSelect>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Region ID</label>
-                  <input
-                    type="number"
-                    min="1"
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Region (optional)</label>
+                  <SearchableSelect
                     value={formData.region}
                     onChange={(e) => setFormData({ ...formData, region: e.target.value })}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                    placeholder="Optional"
-                  />
+                  >
+                    <option value="">No region</option>
+                    {regionOptions.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </SearchableSelect>
                 </div>
 
                 <label className="md:col-span-2 flex items-center gap-2 text-sm text-gray-700">
@@ -1051,7 +1163,7 @@ export default function AppointmentScheduler({ onAppointmentSelect, showActions 
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
               <div>
-                <h2 className="text-lg font-bold text-gray-900">Appointment #{viewingAppt.id}</h2>
+                <h2 className="text-lg font-bold text-gray-900">{viewingAppt.leadName}</h2>
                 <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${getStatusColor(viewingAppt.status)}`}>{viewingAppt.status}</span>
               </div>
               <button onClick={() => { setViewingAppt(null); setReschedulingAppt(null); }} className="text-gray-400 hover:text-gray-600"><XCircle className="w-6 h-6" /></button>
@@ -1243,7 +1355,7 @@ export default function AppointmentScheduler({ onAppointmentSelect, showActions 
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-              <h2 className="text-lg font-bold text-gray-900">Edit Appointment #{editingAppt.id}</h2>
+              <h2 className="text-lg font-bold text-gray-900">Edit Appointment</h2>
               <button onClick={() => setEditingAppt(null)} className="text-gray-400 hover:text-gray-600"><XCircle className="w-6 h-6" /></button>
             </div>
             <div className="px-6 py-4 space-y-4">
@@ -1259,27 +1371,44 @@ export default function AppointmentScheduler({ onAppointmentSelect, showActions 
                   <input type="time" value={editForm.appointtime} onChange={e => setEditForm({...editForm, appointtime: e.target.value})}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500" />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Lead ID</label>
-                  <input type="number" min="1" value={editForm.leadid} onChange={e => setEditForm({...editForm, leadid: e.target.value})}
-                    placeholder={editingAppt.leadName}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500" />
+                <div className="col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Lead</label>
+                  <LeadSearchField
+                    value={editForm.leadid}
+                    label={editLeadLabel}
+                    onSelect={(lead) => { setEditForm({ ...editForm, leadid: String(lead.id) }); setEditLeadLabel(lead.title); }}
+                    onClear={() => { setEditForm({ ...editForm, leadid: '' }); setEditLeadLabel(''); }}
+                  />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Counsellor ID</label>
-                  <input type="number" min="1" value={editForm.counsilorid} onChange={e => setEditForm({...editForm, counsilorid: e.target.value})}
-                    placeholder={editingAppt.counsilorName}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500" />
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Counsellor</label>
+                  <SearchableSelect value={editForm.counsilorid} onChange={e => setEditForm({...editForm, counsilorid: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
+                    <option value="">Unassigned</option>
+                    {counselorOptions.map((option) => (
+                      <option key={option.id} value={String(option.id)}>{option.name}</option>
+                    ))}
+                  </SearchableSelect>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Branch ID</label>
-                  <input type="number" min="0" value={editForm.branch} onChange={e => setEditForm({...editForm, branch: e.target.value})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500" />
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Branch</label>
+                  <SearchableSelect value={editForm.branch} onChange={e => setEditForm({...editForm, branch: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
+                    <option value="">No branch</option>
+                    {branchOptions.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </SearchableSelect>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Region ID</label>
-                  <input type="number" min="1" value={editForm.region} onChange={e => setEditForm({...editForm, region: e.target.value})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500" />
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Region</label>
+                  <SearchableSelect value={editForm.region} onChange={e => setEditForm({...editForm, region: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
+                    <option value="">No region</option>
+                    {regionOptions.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </SearchableSelect>
                 </div>
               </div>
               <label className="flex items-center gap-2 text-sm text-gray-700">
@@ -1307,11 +1436,12 @@ export default function AppointmentScheduler({ onAppointmentSelect, showActions 
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm p-6">
             <h2 className="text-lg font-bold text-gray-900 mb-2">Delete Appointment</h2>
             <p className="text-sm text-gray-600 mb-4">
-              Are you sure you want to delete appointment <span className="font-semibold">#{deleteId}</span>? This cannot be undone.
+              Are you sure you want to delete the appointment with <span className="font-semibold">{deleteTarget?.leadName || 'this client'}</span>
+              {deleteTarget ? ` on ${new Date(deleteTarget.date).toLocaleDateString()} at ${deleteTarget.time}` : ''}? This cannot be undone.
             </p>
             {actionError && <p className="text-sm text-red-600 mb-3">{actionError}</p>}
             <div className="flex justify-end gap-3">
-              <button onClick={() => { setDeleteId(null); setActionError(''); }}
+              <button onClick={() => { setDeleteId(null); setDeleteTarget(null); setActionError(''); }}
                 className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 text-sm">
                 Cancel
               </button>
