@@ -44,10 +44,14 @@ export async function POST(request: NextRequest) {
       leadQualities: body.leadQualities,
       countryInterestIds: body.countryInterestIds,
       serviceInterestIds: body.serviceInterestIds,
+      campaigns: body.campaigns,
+      statuses: body.statuses,
       assignmentMode: body.assignmentMode,
       employeeIds: body.employeeIds,
       employeeWeights: body.employeeWeights,
+      alwaysAvailableEmployeeIds: body.alwaysAvailableEmployeeIds,
       maxOpenLeadsPerEmployee: body.maxOpenLeadsPerEmployee,
+      staleRecycleHours: body.staleRecycleHours,
     };
     const rule = await createAssignmentRule(input, auth.id);
     return NextResponse.json({ success: true, rule }, { status: 201 });

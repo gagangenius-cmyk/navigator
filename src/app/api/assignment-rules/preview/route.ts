@@ -22,6 +22,8 @@ export async function POST(request: NextRequest) {
       leadQuality: body.leadQuality || null,
       countryInterestId: body.countryInterestId ? Number(body.countryInterestId) : null,
       serviceInterestId: body.serviceInterestId ? Number(body.serviceInterestId) : null,
+      campaign: body.campaign || null,
+      status: body.status || null,
     };
     const matchedRule = await findMatchingRule(context);
     const assignment = await previewLeadAssignment(context);

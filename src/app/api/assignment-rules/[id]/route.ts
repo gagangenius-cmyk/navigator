@@ -40,10 +40,14 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       leadQualities: body.leadQualities,
       countryInterestIds: body.countryInterestIds,
       serviceInterestIds: body.serviceInterestIds,
+      campaigns: body.campaigns,
+      statuses: body.statuses,
       assignmentMode: body.assignmentMode,
       employeeIds: body.employeeIds,
       employeeWeights: body.employeeWeights,
+      alwaysAvailableEmployeeIds: body.alwaysAvailableEmployeeIds,
       maxOpenLeadsPerEmployee: body.maxOpenLeadsPerEmployee,
+      staleRecycleHours: body.staleRecycleHours,
     }, auth.id);
     return NextResponse.json({ success: true, rule });
   } catch (error) {

@@ -138,12 +138,25 @@ lead is created or the admin UI is opened.
 | `lead_qualities` | VARCHAR(255) NULL | CSV matched against `crm_forum_leads.lead_quality` (e.g. `Hot,Warm`) |
 | `country_interest_ids` | VARCHAR(255) NULL | CSV of `crm_forum_leads.country_interest` FK values |
 | `service_interest_ids` | VARCHAR(255) NULL | CSV of `crm_forum_leads.service_interest` FK values |
+| `campaigns` | VARCHAR(1000) NULL | CSV of free-text values matched case-insensitively against `crm_forum_leads.campaign` (no fixed vocabulary - whatever marketing typed in) |
+| `statuses` | VARCHAR(500) NULL | CSV matched against `crm_forum_leads.status`, drawn from the same `crm_lead_status` list the Leads page's own status filter uses |
 | `assignment_mode` | VARCHAR(20) | `round_robin` or `specific_employee` |
 | `employee_ids` | VARCHAR(1000) | CSV of `crm_employee.id` - the queue (or the single fixed owner) |
 | `employee_weights` | VARCHAR(2000) NULL | CSV of integers parallel-indexed to `employee_ids` - each member's share of the rotation. Missing/invalid entries default to 1, so an unweighted rule is identical to before this existed. |
+| `always_available_employee_ids` | VARCHAR(500) NULL | CSV subset of `employee_ids` exempt from the "checked in today" gate - they stay eligible for this rule's rotation 24/7 without marking present, while the rest of the same queue still needs to check in |
 | `max_open_leads_per_employee` | INT NULL | Skip a queue member once their open-lead count reaches this. `NULL` = unlimited. |
+| `stale_recycle_hours` | INT NULL | If set, a lead this rule assigned that sees no activity for this many hours is automatically recycled to the next person in the same queue (§6.4). `NULL` = never. |
 | `created_at` / `updated_at` | DATETIME | |
 | `created_by` / `updated_by` | INT NULL | `crm_employee.id` of the admin who last touched the rule |
+
+### `crm_forum_leads.assigned_by_rule_id` (new column on an existing table)
+
+`INT NULL`, stamped by `recordLeadAssignment()` alongside the existing
+`transfer_date`/`transfer_time` audit fields whenever an assignment came
+from the rule engine's round-robin branch. `NULL` for every manual pick,
+pool self-claim, or branch-fallback assignment - only a rule-produced
+assignment is ever eligible for stale-lead recycling (§6.4), and only
+through the same rule that made it.
 
 ### `crm_assignment_settings` (new)
 
@@ -235,6 +248,42 @@ over that many currently-open leads. If that empties the list, the rule
 produces no candidate - same "fall through to the branch fallback" behavior
 as an empty/all-checked-out queue.
 
+### Always-available employees (24/7, no daily check-in)
+
+Listing an employee's id in `always_available_employee_ids` makes step 2
+above (the "checked in today" gate) treat them as eligible unconditionally,
+while every other member of the *same* rule's queue still needs the daily
+check-in. This is for roles that should always keep receiving their share
+of a rotation regardless of attendance marking - e.g. a dedicated digital/
+inbound team - without turning off the attendance gate for the rest of that
+rule's queue, and without touching any other rule. The admin UI exposes this
+as a small ⚡ toggle next to each selected employee's weight stepper.
+
+### Stale-lead recycling
+
+Setting `stale_recycle_hours` on a round-robin rule enables a periodic sweep
+(`src/lib/staleLeadRecycle.ts`, run every 15 minutes by
+`stale-lead-recycle-cron.ts`) that looks for leads where:
+
+1. `crm_forum_leads.assigned_by_rule_id` matches this rule (so a manual pick
+   or a different rule's lead is never touched), and
+2. the lead's status isn't already a closed one (`Converted`, `Closed`,
+   `Lost`, `client`, `retained`), and
+3. `stale_recycle_hours` have passed since `transfer_date`/`transfer_time`
+   (the same "assigned since" stamp every other part of this system reads),
+   and
+4. **no `crm_remarks` entry exists for that lead after the assignment** other
+   than the `lead_assigned` stamp itself - i.e. genuinely zero follow-up,
+   status change, appointment, or remark logged since.
+
+A matching lead is handed to whoever the rule's own round-robin would pick
+next (excluding its current holder), through `findStaleRecycleTarget()` -
+which shares the rule's normal rotation cursor, so a recycle is just another
+real turn in the same queue, not a separate rotation. `recordLeadAssignment()`
+then re-stamps `transfer_date`/`assigned_by_rule_id` on the new owner, which
+also resets this lead's own stale-recycle clock. Leaving the field blank
+(`NULL`) disables recycling for that rule entirely - this is strictly opt-in.
+
 ## 7. API reference
 
 Every `/api/assignment-rules*` route requires the `transfers.manage`
@@ -252,9 +301,9 @@ CEO's explicit request. The sidebar nav entry is hidden from everyone else
 | `PUT` | `/api/assignment-rules/:id` | Update a rule (partial - only sent fields change). |
 | `DELETE` | `/api/assignment-rules/:id` | Delete a rule. |
 | `POST` | `/api/assignment-rules/reorder` | Body `{ orderedIds: number[] }` - rewrites `sort_order` to match array order. |
-| `POST` | `/api/assignment-rules/preview` | Body `{ branchId, sourceId?, priority?, leadQuality?, countryInterestId?, serviceInterestId? }` → `{ matchedRule, assignment }`. Non-consuming. Also reflects `round_robin_enabled = false` (throws the same signal a real lead would), so this doubles as a way to confirm the kill-switch is working without creating a real lead. |
+| `POST` | `/api/assignment-rules/preview` | Body `{ branchId, sourceId?, priority?, leadQuality?, countryInterestId?, serviceInterestId?, campaign?, status? }` → `{ matchedRule, assignment }`. Non-consuming. Also reflects `round_robin_enabled = false` (throws the same signal a real lead would), so this doubles as a way to confirm the kill-switch is working without creating a real lead. |
 | `GET` / `PUT` | `/api/assignment-rules/settings` | Read/update `crm_assignment_settings` (round-robin on/off, SLA sweep on/off, SLA threshold minutes). |
-| `GET` | `/api/assignment-rules/reference-data` | `{ branches, sources, employees }` for populating the admin UI's pickers in one request. |
+| `GET` | `/api/assignment-rules/reference-data` | `{ branches, sources, employees, statuses, campaigns }` for populating the admin UI's pickers in one request - `statuses` from `crm_lead_status`, `campaigns` from distinct non-empty `crm_forum_leads.campaign` values (suggestions only, not a closed list). |
 | `GET` | `/api/lead-auto-assignment?leadId=&branchId=` | Existing manual "who's next" preview, now rule-aware; pass `leadId` for an accurate match against that lead's real attributes. |
 | `POST` | `/api/lead-auto-assignment` | Existing manual "Auto-Assign" action on an existing lead, now rule-aware. |
 
@@ -273,11 +322,13 @@ page):
   as `×N` when not 1), and the capacity cap when set.
 - **New Rule** opens a form: name/description, condition builder (branch and
   source as multi-select chips; priority and lead quality as comma-separated
-  text, since those columns are free text rather than enums in this schema),
+  text; campaign as comma-separated free text with suggestions from real
+  values already on file; status as multi-select chips from `crm_lead_status`),
   and an assignment section (round robin queue vs. one fixed owner) with
   employees grouped by their own branch. In round-robin mode, each selected
-  employee gets a small weight stepper (default 1) next to their chip, and
-  an optional "max open leads per agent" field below the queue.
+  employee gets a small weight stepper (default 1) and an ⚡ "always
+  available" toggle next to their chip, plus optional "max open leads per
+  agent" and "recycle to next agent after (hours idle)" fields below the queue.
 - **Test a lead** - pick a branch/source/priority/quality combination and see
   which rule (if any) would fire and who would receive it right now, without
   moving any rotation cursor. Falls back to reporting the branch round robin
@@ -314,27 +365,40 @@ it lives in the one shared hook every assignment path already called.
 
 Closed since the sections above were first written: bulk Excel upload now
 consults the rule engine per row (§4), weighted round robin and per-agent
-capacity caps exist per rule (§5, §6), and the SLA sweep's threshold plus a
+capacity caps exist per rule (§5, §6), the SLA sweep's threshold plus a
 global on/off switch are CEO-editable from the admin UI instead of a
-deploy-time env var (§5's `crm_assignment_settings`).
+deploy-time env var (§5's `crm_assignment_settings`), rules can now condition
+on campaign and status (§5), per-employee "always available" overrides the
+daily check-in requirement for specific queue members (§6), and an
+hours-based stale-lead recycle exists per rule (§6).
+
+That last point corrects an earlier version of this doc, which pointed to
+`crm_auto_reassignment_rules` (`src/app/api/auto-reassignment`) as the thing
+handling inactive-lead recycling. That table/route/model exist but were
+found to have **zero** live callers - no admin page fetches them and no cron
+invokes `/api/auto-reassignment/run` - so they were dead scaffolding, not a
+working feature, and `findTargetEmployee()` there isn't even round robin (it
+always picks the lowest-id active employee). They're left in place
+untouched (out of scope to remove), but `stale_recycle_hours` on
+`crm_assignment_rules` is the real, wired-in version of that concept now.
 
 Still open:
 
 - No territory/region-level rule dimension yet - only branch, not region, is
   a condition. `crm_forum_leads.region` and `crm_employee.region` already
-  exist and could be added as a seventh condition column the same way the
-  other five were added.
-- No working-hours-awareness beyond "checked in today" - a lead created at
-  11pm still round-robins to whoever is marked checked in, with no SLA
-  escalation if nobody responds (that concern is handled separately, and
-  only by inactive-hours, by the existing `crm_auto_reassignment_rules`
-  engine in `src/app/api/auto-reassignment`).
-- Weighting and capacity caps apply only inside a rule's own queue, not the
-  branch-level fallback engine (`leadAutoAssignment.ts`) - that stays a
-  simple, uniform, always-available default on purpose. Extending either
-  concept to the fallback itself would be a separate, deliberate change.
+  exist and could be added as a condition column the same way the others
+  were added.
+- Weighting, capacity caps, and stale-lead recycling apply only inside a
+  rule's own queue, not the branch-level fallback engine
+  (`leadAutoAssignment.ts`) - that stays a simple, uniform, always-available
+  default on purpose. Extending any of these concepts to the fallback itself
+  would be a separate, deliberate change.
 - `round_robin_enabled = false` also pauses the admin "Test a lead" preview
   and the admin-triggered "Auto-Assign" button on an existing lead, not just
   automatic routing of brand-new leads - a deliberate simplification (one
   switch, one meaning everywhere) rather than an oversight; see
   `resolveLeadAssignment` in `assignmentRuleEngine.ts`.
+- Stale-lead recycling's "no activity" check is `crm_remarks` existence only
+  - it doesn't yet distinguish a substantive follow-up from a trivial logged
+    action. Good enough for the intended use (catching an agent who never
+    touched a lead at all), but not a measure of *quality* of contact.

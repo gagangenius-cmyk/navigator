@@ -143,6 +143,7 @@ export async function POST(request: NextRequest) {
         // No match leaves the lead unassigned and falls back to the
         // uploading CEO's own branch/region rather than failing the row.
         let assignToId: number | null = null;
+        let assignmentRuleId: number | null = null;
         let branchId = fallbackBranchId;
         let regionId = fallbackRegionId;
         if (counselorName) {
@@ -183,8 +184,10 @@ export async function POST(request: NextRequest) {
               sourceId: marketSourceId,
               forceAutoAssign: true,
               roundRobin: true,
+              campaign: campaign || null,
             });
             assignToId = assignment.assignedEmployeeId;
+            assignmentRuleId = assignment.ruleId ?? null;
             branchId = assignment.branchId || branchId;
             const [assignedEmployee] = await sequelize.query<{ region: number | null }>(
               'SELECT region FROM crm_employee WHERE id = :id LIMIT 1',
@@ -382,6 +385,7 @@ export async function POST(request: NextRequest) {
             newAssignTo: assignToId,
             actorId: currentUser.id,
             actorRole: currentUser.roleName || currentUser.type,
+            ruleId: assignmentRuleId,
           });
         }
 

@@ -138,6 +138,7 @@ export async function ingestWebToLead(
 
   let assignToId: number | null = null;
   let counselorId: number | null = null;
+  let assignmentRuleId: number | null = null;
   if (wantsRoundRobin) {
     try {
       const assignment = await resolveLeadAssignment({
@@ -151,6 +152,7 @@ export async function ingestWebToLead(
       });
       assignToId = assignment.assignedEmployeeId;
       counselorId = assignment.counselorId;
+      assignmentRuleId = assignment.ruleId ?? null;
     } catch (error) {
       const message = error instanceof Error ? error.message : '';
       if (!message.includes('No active employees are available')) throw error;
@@ -309,6 +311,7 @@ export async function ingestWebToLead(
       newAssignTo: assignToId,
       actorId: null,
       actorRole: 'System (web-to-leads round robin)',
+      ruleId: assignmentRuleId,
     });
   }
 

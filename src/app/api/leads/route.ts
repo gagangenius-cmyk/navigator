@@ -936,6 +936,8 @@ export async function POST(request: NextRequest) {
           leadQuality: data.lead_quality || data.leadQuality || null,
           countryInterestId: resolvedCountryInterest,
           serviceInterestId: resolvedServiceInterest,
+          campaign: data.campaign || null,
+          status: data.status || null,
         })
       } catch (error) {
         const message = error instanceof Error ? error.message : ''
@@ -973,6 +975,7 @@ export async function POST(request: NextRequest) {
         newAssignTo: Number(leadData.assignTo),
         actorId: currentUser.id,
         actorRole: currentUser.roleName || currentUser.type,
+        ruleId: assignment?.ruleId ?? null,
       });
     }
 

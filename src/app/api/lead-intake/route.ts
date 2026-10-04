@@ -43,6 +43,7 @@ export async function POST(request: NextRequest) {
 
     let assignToId: number | null = data.assignTo ? Number(data.assignTo) : null;
     let counselorId: number | null = data.counselorId ? Number(data.counselorId) : null;
+    let assignmentRuleId: number | null = null;
     if (!assignToId) {
       try {
         const assignment = await resolveLeadAssignment({
@@ -53,9 +54,11 @@ export async function POST(request: NextRequest) {
           priority: data.priority || 'medium',
           countryInterestId: resolvedCountryInterest,
           serviceInterestId: resolvedServiceInterest,
+          campaign: data.campaign || null,
         });
         assignToId = assignment.assignedEmployeeId;
         counselorId = assignment.counselorId;
+        assignmentRuleId = assignment.ruleId ?? null;
       } catch (error) {
         const message = error instanceof Error ? error.message : '';
         if (!message.includes('No active employees are available')) throw error;
@@ -100,7 +103,7 @@ export async function POST(request: NextRequest) {
 
     const leadId = await insertLeadRecord(leadData);
     if (leadId && assignToId) {
-      await recordLeadAssignment({ leadId, oldAssignTo: null, newAssignTo: assignToId, actorId: null, actorRole: 'System (lead intake)' });
+      await recordLeadAssignment({ leadId, oldAssignTo: null, newAssignTo: assignToId, actorId: null, actorRole: 'System (lead intake)', ruleId: assignmentRuleId });
     }
     // insertLeadRecord() already fires trigger.lead_created - this endpoint
     // is also a distinct form-submission source, so fire that trigger too.

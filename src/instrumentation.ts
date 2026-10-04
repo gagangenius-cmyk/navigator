@@ -13,6 +13,9 @@ export async function register() {
     const { startLeadPoolSlaCron } = await import('@/lib/lead-pool-sla-cron');
     await startLeadPoolSlaCron();
 
+    const { startStaleLeadRecycleCron } = await import('@/lib/stale-lead-recycle-cron');
+    await startStaleLeadRecycleCron();
+
     const { startJobQueueCron } = await import('@/lib/job-queue-cron');
     await startJobQueueCron();
 

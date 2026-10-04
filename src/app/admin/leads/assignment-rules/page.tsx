@@ -19,10 +19,14 @@ interface AssignmentRule {
   leadQualities: string[];
   countryInterestIds: number[];
   serviceInterestIds: number[];
+  campaigns: string[];
+  statuses: string[];
   assignmentMode: AssignmentMode;
   employeeIds: number[];
   employeeWeights: Record<number, number>;
+  alwaysAvailableEmployeeIds: number[];
   maxOpenLeadsPerEmployee: number | null;
+  staleRecycleHours: number | null;
 }
 
 interface AssignmentSettings {
@@ -46,10 +50,14 @@ const emptyForm = (sortOrder: number): Omit<AssignmentRule, 'id'> => ({
   leadQualities: [],
   countryInterestIds: [],
   serviceInterestIds: [],
+  campaigns: [],
+  statuses: [],
   assignmentMode: 'round_robin',
   employeeIds: [],
   employeeWeights: {},
+  alwaysAvailableEmployeeIds: [],
   maxOpenLeadsPerEmployee: null,
+  staleRecycleHours: null,
 });
 
 function csvToList(value: string): string[] {
@@ -64,13 +72,15 @@ export default function AssignmentRulesPage() {
   const [branches, setBranches] = useState<RefBranch[]>([]);
   const [sources, setSources] = useState<RefSource[]>([]);
   const [employees, setEmployees] = useState<RefEmployee[]>([]);
+  const [statusOptions, setStatusOptions] = useState<string[]>([]);
+  const [campaignSuggestions, setCampaignSuggestions] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [editing, setEditing] = useState<Omit<AssignmentRule, 'id'> & { id?: number } | null>(null);
   const [saving, setSaving] = useState(false);
 
-  const [preview, setPreview] = useState({ branchId: 0, sourceId: 0, priority: '', leadQuality: '' });
+  const [preview, setPreview] = useState({ branchId: 0, sourceId: 0, priority: '', leadQuality: '', campaign: '', status: '' });
   const [previewResult, setPreviewResult] = useState<any>(null);
   const [previewing, setPreviewing] = useState(false);
 
@@ -99,6 +109,8 @@ export default function AssignmentRulesPage() {
       setBranches(refJson.branches || []);
       setSources(refJson.sources || []);
       setEmployees(refJson.employees || []);
+      setStatusOptions(refJson.statuses || []);
+      setCampaignSuggestions(refJson.campaigns || []);
       setSettings(settingsJson.settings);
       if (!preview.branchId && refJson.branches?.[0]) {
         setPreview((p) => ({ ...p, branchId: refJson.branches[0].id }));
@@ -193,6 +205,8 @@ export default function AssignmentRulesPage() {
           sourceId: preview.sourceId || null,
           priority: preview.priority || null,
           leadQuality: preview.leadQuality || null,
+          campaign: preview.campaign || null,
+          status: preview.status || null,
         }),
       });
       const json = await res.json();
@@ -315,7 +329,9 @@ export default function AssignmentRulesPage() {
                         {rule.sourceIds.map((id) => <span key={`s${id}`} className="rounded-full bg-blue-50 px-2 py-0.5 text-blue-700">Source: {sourceName(id)}</span>)}
                         {rule.priorities.map((p) => <span key={`p${p}`} className="rounded-full bg-amber-50 px-2 py-0.5 text-amber-700">Priority: {p}</span>)}
                         {rule.leadQualities.map((q) => <span key={`q${q}`} className="rounded-full bg-rose-50 px-2 py-0.5 text-rose-700">Quality: {q}</span>)}
-                        {rule.branchIds.length + rule.sourceIds.length + rule.priorities.length + rule.leadQualities.length === 0 && (
+                        {(rule.campaigns || []).map((c) => <span key={`c${c}`} className="rounded-full bg-purple-50 px-2 py-0.5 text-purple-700">Campaign: {c}</span>)}
+                        {(rule.statuses || []).map((s) => <span key={`st${s}`} className="rounded-full bg-cyan-50 px-2 py-0.5 text-cyan-700">Status: {s}</span>)}
+                        {rule.branchIds.length + rule.sourceIds.length + rule.priorities.length + rule.leadQualities.length + (rule.campaigns?.length || 0) + (rule.statuses?.length || 0) === 0 && (
                           <span className="rounded-full bg-slate-100 px-2 py-0.5 text-slate-500">Matches every lead</span>
                         )}
                       </div>
@@ -323,11 +339,17 @@ export default function AssignmentRulesPage() {
                         <Users className="h-3.5 w-3.5" />
                         {rule.employeeIds.map((id) => {
                           const w = rule.employeeWeights?.[id] ?? 1;
-                          return w > 1 ? `${employeeName(id)} ×${w}` : employeeName(id);
+                          const always = rule.alwaysAvailableEmployeeIds?.includes(id);
+                          return `${employeeName(id)}${w > 1 ? ` ×${w}` : ''}${always ? ' ⚡' : ''}`;
                         }).join(', ')}
                         {rule.maxOpenLeadsPerEmployee != null && (
                           <span className="ml-1 rounded-full bg-slate-100 px-2 py-0.5 text-slate-600">
                             Cap: {rule.maxOpenLeadsPerEmployee}/agent
+                          </span>
+                        )}
+                        {rule.staleRecycleHours != null && (
+                          <span className="ml-1 rounded-full bg-orange-50 px-2 py-0.5 text-orange-700">
+                            Recycle after {rule.staleRecycleHours}h untouched
                           </span>
                         )}
                       </div>
@@ -371,6 +393,17 @@ export default function AssignmentRulesPage() {
               Lead quality
               <input className="mt-1 block w-32 rounded-lg border border-[var(--dmc-border)] p-2 text-sm" placeholder="e.g. Hot" value={preview.leadQuality} onChange={(e) => setPreview((p) => ({ ...p, leadQuality: e.target.value }))} />
             </label>
+            <label className="text-xs font-medium text-[var(--dmc-muted)]">
+              Campaign
+              <input className="mt-1 block w-32 rounded-lg border border-[var(--dmc-border)] p-2 text-sm" placeholder="e.g. Meta Q4" value={preview.campaign} onChange={(e) => setPreview((p) => ({ ...p, campaign: e.target.value }))} />
+            </label>
+            <label className="text-xs font-medium text-[var(--dmc-muted)]">
+              Status
+              <select className="mt-1 block w-32 rounded-lg border border-[var(--dmc-border)] p-2 text-sm" value={preview.status} onChange={(e) => setPreview((p) => ({ ...p, status: e.target.value }))}>
+                <option value="">Any</option>
+                {statusOptions.map((s) => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </label>
             <button onClick={runPreview} disabled={previewing || !preview.branchId} className="rounded-full bg-[var(--dmc-gold)] px-4 py-2 text-sm font-semibold text-[var(--dmc-ink)] shadow-sm disabled:opacity-50">
               {previewing ? 'Testing…' : 'Preview'}
             </button>
@@ -392,6 +425,8 @@ export default function AssignmentRulesPage() {
           branches={branches}
           sources={sources}
           employees={employees}
+          statusOptions={statusOptions}
+          campaignSuggestions={campaignSuggestions}
           toggleId={toggleId}
           onSave={save}
           saving={saving}
@@ -402,13 +437,15 @@ export default function AssignmentRulesPage() {
 }
 
 function RuleEditorModal({
-  editing, setEditing, branches, sources, employees, toggleId, onSave, saving,
+  editing, setEditing, branches, sources, employees, statusOptions, campaignSuggestions, toggleId, onSave, saving,
 }: {
   editing: Omit<AssignmentRule, 'id'> & { id?: number };
   setEditing: (v: (Omit<AssignmentRule, 'id'> & { id?: number }) | null) => void;
   branches: RefBranch[];
   sources: RefSource[];
   employees: RefEmployee[];
+  statusOptions: string[];
+  campaignSuggestions: string[];
   toggleId: (list: number[], id: number) => number[];
   onSave: () => void;
   saving: boolean;
@@ -470,6 +507,28 @@ function RuleEditorModal({
                 Lead quality (comma-separated, e.g. Hot,Warm)
                 <input className="mt-1 w-full rounded-lg border border-[var(--dmc-border)] p-2 text-sm" value={editing.leadQualities.join(', ')} onChange={(e) => setEditing({ ...editing, leadQualities: csvToList(e.target.value) })} />
               </label>
+              <label className="block text-xs font-medium text-[var(--dmc-muted)]">
+                Campaign (comma-separated - free text, matches crm_forum_leads.campaign)
+                <input
+                  className="mt-1 w-full rounded-lg border border-[var(--dmc-border)] p-2 text-sm"
+                  list="assignment-rule-campaign-suggestions"
+                  value={editing.campaigns.join(', ')}
+                  onChange={(e) => setEditing({ ...editing, campaigns: csvToList(e.target.value) })}
+                  placeholder="e.g. Meta Q4, Instagram Promo"
+                />
+                <datalist id="assignment-rule-campaign-suggestions">
+                  {campaignSuggestions.map((c) => <option key={c} value={c} />)}
+                </datalist>
+              </label>
+            </div>
+            <p className="mb-2 mt-3 text-xs text-[var(--dmc-muted)]">Status</p>
+            <div className="flex flex-wrap gap-2">
+              {statusOptions.map((s) => (
+                <label key={s} className={`cursor-pointer rounded-full border px-3 py-1 text-xs ${editing.statuses.includes(s) ? 'border-[var(--dmc-green)] bg-[var(--dmc-green-soft)] text-[var(--dmc-green-dark)]' : 'border-[var(--dmc-border)] text-[var(--dmc-muted)]'}`}>
+                  <input type="checkbox" className="hidden" checked={editing.statuses.includes(s)} onChange={() => setEditing({ ...editing, statuses: csvToList(editing.statuses.includes(s) ? editing.statuses.filter((v) => v !== s).join(',') : [...editing.statuses, s].join(',')) })} />
+                  {s}
+                </label>
+              ))}
             </div>
           </div>
 
@@ -515,6 +574,19 @@ function RuleEditorModal({
                               })}
                             />
                           )}
+                          {selected && editing.assignmentMode === 'round_robin' && (
+                            <button
+                              type="button"
+                              title={`${emp.name} is always available (skips the daily check-in/presence requirement for this rule)`}
+                              onClick={() => setEditing({
+                                ...editing,
+                                alwaysAvailableEmployeeIds: toggleId(editing.alwaysAvailableEmployeeIds, emp.id),
+                              })}
+                              className={`rounded-full border px-1.5 py-0.5 text-xs ${editing.alwaysAvailableEmployeeIds.includes(emp.id) ? 'border-amber-400 bg-amber-50 text-amber-700' : 'border-[var(--dmc-border)] text-[var(--dmc-muted)]'}`}
+                            >
+                              ⚡
+                            </button>
+                          )}
                         </span>
                       );
                     })}
@@ -525,20 +597,40 @@ function RuleEditorModal({
             {editing.assignmentMode === 'round_robin' && (
               <p className="mt-2 text-xs text-[var(--dmc-muted)]">
                 The number next to each name is their share of the rotation (default 1 each) - e.g. 2 means
-                roughly double the turns of someone left at 1.
+                roughly double the turns of someone left at 1. The ⚡ toggle marks someone "always available" -
+                they stay eligible for this rule's rotation 24/7 even if nobody marks them present that day,
+                while everyone else in the queue still needs to check in.
               </p>
             )}
             {editing.assignmentMode === 'round_robin' && (
-              <label className="mt-3 block text-xs font-medium text-[var(--dmc-muted)]">
-                Max open leads per agent (optional - leave blank for unlimited)
-                <input
-                  type="number" min={1}
-                  className="mt-1 block w-32 rounded-lg border border-[var(--dmc-border)] p-2 text-sm"
-                  value={editing.maxOpenLeadsPerEmployee ?? ''}
-                  placeholder="Unlimited"
-                  onChange={(e) => setEditing({ ...editing, maxOpenLeadsPerEmployee: e.target.value === '' ? null : Math.max(1, Number(e.target.value) || 1) })}
-                />
-              </label>
+              <div className="mt-3 grid grid-cols-2 gap-3">
+                <label className="block text-xs font-medium text-[var(--dmc-muted)]">
+                  Max open leads per agent (optional - leave blank for unlimited)
+                  <input
+                    type="number" min={1}
+                    className="mt-1 block w-full rounded-lg border border-[var(--dmc-border)] p-2 text-sm"
+                    value={editing.maxOpenLeadsPerEmployee ?? ''}
+                    placeholder="Unlimited"
+                    onChange={(e) => setEditing({ ...editing, maxOpenLeadsPerEmployee: e.target.value === '' ? null : Math.max(1, Number(e.target.value) || 1) })}
+                  />
+                </label>
+                <label className="block text-xs font-medium text-[var(--dmc-muted)]">
+                  Recycle to next agent after (hours idle, optional)
+                  <input
+                    type="number" min={1}
+                    className="mt-1 block w-full rounded-lg border border-[var(--dmc-border)] p-2 text-sm"
+                    value={editing.staleRecycleHours ?? ''}
+                    placeholder="Never"
+                    onChange={(e) => setEditing({ ...editing, staleRecycleHours: e.target.value === '' ? null : Math.max(1, Number(e.target.value) || 1) })}
+                  />
+                </label>
+                {editing.staleRecycleHours != null && (
+                  <p className="col-span-2 text-xs text-[var(--dmc-muted)]">
+                    A lead this rule assigned that gets no activity (no remark, status change, follow-up, etc.)
+                    for {editing.staleRecycleHours}h is automatically handed to the next person in this queue.
+                  </p>
+                )}
+              </div>
             )}
           </div>
         </div>

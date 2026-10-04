@@ -482,6 +482,7 @@ async function runNodeHandler(node: WorkflowGraphNode, enrollment: CrmWorkflowEn
     const oldAssignTo = lead.assignTo ?? null;
 
     let newAssignTo: number;
+    let assignmentRuleId: number | null = null;
     if (data.strategy === 'round_robin') {
       // Calls into this CRM's real round-robin engine
       // (src/lib/assignmentRuleEngine.ts -> crm_lead_round_robin_state) -
@@ -501,6 +502,7 @@ async function runNodeHandler(node: WorkflowGraphNode, enrollment: CrmWorkflowEn
           serviceInterestId: Number(lead.service_interest) || null,
         });
         newAssignTo = assignment.assignedEmployeeId;
+        assignmentRuleId = assignment.ruleId ?? null;
       } catch (error) {
         const message = error instanceof Error ? error.message : '';
         // Same "leave the lead as-is rather than fail" behavior as every
@@ -524,6 +526,7 @@ async function runNodeHandler(node: WorkflowGraphNode, enrollment: CrmWorkflowEn
       newAssignTo,
       actorId: null,
       actorRole: 'System (workflow automation)',
+      ruleId: assignmentRuleId,
     });
     return undefined;
   }

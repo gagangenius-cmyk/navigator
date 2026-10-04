@@ -28,6 +28,12 @@ export interface AssignmentRule {
   leadQualities: string[];
   countryInterestIds: number[];
   serviceInterestIds: number[];
+  // Free-text, case-insensitive (crm_forum_leads.campaign has no fixed
+  // vocabulary - unlike branch/source these are whatever marketing typed in).
+  campaigns: string[];
+  // Case-insensitive match against crm_forum_leads.status, values drawn from
+  // the same crm_lead_status config table the Leads list's own filter uses.
+  statuses: string[];
   assignmentMode: AssignmentMode;
   employeeIds: number[];
   // Per-employee share of the rotation within this rule's queue - keyed by
@@ -35,9 +41,18 @@ export interface AssignmentRule {
   // weighting configured at all, every member is an equal 1). Round-robin
   // only; meaningless for 'specific_employee' mode.
   employeeWeights: Record<number, number>;
+  // Subset of employeeIds exempt from the "checked in today" requirement -
+  // they stay eligible for this rule's rotation 24/7 even if nobody marks
+  // them present, while every other member of the same queue still needs to.
+  alwaysAvailableEmployeeIds: number[];
   // Skip a queue member once their open-lead count reaches this, instead of
   // assigning them more than they can realistically handle. null = unlimited.
   maxOpenLeadsPerEmployee: number | null;
+  // If set, a lead this rule assigned that sees no activity (no remark,
+  // status change, follow-up, etc. after the assignment) for this many hours
+  // gets automatically recycled to the next person in the same round-robin
+  // queue (src/lib/staleLeadRecycle.ts). null/0 = disabled.
+  staleRecycleHours: number | null;
   createdAt?: string;
   updatedAt?: string;
   createdBy?: number | null;
@@ -55,10 +70,14 @@ export interface AssignmentRuleInput {
   leadQualities?: string[];
   countryInterestIds?: number[];
   serviceInterestIds?: number[];
+  campaigns?: string[];
+  statuses?: string[];
   assignmentMode: AssignmentMode;
   employeeIds: number[];
   employeeWeights?: Record<number, number>;
+  alwaysAvailableEmployeeIds?: number[];
   maxOpenLeadsPerEmployee?: number | null;
+  staleRecycleHours?: number | null;
 }
 
 export interface LeadAssignmentContext {
@@ -68,6 +87,8 @@ export interface LeadAssignmentContext {
   leadQuality?: string | null;
   countryInterestId?: number | null;
   serviceInterestId?: number | null;
+  campaign?: string | null;
+  status?: string | null;
   preferredEmployeeId?: number | null;
   forceAutoAssign?: boolean;
   roundRobin?: boolean;
@@ -92,10 +113,14 @@ interface RuleRow {
   lead_qualities: string | null;
   country_interest_ids: string | null;
   service_interest_ids: string | null;
+  campaigns: string | null;
+  statuses: string | null;
   assignment_mode: AssignmentMode;
   employee_ids: string;
   employee_weights: string | null;
+  always_available_employee_ids: string | null;
   max_open_leads_per_employee: number | null;
+  stale_recycle_hours: number | null;
   created_at: string;
   updated_at: string;
   created_by: number | null;
@@ -114,7 +139,7 @@ const ensureWeightingColumns = async () => {
   const [rows] = await sequelize.query(`
     SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'crm_assignment_rules'
-      AND COLUMN_NAME IN ('employee_weights', 'max_open_leads_per_employee')
+      AND COLUMN_NAME IN ('employee_weights', 'max_open_leads_per_employee', 'campaigns', 'statuses', 'always_available_employee_ids', 'stale_recycle_hours')
   `);
   const existing = new Set(((rows as Array<{ COLUMN_NAME: string }>) || []).map((r) => r.COLUMN_NAME));
   if (!existing.has('employee_weights')) {
@@ -122,6 +147,18 @@ const ensureWeightingColumns = async () => {
   }
   if (!existing.has('max_open_leads_per_employee')) {
     await sequelize.query(`ALTER TABLE crm_assignment_rules ADD COLUMN max_open_leads_per_employee INT NULL`);
+  }
+  if (!existing.has('campaigns')) {
+    await sequelize.query(`ALTER TABLE crm_assignment_rules ADD COLUMN campaigns VARCHAR(1000) NULL`);
+  }
+  if (!existing.has('statuses')) {
+    await sequelize.query(`ALTER TABLE crm_assignment_rules ADD COLUMN statuses VARCHAR(500) NULL`);
+  }
+  if (!existing.has('always_available_employee_ids')) {
+    await sequelize.query(`ALTER TABLE crm_assignment_rules ADD COLUMN always_available_employee_ids VARCHAR(500) NULL`);
+  }
+  if (!existing.has('stale_recycle_hours')) {
+    await sequelize.query(`ALTER TABLE crm_assignment_rules ADD COLUMN stale_recycle_hours INT NULL`);
   }
 };
 
@@ -141,10 +178,14 @@ const ensureAssignmentRulesTable = async () => {
           lead_qualities VARCHAR(255) NULL,
           country_interest_ids VARCHAR(255) NULL,
           service_interest_ids VARCHAR(255) NULL,
+          campaigns VARCHAR(1000) NULL,
+          statuses VARCHAR(500) NULL,
           assignment_mode VARCHAR(20) NOT NULL DEFAULT 'round_robin',
           employee_ids VARCHAR(1000) NOT NULL,
           employee_weights VARCHAR(2000) NULL,
+          always_available_employee_ids VARCHAR(500) NULL,
           max_open_leads_per_employee INT NULL,
+          stale_recycle_hours INT NULL,
           created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
           updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
           created_by INT NULL,
@@ -265,10 +306,14 @@ const rowToRule = (row: RuleRow): AssignmentRule => ({
   leadQualities: parseStringList(row.lead_qualities),
   countryInterestIds: parseIdList(row.country_interest_ids),
   serviceInterestIds: parseIdList(row.service_interest_ids),
+  campaigns: parseStringList(row.campaigns),
+  statuses: parseStringList(row.statuses),
   assignmentMode: row.assignment_mode,
   employeeIds: parseIdList(row.employee_ids),
   employeeWeights: parseWeights(row.employee_weights, parseIdList(row.employee_ids)),
+  alwaysAvailableEmployeeIds: parseIdList(row.always_available_employee_ids),
   maxOpenLeadsPerEmployee: row.max_open_leads_per_employee ?? null,
+  staleRecycleHours: row.stale_recycle_hours ?? null,
   createdAt: row.created_at,
   updatedAt: row.updated_at,
   createdBy: row.created_by,
@@ -312,6 +357,12 @@ function validateRuleInput(input: AssignmentRuleInput) {
   ) {
     throw new Error('Max open leads per agent must be a positive number, or left blank for unlimited');
   }
+  if (
+    input.staleRecycleHours !== undefined && input.staleRecycleHours !== null
+    && (!Number.isFinite(input.staleRecycleHours) || input.staleRecycleHours < 1)
+  ) {
+    throw new Error('Stale-lead recycle hours must be a positive number, or left blank to disable');
+  }
 }
 
 export async function createAssignmentRule(input: AssignmentRuleInput, actorId?: number | null): Promise<AssignmentRule> {
@@ -330,11 +381,13 @@ export async function createAssignmentRule(input: AssignmentRuleInput, actorId?:
   const insertResult = await sequelize.query(
     `INSERT INTO crm_assignment_rules
       (name, description, is_active, sort_order, branch_ids, source_ids, priorities,
-       lead_qualities, country_interest_ids, service_interest_ids, assignment_mode,
-       employee_ids, employee_weights, max_open_leads_per_employee, created_by, updated_by)
+       lead_qualities, country_interest_ids, service_interest_ids, campaigns, statuses, assignment_mode,
+       employee_ids, employee_weights, always_available_employee_ids, max_open_leads_per_employee,
+       stale_recycle_hours, created_by, updated_by)
      VALUES (:name, :description, :isActive, :sortOrder, :branchIds, :sourceIds, :priorities,
-       :leadQualities, :countryInterestIds, :serviceInterestIds, :assignmentMode,
-       :employeeIds, :employeeWeights, :maxOpenLeadsPerEmployee, :actorId, :actorId)`,
+       :leadQualities, :countryInterestIds, :serviceInterestIds, :campaigns, :statuses, :assignmentMode,
+       :employeeIds, :employeeWeights, :alwaysAvailableEmployeeIds, :maxOpenLeadsPerEmployee,
+       :staleRecycleHours, :actorId, :actorId)`,
     {
       replacements: {
         name: input.name.trim(),
@@ -347,10 +400,14 @@ export async function createAssignmentRule(input: AssignmentRuleInput, actorId?:
         leadQualities: toCsv(input.leadQualities),
         countryInterestIds: toCsv(input.countryInterestIds),
         serviceInterestIds: toCsv(input.serviceInterestIds),
+        campaigns: toCsv(input.campaigns),
+        statuses: toCsv(input.statuses),
         assignmentMode: input.assignmentMode,
         employeeIds: toCsv(input.employeeIds),
         employeeWeights: weightsToCsv(input.employeeWeights, input.employeeIds),
+        alwaysAvailableEmployeeIds: toCsv(input.alwaysAvailableEmployeeIds),
         maxOpenLeadsPerEmployee: input.maxOpenLeadsPerEmployee ?? null,
+        staleRecycleHours: input.staleRecycleHours ?? null,
         actorId: actorId ?? null,
       },
       type: QueryTypes.INSERT,
@@ -379,10 +436,14 @@ export async function updateAssignmentRule(id: number, input: Partial<Assignment
     leadQualities: input.leadQualities ?? existing.leadQualities,
     countryInterestIds: input.countryInterestIds ?? existing.countryInterestIds,
     serviceInterestIds: input.serviceInterestIds ?? existing.serviceInterestIds,
+    campaigns: input.campaigns ?? existing.campaigns,
+    statuses: input.statuses ?? existing.statuses,
     assignmentMode: input.assignmentMode ?? existing.assignmentMode,
     employeeIds: input.employeeIds ?? existing.employeeIds,
     employeeWeights: input.employeeWeights ?? existing.employeeWeights,
+    alwaysAvailableEmployeeIds: input.alwaysAvailableEmployeeIds ?? existing.alwaysAvailableEmployeeIds,
     maxOpenLeadsPerEmployee: input.maxOpenLeadsPerEmployee !== undefined ? input.maxOpenLeadsPerEmployee : existing.maxOpenLeadsPerEmployee,
+    staleRecycleHours: input.staleRecycleHours !== undefined ? input.staleRecycleHours : existing.staleRecycleHours,
   };
   validateRuleInput(merged);
 
@@ -391,9 +452,11 @@ export async function updateAssignmentRule(id: number, input: Partial<Assignment
        name = :name, description = :description, is_active = :isActive, sort_order = :sortOrder,
        branch_ids = :branchIds, source_ids = :sourceIds, priorities = :priorities,
        lead_qualities = :leadQualities, country_interest_ids = :countryInterestIds,
-       service_interest_ids = :serviceInterestIds, assignment_mode = :assignmentMode,
-       employee_ids = :employeeIds, employee_weights = :employeeWeights,
-       max_open_leads_per_employee = :maxOpenLeadsPerEmployee, updated_by = :actorId
+       service_interest_ids = :serviceInterestIds, campaigns = :campaigns, statuses = :statuses,
+       assignment_mode = :assignmentMode, employee_ids = :employeeIds, employee_weights = :employeeWeights,
+       always_available_employee_ids = :alwaysAvailableEmployeeIds,
+       max_open_leads_per_employee = :maxOpenLeadsPerEmployee, stale_recycle_hours = :staleRecycleHours,
+       updated_by = :actorId
      WHERE id = :id`,
     {
       replacements: {
@@ -408,10 +471,14 @@ export async function updateAssignmentRule(id: number, input: Partial<Assignment
         leadQualities: toCsv(merged.leadQualities),
         countryInterestIds: toCsv(merged.countryInterestIds),
         serviceInterestIds: toCsv(merged.serviceInterestIds),
+        campaigns: toCsv(merged.campaigns),
+        statuses: toCsv(merged.statuses),
         assignmentMode: merged.assignmentMode,
         employeeIds: toCsv(merged.employeeIds),
         employeeWeights: weightsToCsv(merged.employeeWeights, merged.employeeIds),
+        alwaysAvailableEmployeeIds: toCsv(merged.alwaysAvailableEmployeeIds),
         maxOpenLeadsPerEmployee: merged.maxOpenLeadsPerEmployee ?? null,
+        staleRecycleHours: merged.staleRecycleHours ?? null,
         actorId: actorId ?? null,
       },
     }
@@ -460,6 +527,14 @@ function matchesRule(rule: AssignmentRule, lead: LeadAssignmentContext): boolean
   }
   if (rule.countryInterestIds.length > 0 && (!lead.countryInterestId || !rule.countryInterestIds.includes(lead.countryInterestId))) return false;
   if (rule.serviceInterestIds.length > 0 && (!lead.serviceInterestId || !rule.serviceInterestIds.includes(lead.serviceInterestId))) return false;
+  if (rule.campaigns.length > 0) {
+    const c = (lead.campaign || '').toLowerCase();
+    if (!rule.campaigns.some((v) => v.toLowerCase() === c)) return false;
+  }
+  if (rule.statuses.length > 0) {
+    const s = (lead.status || '').toLowerCase();
+    if (!rule.statuses.some((v) => v.toLowerCase() === s)) return false;
+  }
   return true;
 }
 
@@ -475,7 +550,12 @@ interface RuleCandidate {
   openLeadCount: number;
 }
 
-async function loadRuleCandidates(employeeIds: number[], requireCheckedIn: boolean, transaction?: Transaction): Promise<RuleCandidate[]> {
+async function loadRuleCandidates(
+  employeeIds: number[],
+  requireCheckedIn: boolean,
+  alwaysAvailableIds: number[] = [],
+  transaction?: Transaction
+): Promise<RuleCandidate[]> {
   // Previously the only one of crm_employee_attendance's four consumers
   // that never called its own table-provisioning - relied entirely on
   // admin/attendance, admin/attendance/presence, or leadAutoAssignment.ts
@@ -488,7 +568,14 @@ async function loadRuleCandidates(employeeIds: number[], requireCheckedIn: boole
     await Promise.all([ensureEmployeeAttendanceTable(), HRService.ensureAttendanceRecordTable()]);
   }
 
-  const attendanceClause = requireCheckedIn ? `AND ${CHECKED_IN_TODAY_SQL}` : '';
+  // alwaysAvailableIds are always a subset of this rule's own employee_ids,
+  // already filtered to positive integers by parseIdList when the rule was
+  // loaded - same trust basis as the existing employeeIds interpolation in
+  // the ORDER BY FIELD(...) below, never raw user input.
+  const alwaysAvailableOverride = requireCheckedIn && alwaysAvailableIds.length
+    ? ` OR e.id IN (${alwaysAvailableIds.join(',')})`
+    : '';
+  const attendanceClause = requireCheckedIn ? `AND (${CHECKED_IN_TODAY_SQL}${alwaysAvailableOverride})` : '';
 
   return sequelize.query<RuleCandidate>(
     `SELECT e.id, e.name, e.branch, COUNT(l.id) AS openLeadCount
@@ -613,9 +700,9 @@ async function resolveRuleAssignment(
     // Prefer only employees checked in today; if none of the rule's queue is
     // checked in, degrade to "active member of the queue" rather than
     // abandoning the rule entirely - mirrors the branch engine's own fallback.
-    let candidates = await loadRuleCandidates(rule.employeeIds, true, transaction);
+    let candidates = await loadRuleCandidates(rule.employeeIds, true, rule.alwaysAvailableEmployeeIds, transaction);
     if (candidates.length === 0) {
-      candidates = await loadRuleCandidates(rule.employeeIds, false, transaction);
+      candidates = await loadRuleCandidates(rule.employeeIds, false, rule.alwaysAvailableEmployeeIds, transaction);
     }
 
     // Capacity cap: drop anyone already carrying rule.maxOpenLeadsPerEmployee
@@ -639,6 +726,35 @@ async function resolveRuleAssignment(
       ruleId: rule.id,
       ruleName: rule.name,
     };
+  });
+}
+
+// Used only by the stale-lead recycle sweep (src/lib/staleLeadRecycle.ts):
+// picks who a rule's round robin would hand a lead to NEXT, excluding the
+// lead's current holder (recycling to the same person would be a no-op).
+// Shares the rule's normal rotation cursor (crm_assignment_rule_state) - a
+// recycle is just another real turn in the same queue, not a separate one.
+export async function findStaleRecycleTarget(
+  rule: AssignmentRule,
+  excludeEmployeeId: number
+): Promise<{ employeeId: number } | null> {
+  if (rule.assignmentMode !== 'round_robin') return null;
+  const pool = rule.employeeIds.filter((id) => id !== excludeEmployeeId);
+  if (pool.length === 0) return null;
+
+  await ensureRuleStateTable();
+  return sequelize.transaction(async (transaction) => {
+    let candidates = await loadRuleCandidates(pool, true, rule.alwaysAvailableEmployeeIds, transaction);
+    if (candidates.length === 0) {
+      candidates = await loadRuleCandidates(pool, false, rule.alwaysAvailableEmployeeIds, transaction);
+    }
+    if (rule.maxOpenLeadsPerEmployee !== null) {
+      candidates = candidates.filter((c) => c.openLeadCount < rule.maxOpenLeadsPerEmployee!);
+    }
+    if (candidates.length === 0) return null;
+
+    const selected = await getNextRuleRoundRobinCandidate(rule.id, candidates, rule.employeeWeights, transaction, true);
+    return { employeeId: selected.id };
   });
 }
 

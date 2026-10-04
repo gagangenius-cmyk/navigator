@@ -3,6 +3,7 @@ import { CrmRemarks } from '@/models/CrmRemarks';
 import { sequelize } from '@/lib/sequelize';
 import { notifyLeadAssigned } from '@/lib/notify';
 import { CACHE_TAGS, invalidateReportCaches } from '@/lib/reportCache';
+import { ensureAssignedByRuleColumn } from '@/lib/ensureAssignedByRuleColumn';
 
 export type LeadRemarkAction =
   | 'lead_created'
@@ -60,6 +61,14 @@ interface RecordLeadAssignmentInput {
   newAssignTo: number | null;
   actorId?: number | null;
   actorRole?: string | null;
+  // The Assignment Rule (crm_assignment_rules.id) that produced newAssignTo,
+  // when this assignment came from resolveLeadAssignment()'s rule-engine
+  // branch - stamped onto crm_forum_leads.assigned_by_rule_id so the
+  // stale-lead recycle sweep can later recycle this lead through the same
+  // rule's queue. Left null/omitted for every non-rule assignment (manual
+  // pick, pool self-claim, branch-fallback round robin, etc.) - those are
+  // never eligible for automatic recycling.
+  ruleId?: number | null;
   transaction?: Transaction;
 }
 
@@ -83,10 +92,12 @@ export async function recordLeadAssignment({
   newAssignTo,
   actorId = null,
   actorRole = null,
+  ruleId = null,
   transaction,
 }: RecordLeadAssignmentInput): Promise<void> {
   if (oldAssignTo === newAssignTo) return;
   try {
+    await ensureAssignedByRuleColumn();
     const employeeIds = [oldAssignTo, newAssignTo].filter((v): v is number => v !== null);
     const employeeNames = employeeIds.length
       ? await sequelize.query<{ id: number; name: string }>(
@@ -108,11 +119,11 @@ export async function recordLeadAssignment({
     // rather than violating the constraint and losing the audit trail entirely.
     await sequelize.query(
       `UPDATE crm_forum_leads
-       SET transfer_date = ?, transfer_time = ?, transfered = 1, transfered_by = ?
+       SET transfer_date = ?, transfer_time = ?, transfered = 1, transfered_by = ?, assigned_by_rule_id = ?
            ${clearsUntouched ? ", status = IF(status = 'untouched', 'New', status)" : ''}
        WHERE id = ?`,
       {
-        replacements: [now, now.toTimeString().split(' ')[0], actorId ?? 1, leadId],
+        replacements: [now, now.toTimeString().split(' ')[0], actorId ?? 1, ruleId ?? null, leadId],
         transaction,
       }
     );

@@ -170,6 +170,7 @@ export async function runSlaSweep(limit = 200): Promise<SlaSweepResult> {
         newAssignTo: assignment.assignedEmployeeId,
         actorId: null,
         actorRole: `System (lead pool SLA sweep, ${slaMinutes}m timeout)`,
+        ruleId: assignment.ruleId ?? null,
       });
       if (lead.branch) await pushLeadPoolEvent(lead.branch, 'lead-pool:claimed', { leadId: lead.id });
       autoAssigned++;
