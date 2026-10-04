@@ -484,6 +484,10 @@ export async function GET(request: NextRequest) {
         COALESCE(s.name, pt.type, l.service_interest) as service_interest_label,
         COALESCE(ms.name, l.market_source) as market_source_label,
         COALESCE(l.opportunity_id, (SELECT MAX(o.id) FROM crm_opportunities o WHERE o.leadId = l.id AND o.is_deleted = 0)) as resolved_opportunity_id,
+        COALESCE(
+          (SELECT MAX(rr.reassignmentDate) FROM crm_lead_reassignments rr WHERE rr.leadId = l.id AND rr.status = 'approved'),
+          l.regdate
+        ) as assigned_date,
         e1.name as assigned_to_name, b.branch as branch_name, b.name as branch_legal_name,
         b.ar_name as branch_name_ar, b.address as branch_address, b.email as branch_email,
         b.mobile as branch_mobile, b.license_number as branch_license_number,

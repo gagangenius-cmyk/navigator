@@ -32,6 +32,10 @@ export interface Lead {
   priority: string;
   status: string;
   regdate: string;
+  // Most recent *approved* lead-reassignment date (crm_lead_reassignments),
+  // falling back to regdate for a lead that's never been reassigned - see
+  // the `assigned_date` subquery in src/app/api/leads/route.ts.
+  assigned_date?: string | null;
   assignTo: number;
   branch: number;
   region: number;

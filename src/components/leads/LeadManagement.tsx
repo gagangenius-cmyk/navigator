@@ -36,14 +36,12 @@ interface PaginationData {
 interface FilterOption {
   value: string;
   label: string;
-  region?: string;
 }
 
 interface LeadFilterOptions {
   statuses: FilterOption[];
   priorities: FilterOption[];
   branches: FilterOption[];
-  regions: FilterOption[];
   countries: FilterOption[];
   services: FilterOption[];
   sources: FilterOption[];
@@ -166,8 +164,6 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
   const [filters, setFilters] = useState({
     status: '',
     priority: '',
-    branch: '',
-    region: '',
     countryInterest: '',
     serviceInterest: '',
     marketSource: '',
@@ -180,7 +176,6 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
     statuses: [],
     priorities: [],
     branches: [],
-    regions: [],
     countries: [],
     services: [],
     sources: [],
@@ -477,10 +472,6 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
   };
 
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const filteredBranchOptions = useMemo(() => {
-    if (!filters.region) return filterOptions.branches;
-    return filterOptions.branches.filter((branch) => !branch.region || branch.region === filters.region);
-  }, [filterOptions.branches, filters.region]);
   const selectableLeadIds = useMemo(
     () => leads.map(getSelectableLeadId).filter((id): id is number => id !== null),
     [leads]
@@ -493,8 +484,6 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
   const resetLeadFilters = () => setFilters({
     status: '',
     priority: '',
-    branch: '',
-    region: '',
     countryInterest: '',
     serviceInterest: '',
     marketSource: '',
@@ -740,7 +729,6 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
           statuses: data.statuses || [],
           priorities: data.priorities || [],
           branches: data.branches || [],
-          regions: data.regions || [],
           countries: data.countries || [],
           services: data.services || [],
           sources: data.sources || [],
@@ -2166,14 +2154,6 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
               <option value="">Priority: All</option>
               {filterOptions.priorities.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
             </SearchableSelect>
-            <SearchableSelect value={filters.region} onChange={(e) => setFilters({...filters, region: e.target.value, branch: ''})} className="h-9 rounded-md border border-gray-200 bg-gray-50 px-3 text-sm font-medium focus:bg-white focus:ring-2 focus:ring-blue-500">
-              <option value="">Region: All</option>
-              {filterOptions.regions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-            </SearchableSelect>
-            <SearchableSelect value={filters.branch} onChange={(e) => setFilters({...filters, branch: e.target.value})} className="h-9 rounded-md border border-gray-200 bg-gray-50 px-3 text-sm font-medium focus:bg-white focus:ring-2 focus:ring-blue-500">
-              <option value="">Branch: All</option>
-              {filteredBranchOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-            </SearchableSelect>
             {isBranchManagerOrCeo(user) && (
               <SearchableSelect value={filters.assignTo} onChange={(e) => setFilters({...filters, assignTo: e.target.value})} className="h-9 rounded-md border border-gray-200 bg-gray-50 px-3 text-sm font-medium focus:bg-white focus:ring-2 focus:ring-blue-500">
                 <option value="">Counselor: All</option>
@@ -2599,6 +2579,11 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
                   <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
                   <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Phone</th>
                   <SortableTh label="Status" sortKey="status" activeKey={leadSortKey} direction={leadSortDirection} onSort={toggleLeadSort} />
+                  <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Country Interested</th>
+                  <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Program Interested</th>
+                  <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Counselor</th>
+                  <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date Registered</th>
+                  <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Assigned Date</th>
                   <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Campaign</th>
                   <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Remarks</th>
                   <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
@@ -2667,6 +2652,21 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
                           </span>
                         )}
                       </div>
+                    </td>
+                    <td className="px-4 py-2.5 whitespace-nowrap max-w-[160px] truncate text-sm text-gray-700" title={lead.country_interest_label || undefined}>
+                      {lead.country_interest_label || <span className="text-gray-400">—</span>}
+                    </td>
+                    <td className="px-4 py-2.5 whitespace-nowrap max-w-[160px] truncate text-sm text-gray-700" title={lead.service_interest_label || undefined}>
+                      {lead.service_interest_label || <span className="text-gray-400">—</span>}
+                    </td>
+                    <td className="px-4 py-2.5 whitespace-nowrap max-w-[160px] truncate text-sm text-gray-700" title={lead.dmEmployeeByASSIGNTo?.name || undefined}>
+                      {lead.dmEmployeeByASSIGNTo?.name || <span className="text-gray-400">Unassigned</span>}
+                    </td>
+                    <td className="px-4 py-2.5 whitespace-nowrap text-sm text-gray-600">
+                      {formatDate(lead.regdate) || <span className="text-gray-400">—</span>}
+                    </td>
+                    <td className="px-4 py-2.5 whitespace-nowrap text-sm text-gray-600">
+                      {formatDate(lead.assigned_date) || <span className="text-gray-400">—</span>}
                     </td>
                     <td className="px-4 py-2.5 whitespace-nowrap max-w-[140px] truncate text-sm text-gray-600" title={lead.campaign || undefined}>
                       {lead.campaign || <span className="text-gray-400">—</span>}
