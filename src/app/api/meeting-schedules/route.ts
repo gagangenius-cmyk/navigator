@@ -162,6 +162,7 @@ export async function POST(request: NextRequest) {
       title: `Meeting Scheduled: ${title || meetingType}`,
       message: `You have a ${meetingType} meeting scheduled for ${new Date(appointmentAt).toLocaleString()}`,
       priority: priority || 'medium',
+      link: leadId ? `/admin/leads/${parseInt(leadId)}/edit` : '/admin/appointments',
       created_at: new Date(),
       updated_at: new Date()
     });
@@ -175,6 +176,7 @@ export async function POST(request: NextRequest) {
           title: `Meeting Invitation: ${title || meetingType}`,
           message: `You have been invited to a ${meetingType} meeting on ${new Date(appointmentAt).toLocaleString()}`,
           priority: priority || 'medium',
+          link: leadId ? `/admin/leads/${parseInt(leadId)}/edit` : '/admin/appointments',
           created_at: new Date(),
           updated_at: new Date()
         });

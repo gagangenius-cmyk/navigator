@@ -17,7 +17,7 @@ interface ExpenseRow {
 interface CoaAccount { id: number; code: string; name: string; group_name: string; status: number; }
 interface BranchOption { id: number; name: string; }
 
-const fmtAed = (v: number) => `AED ${Number(v || 0).toLocaleString('en', { maximumFractionDigits: 0 })}`;
+const fmtAed = (v: number) => `AED ${Number(v || 0).toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const emptyFilters = { dateFrom: '', dateTo: '', branchId: '', coaAccountId: '', approved: '' };
 const emptyForm = { branch: '', coa_account_id: '', amount: '', date: new Date().toISOString().slice(0, 10), particular: '', remark: '', includeVat: true };
 

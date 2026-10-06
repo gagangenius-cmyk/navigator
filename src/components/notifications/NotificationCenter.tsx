@@ -18,7 +18,7 @@ interface Notification {
   isRead: boolean;
   createdAt: string;
   relatedId?: number;
-  relatedType?: 'lead' | 'opportunity' | 'appointment' | 'discount_approval' | 'reassignment';
+  relatedType?: 'lead' | 'opportunity' | 'appointment' | 'discount_approval' | 'reassignment' | 'contract';
   link?: string | null;
 }
 
@@ -28,8 +28,13 @@ interface Notification {
 // notification unclickable (see discount-approvals/route.ts's outcome
 // notification, which hit exactly this before it started setting `link`).
 function resolveNotificationLink(notification: Notification): string | null {
-  if (notification.link) return notification.link;
-  if (!notification.relatedId) return null;
+  if (notification.link) {
+    // Older lead alerts were stored as /admin/leads/:id, which has no page
+    // (the lead detail route is /admin/leads/:id/edit) and 404'd on click.
+    const bareLead = notification.link.match(/^\/admin\/leads\/(\d+)\/?$/);
+    return bareLead ? `/admin/leads/${bareLead[1]}/edit` : notification.link;
+  }
+  if (!notification.relatedId) return linkForType(notification.type);
   switch (notification.relatedType) {
     case 'lead':
       return `/admin/leads/${notification.relatedId}/edit`;
@@ -41,6 +46,32 @@ function resolveNotificationLink(notification: Notification): string | null {
       return '/admin/discount-approvals';
     case 'reassignment':
       return '/admin/reassignment';
+    case 'contract':
+      return '/admin/contracts';
+    default:
+      return linkForType(notification.type);
+  }
+}
+
+// Last resort for alerts saved with neither a link nor a related record.
+function linkForType(type: string): string | null {
+  switch (type) {
+    case 'appointment':
+    case 'meeting':
+      return '/admin/appointments';
+    case 'discount_requested':
+      return '/admin/discount-approvals';
+    case 'compliance_submission':
+      return '/admin/compliance-approvals';
+    case 'contract_receipt_recorded':
+    case 'contract_reconciliation_drift':
+      return '/admin/contracts';
+    case 'renewal_alert':
+      return '/admin/pro-works/renewal-reminders';
+    case 'leave_approval':
+      return '/admin/hr/leave-management';
+    case 'payroll_completion':
+      return '/admin/hr/payroll-management';
     default:
       return null;
   }

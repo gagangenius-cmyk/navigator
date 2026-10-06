@@ -36,7 +36,7 @@ const STATUS_COLOR: Record<string, string> = {
   closed: 'bg-gray-100 text-gray-600',
 };
 
-const fmtAed = (v: number) => `AED ${Number(v || 0).toLocaleString('en', { maximumFractionDigits: 0 })}`;
+const fmtAed = (v: number) => `AED ${Number(v || 0).toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 const emptyFilters = { dateFrom: '', dateTo: '', branchId: '', counselorId: '', search: '' };
 

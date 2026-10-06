@@ -123,6 +123,18 @@ export default function BranchPerformanceReport() {
     branch.region.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  const { sorted: sortedBranches, sortKey: branchSortKey, sortDirection: branchSortDirection, toggleSort: toggleBranchSort } = useSortableData(
+    filteredBranches,
+    {
+      name: (b: BranchPerformance) => b.name,
+      leads: (b: BranchPerformance) => b.totalLeads,
+      converted: (b: BranchPerformance) => b.convertedLeads,
+      conversion: (b: BranchPerformance) => b.conversionRate,
+      revenue: (b: BranchPerformance) => b.revenue,
+      achievement: (b: BranchPerformance) => b.achievementRate,
+    },
+  );
+
   const getBranchLeads = (branchId: number) => {
     // ✅ FIXED: Properly typed parameter in filter
     return leads.filter((lead: Lead) => lead.branch === branchId);
@@ -197,8 +209,21 @@ export default function BranchPerformanceReport() {
       </div>
 
       {/* Branch Performance Grid */}
+      <SortButtonRow
+        options={[
+          ['name', 'Branch'],
+          ['leads', 'Total Leads'],
+          ['converted', 'Converted'],
+          ['conversion', 'Conversion'],
+          ['revenue', 'Revenue'],
+          ['achievement', 'Achievement'],
+        ] as const}
+        activeKey={branchSortKey}
+        direction={branchSortDirection}
+        onSort={toggleBranchSort}
+      />
       <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6 mb-6">
-        {filteredBranches.map((branch) => (
+        {sortedBranches.map((branch) => (
           <div
             key={branch.id}
             onClick={() => handleBranchClick(branch)}

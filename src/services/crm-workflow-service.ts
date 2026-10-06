@@ -504,7 +504,8 @@ export class CrmWorkflowService {
         'New Case Assigned',
         `You have been assigned case ${review.formalClientId || opportunityId}. Please review the client record and begin processing.`,
         'high',
-        transaction
+        transaction,
+        `/admin/leads/${review.leadId}/edit`
       );
 
       await transaction.commit();
@@ -610,7 +611,8 @@ export class CrmWorkflowService {
         'New Opportunity for Finance Review',
         `Opportunity #${opportunityId} has been submitted and requires your finance verification.`,
         'high',
-        transaction
+        transaction,
+        `/admin/leads/${leadId}/edit`
       );
     }
   }
@@ -630,7 +632,8 @@ export class CrmWorkflowService {
         'Finance Approved — Compliance Review Required',
         `Opportunity #${opportunityId} has passed Finance verification and requires your compliance review.`,
         'high',
-        transaction
+        transaction,
+        `/admin/leads/${leadId}/edit`
       );
     }
   }
@@ -653,7 +656,8 @@ export class CrmWorkflowService {
       'Opportunity Status Update',
       message,
       'normal',
-      transaction
+      transaction,
+      `/admin/leads/${leadId}/edit`
     );
   }
 
@@ -663,13 +667,15 @@ export class CrmWorkflowService {
     title: string,
     message: string,
     priority: string,
-    transaction: any
+    transaction: any,
+    link: string | null = null
   ) {
     await CrmcNotifications.create({
       user_id: userId,
       type,
       title,
       message,
+      link,
       is_read: false,
       priority,
       created_at: new Date(),

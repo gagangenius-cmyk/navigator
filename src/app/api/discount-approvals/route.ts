@@ -303,7 +303,7 @@ export async function POST(request: NextRequest) {
         ? `${clientName || `Lead #${body.leadId}`} received a ${discountAmount} ${branchCurrency.currencyCode} discount (${discountTierLabel(tier, thresholds)}) — no approval was required.`
         : `A ${discountAmount} ${branchCurrency.currencyCode} discount was requested for ${clientName || `Lead #${body.leadId}`} and needs ${discountTierLabel(tier, thresholds)} approval.`,
       priority: 'medium',
-      link: `/admin/leads/${body.leadId}/edit`,
+      link: isAutoApproved ? `/admin/leads/${body.leadId}/edit` : '/admin/discount-approvals',
       relatedId: body.leadId,
       relatedType: 'lead',
     };

@@ -1311,6 +1311,7 @@ export class HRService {
     title: string;
     message: string;
     priority?: 'low' | 'medium' | 'normal' | 'high' | 'urgent';
+    link?: string;
   }) {
     const userIds = input.userIds
       .map((id) => Number(id))
@@ -1325,6 +1326,7 @@ export class HRService {
         message: input.message,
         priority: input.priority || 'medium',
         channels: ['in_app', 'email', 'sms'],
+        link: input.link,
       });
     } catch (error) {
       console.error('Failed to send leave notification:', error);
@@ -3085,6 +3087,7 @@ export class HRService {
     const recipients = await this.getLeaveWorkflowRecipients(leave.employee_id, leave.manager_id);
     await this.notifyLeaveUsers({
       userIds: [leave.employee_id],
+      link: '/admin/my-leave',
       title: `Leave request ${input.status.toLowerCase()}`,
       message: `Your ${leave.leave_type} request from ${leave.start_date} to ${leave.end_date} was ${input.status.toLowerCase()} by HR.${hrStatus === 'Overridden' ? ' HR overrode the manager decision.' : ''}`,
       priority: input.status === 'Approved' ? 'medium' : 'high',

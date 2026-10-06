@@ -233,6 +233,9 @@ export async function POST(request: NextRequest) {
       title: `Follow-up Reminder: ${subject || reminderType || 'Lead follow-up'}`,
       message: `You have a follow-up scheduled for ${new Date(followUpAt).toLocaleDateString()}`,
       priority: priority || 'medium',
+      link: leadId ? `/admin/leads/${parseInt(leadId)}/edit` : null,
+      related_id: leadId ? parseInt(leadId) : null,
+      related_type: leadId ? 'lead' : null,
       created_at: new Date(),
       updated_at: new Date()
     });

@@ -249,6 +249,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       title: 'Payment recorded on a contract',
       message: `Receipt ${receiptNumber} for ${contract.currency} ${amount} is awaiting accounts verification.`,
       relatedId: contractId,
+      link: '/admin/contracts',
       relatedType: 'contract',
     });
 

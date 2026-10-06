@@ -81,6 +81,7 @@ export async function runContractReconciliation(): Promise<{ checked: number; dr
       message: `Contract ${d.contractNumber}'s stored paid/balance amounts don't match its receipt history — needs a finance review.`,
       priority: 'high',
       relatedId: d.contractId,
+      link: '/admin/contracts',
       relatedType: 'contract',
     });
   }

@@ -235,7 +235,7 @@ export async function POST(request: NextRequest) {
         title: 'Signed agreement submitted for compliance review',
         message: `${clientName || `Lead #${body.leadId}`}'s signed agreement is awaiting compliance approval. Review the signed agreement, receipt proof, and counselor conversation summary before approval.`,
         priority: 'medium',
-        link: `/admin/leads/${body.leadId}/edit`,
+        link: '/admin/compliance-approvals',
         relatedId: body.leadId,
         relatedType: 'lead',
       })

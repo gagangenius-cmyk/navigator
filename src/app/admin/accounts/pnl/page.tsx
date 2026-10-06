@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { SearchableSelect } from '@/components/ui/searchable-select';
-import { RecordCard, RecordList } from '@/components/shared/ResponsiveRecordList';
+import { RecordCard, RecordList, SortButtonRow } from '@/components/shared/ResponsiveRecordList';
+import { useSortableData } from '@/components/ui/sortable-th';
 import { Receipt } from 'lucide-react';
 
 interface PnlSummary {
@@ -12,7 +13,7 @@ interface PnlSummary {
 interface ExpenseLine { groupName: string; code: string | null; name: string | null; amount: number; vat: number; total: number; }
 interface BranchOption { id: number; name: string; }
 
-const fmtAed = (v: number) => `AED ${Number(v || 0).toLocaleString('en', { maximumFractionDigits: 0 })}`;
+const fmtAed = (v: number) => `AED ${Number(v || 0).toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 // toISOString() converts to UTC first, which rolls the date back a day in
 // timezones ahead of UTC - use local getters so "this month" matches the
@@ -62,7 +63,15 @@ export default function PnlPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  const groupedExpenses = expenseLines.reduce<Record<string, ExpenseLine[]>>((acc, line) => {
+  const { sorted: sortedLines, sortKey, sortDirection, toggleSort } = useSortableData(expenseLines, {
+    code: (l) => l.code,
+    name: (l) => l.name,
+    amount: (l) => l.amount,
+    vat: (l) => l.vat,
+    total: (l) => l.total,
+  });
+
+  const groupedExpenses = sortedLines.reduce<Record<string, ExpenseLine[]>>((acc, line) => {
     (acc[line.groupName] ||= []).push(line);
     return acc;
   }, {});
@@ -140,6 +149,22 @@ export default function PnlPage() {
             <div className="px-6 py-3 bg-gray-50 border-b border-gray-200">
               <h3 className="text-sm font-semibold text-gray-700">Expenses by Account Group</h3>
             </div>
+            {Object.keys(groupedExpenses).length > 0 && (
+              <div className="px-6 pt-4">
+                <SortButtonRow
+                  options={[
+                    ['code', 'Code'],
+                    ['name', 'Account'],
+                    ['amount', 'Amount'],
+                    ['vat', 'VAT'],
+                    ['total', 'Total'],
+                  ] as const}
+                  activeKey={sortKey}
+                  direction={sortDirection}
+                  onSort={toggleSort}
+                />
+              </div>
+            )}
             {Object.keys(groupedExpenses).length === 0 ? (
               <div className="px-6 py-10 text-center text-gray-400 text-sm">No expenses in this period</div>
             ) : (

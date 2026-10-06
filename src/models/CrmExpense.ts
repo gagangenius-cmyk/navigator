@@ -59,11 +59,11 @@ CrmExpense.init(
       allowNull: false
     },
     amount: {
-      type: DataTypes.DECIMAL(10,2),
+      type: DataTypes.DECIMAL(12,2),
       allowNull: false
     },
     vat: {
-      type: DataTypes.DECIMAL(10,2),
+      type: DataTypes.DECIMAL(12,2),
       allowNull: false
     },
     addBy: {

@@ -95,6 +95,8 @@ const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
   const [globalSearchOpen, setGlobalSearchOpen] = useState(false);
   const [pendingAssignmentsCount, setPendingAssignmentsCount] = useState(0);
   const [foeSidebarOpen, setFoeSidebarOpen] = useState(false);
+  // Sidebar groups behave as an accordion: one group open at a time, null = all collapsed.
+  const [openNavGroup, setOpenNavGroup] = useState<string | null>(null);
   const [foeWorkloadPeriod, setFoeWorkloadPeriod] = useState<WorkloadPeriod>('all');
   const [counselorWorkload, setCounselorWorkload] = useState<{ counselors: CounselorWorkload[]; unassignedLeads: number }>({ counselors: [], unassignedLeads: 0 });
 
@@ -360,6 +362,14 @@ const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
     return shouldShow;
   });
 
+  const isNavItemActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
+  const activeNavGroup = navigationGroups.find((group) => group.items.some((item) => isNavItemActive(item.href)))?.title ?? null;
+
+  // Expand the group holding the current page whenever the route changes.
+  useEffect(() => {
+    if (activeNavGroup) setOpenNavGroup(activeNavGroup);
+  }, [activeNavGroup]);
+
   const handleLogout = async () => {
     await logout();
     router.push('/login');
@@ -468,19 +478,28 @@ const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
         </div>
 
         <nav className="flex-1 sidebar-nav py-5 px-3 overflow-y-auto">
-          <div className="space-y-7">
+          <div className="space-y-2">
             {navigationGroups.map((group) => {
               const permittedItems = group.items.filter(item => filteredNavigation.includes(item));
               if (permittedItems.length === 0) return null;
 
+              const isGroupOpen = openNavGroup === group.title;
+
               return (
               <div key={group.title}>
-                <h3 className="px-3 text-xs font-semibold text-[var(--cmg-muted)] uppercase mb-2">
-                  {group.title}
-                </h3>
-                <div className="space-y-1">
+                <button
+                  type="button"
+                  onClick={() => setOpenNavGroup(isGroupOpen ? null : group.title)}
+                  aria-expanded={isGroupOpen}
+                  className="w-full flex items-center justify-between px-3 py-1.5 text-xs font-semibold text-[var(--cmg-muted)] uppercase rounded-md hover:bg-[#FBF0E9] hover:text-[var(--cmg-ink)] transition-colors"
+                >
+                  <span>{group.title}</span>
+                  <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${isGroupOpen ? 'rotate-180' : ''}`} />
+                </button>
+                {isGroupOpen && (
+                <div className="space-y-1 mt-2">
                   {permittedItems.map((item) => {
-                    const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
+                    const isActive = isNavItemActive(item.href);
                     const Icon = item.icon;
 
                     return (
@@ -506,6 +525,7 @@ const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
                     );
                   })}
                 </div>
+                )}
               </div>
               );
             })}

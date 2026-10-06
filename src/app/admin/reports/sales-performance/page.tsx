@@ -242,6 +242,18 @@ export default function SalesPerformanceReportPage() {
     },
   );
 
+  const { sorted: sortedTrend, sortKey: trendSortKey, sortDirection: trendSortDirection, toggleSort: toggleTrendSort } = useSortableData(
+    trend,
+    {
+      month: (m) => m.month,
+      leads: (m) => m.leadsCount,
+      won: (m) => m.wonCount,
+      conversion: (m) => m.conversionRate,
+      revenue: (m) => m.revenueAed,
+      avgSale: (m) => m.avgSaleAed,
+    },
+  );
+
   if (!user) return null;
 
   return (
@@ -430,8 +442,21 @@ export default function SalesPerformanceReportPage() {
               <h3 className="text-sm font-semibold text-gray-900">Monthly Detail</h3>
             </div>
             <div className="p-4">
-              <RecordList isEmpty={trend.length === 0} emptyTitle="No data for this period">
-                {trend.map((m) => (
+              <SortButtonRow
+                options={[
+                  ['month', 'Month'],
+                  ['leads', 'Leads'],
+                  ['won', 'Won'],
+                  ['conversion', 'Conversion'],
+                  ['revenue', 'Revenue (AED)'],
+                  ['avgSale', 'Avg Sale (AED)'],
+                ] as const}
+                activeKey={trendSortKey}
+                direction={trendSortDirection}
+                onSort={toggleTrendSort}
+              />
+              <RecordList isEmpty={sortedTrend.length === 0} emptyTitle="No data for this period">
+                {sortedTrend.map((m) => (
                   <RecordCard
                     key={m.month}
                     avatar={<DollarSign className="h-4 w-4" />}

@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { clientName, paymentDue, searchOperationCases, OperationsSearchRow } from '@/lib/operationsClient'
-import { RecordCard, RecordList } from '@/components/shared/ResponsiveRecordList'
+import { RecordCard, RecordList, SortButtonRow } from '@/components/shared/ResponsiveRecordList'
 import {
   FileText,
   Download,
@@ -144,6 +144,8 @@ const buildOpsReport = (rows: OperationsSearchRow[], reportType: string, startDa
   }
 }
 
+type TrendSortKey = 'month' | 'applications' | 'completed' | 'successRate'
+
 export default function OpsReportPage() {
   const [reports, setReports] = useState<OpsReport[]>([])
   const [rows, setRows] = useState<OperationsSearchRow[]>([])
@@ -156,6 +158,21 @@ export default function OpsReportPage() {
     reportType: 'canada'
   })
   const [showFilters, setShowFilters] = useState(false)
+  // Shared sort for every report card's Monthly Trends list (hooks can't run per card).
+  const [trendSortKey, setTrendSortKey] = useState<TrendSortKey | null>(null)
+  const [trendSortDir, setTrendSortDir] = useState<'asc' | 'desc'>('asc')
+  const toggleTrendSort = (key: TrendSortKey) => {
+    if (trendSortKey === key) setTrendSortDir(d => (d === 'asc' ? 'desc' : 'asc'))
+    else { setTrendSortKey(key); setTrendSortDir('asc') }
+  }
+  const sortTrends = (trends: OpsReport['monthlyTrends']) => {
+    if (!trendSortKey) return trends
+    const sign = trendSortDir === 'asc' ? 1 : -1
+    return [...trends].sort((a, b) => {
+      const av = a[trendSortKey], bv = b[trendSortKey]
+      return sign * (typeof av === 'number' && typeof bv === 'number' ? av - bv : String(av).localeCompare(String(bv)))
+    })
+  }
 
   const fetchReports = useCallback(async () => {
     setLoading(true)
@@ -457,8 +474,21 @@ export default function OpsReportPage() {
               {/* Monthly Trends */}
               <div>
                 <h4 className="text-md font-medium text-gray-800 mb-3">Monthly Trends</h4>
+                {report.monthlyTrends.length > 0 && (
+                  <SortButtonRow
+                    options={[
+                      ['month', 'Month'],
+                      ['applications', 'Applications'],
+                      ['completed', 'Completed'],
+                      ['successRate', 'Success Rate'],
+                    ] as const}
+                    activeKey={trendSortKey}
+                    direction={trendSortDir}
+                    onSort={toggleTrendSort}
+                  />
+                )}
                 <RecordList isEmpty={report.monthlyTrends.length === 0}>
-                  {report.monthlyTrends.map((trend, index) => (
+                  {sortTrends(report.monthlyTrends).map((trend, index) => (
                     <RecordCard
                       key={index}
                       avatar={<TrendingUp className="h-4 w-4" />}

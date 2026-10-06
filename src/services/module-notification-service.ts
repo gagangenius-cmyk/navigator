@@ -8,6 +8,13 @@ type ModuleNotificationInput = {
   type: 'renewal_alert' | 'payroll_completion' | 'leave_approval';
   priority?: 'low' | 'medium' | 'normal' | 'high' | 'urgent';
   channels?: NotificationChannel[];
+  link?: string | null;
+};
+
+const DEFAULT_LINKS: Record<ModuleNotificationInput['type'], string> = {
+  renewal_alert: '/admin/pro-works/renewal-reminders',
+  payroll_completion: '/admin/hr/payroll-management',
+  leave_approval: '/admin/hr/leave-management',
 };
 
 type DeliveryResult = {
@@ -26,6 +33,7 @@ export class ModuleNotificationService {
           title: input.title,
           message: input.message,
           priority: input.priority || 'normal',
+          link: input.link ?? DEFAULT_LINKS[input.type],
         })))
       : [];
 

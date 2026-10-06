@@ -365,7 +365,7 @@ export async function POST(request: NextRequest) {
           priority: 'high',
           relatedId: remarkRows[0].id,
           relatedType: 'lead',
-          link: remarkRows.length === 1 ? `/admin/leads/${remarkRows[0].id}` : '/admin/lead-pool',
+          link: remarkRows.length === 1 ? `/admin/leads/${remarkRows[0].id}/edit` : '/admin/lead-pool',
         });
       }
     }

@@ -164,6 +164,6 @@ export async function notifyLeadAssigned({
     priority: 'high',
     relatedId: leadId,
     relatedType: 'lead',
-    link: `/admin/leads/${leadId}`,
+    link: `/admin/leads/${leadId}/edit`,
   });
 }
