@@ -16,7 +16,6 @@ const baseConfig = {
   multipleStatements: false,
 };
 
-
 const BRANCH_ABBRV = { DXB: 'DXB SZR' };
 // Mirrors the seeded rows in crm_department (id -> name); the Add/Edit
 // Employee form at src/app/admin/employees/page.tsx now reads that table
