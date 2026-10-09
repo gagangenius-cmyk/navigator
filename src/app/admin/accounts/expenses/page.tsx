@@ -7,7 +7,7 @@ import { SearchableSelect } from '@/components/ui/searchable-select';
 import { useAuth } from '@/contexts/AuthContext';
 import { isCeo, isFinanceOrAccounts } from '@/lib/roleChecks';
 import { uploadFileToBlob } from '@/lib/uploadToBlob';
-import { Receipt, CheckCircle, RotateCcw, Trash2, Percent } from 'lucide-react';
+import { Receipt, CheckCircle, RotateCcw, Trash2, Percent, FileSpreadsheet } from 'lucide-react';
 
 interface ExpenseRow {
   id: number; date: string; particular: string; amount: number; vat: number; total: number;
@@ -23,7 +23,8 @@ const emptyForm = { branch: '', coa_account_id: '', amount: '', date: new Date()
 
 export default function ExpensesPage() {
   const { user } = useAuth();
-  const canManage = isCeo(user as any) || isFinanceOrAccounts(user as any);
+  const canExport = isCeo(user as any);
+  const canManage = canExport || isFinanceOrAccounts(user as any);
 
   const [rows, setRows] = useState<ExpenseRow[]>([]);
   const { sorted: sortedRows, sortKey: expenseSortKey, sortDirection: expenseSortDirection, toggleSort: toggleExpenseSort } = useSortableData(
@@ -44,6 +45,7 @@ export default function ExpensesPage() {
   const [filters, setFilters] = useState(emptyFilters);
   const [pagination, setPagination] = useState({ page: 1, limit: 25, total: 0, totalPages: 1 });
   const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState(false);
   const [error, setError] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [formData, setFormData] = useState(emptyForm);
@@ -177,16 +179,86 @@ export default function ExpensesPage() {
     if (res.ok) load();
   };
 
+  const handleExport = async () => {
+    if (!canExport) return;
+
+    setExporting(true);
+    setError('');
+    try {
+      const exportLimit = 200;
+      const filterParams = {
+        ...(filters.dateFrom && { dateFrom: filters.dateFrom }),
+        ...(filters.dateTo && { dateTo: filters.dateTo }),
+        ...(filters.branchId && { branchId: filters.branchId }),
+        ...(filters.coaAccountId && { coaAccountId: filters.coaAccountId }),
+        ...(filters.approved && { approved: filters.approved }),
+      };
+      const allRows: ExpenseRow[] = [];
+      let page = 1;
+      let totalPages = 1;
+
+      do {
+        const params = new URLSearchParams({
+          ...filterParams,
+          page: String(page),
+          limit: String(exportLimit),
+        });
+        const res = await fetch(`/api/admin/accounts/expenses?${params}`);
+        const result = await res.json();
+        if (!res.ok) throw new Error(result.error || 'Failed to load expenses for export');
+        allRows.push(...result.data);
+        totalPages = result.pagination.totalPages || 1;
+        page += 1;
+      } while (page <= totalPages);
+
+      const { downloadJsonAsExcel } = await import('@/lib/excelClientExport');
+      await downloadJsonAsExcel(
+        allRows.map((row) => ({
+          'Date': row.date,
+          'Description / Vendor': row.particular,
+          'Account Code': row.coaCode || '',
+          'Account Name': row.coaName || 'Uncategorized',
+          'Branch': row.branch,
+          'Amount (AED)': row.amount,
+          'VAT (AED)': row.vat,
+          'Total (AED)': row.total,
+          'Added By': row.addedBy,
+          'Status': row.approved ? 'Approved' : 'Pending',
+          'Receipt': row.receipt || '',
+        })),
+        'Expenses',
+        `expenses-${new Date().toISOString().slice(0, 10)}.xlsx`,
+      );
+    } catch (e: any) {
+      setError(e.message || 'Failed to export expenses');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Expenses</h1>
           <p className="text-gray-600 mt-1">Branch expenses tagged to the Chart of Accounts, with auto-calculated VAT</p>
         </div>
-        <button onClick={openAdd} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700 transition-colors">
-          + Add Expense
-        </button>
+        <div className="flex items-center gap-2">
+          {canExport && (
+            <button
+              type="button"
+              onClick={handleExport}
+              disabled={exporting || pagination.total === 0}
+              className="inline-flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <FileSpreadsheet className="h-4 w-4" />
+              {exporting ? 'Exporting…' : 'Export Excel'}
+            </button>
+          )}
+          <button onClick={openAdd} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700 transition-colors">
+            + Add Expense
+          </button>
+        </div>
       </div>
 
       <div className="bg-white rounded-lg shadow p-4">
