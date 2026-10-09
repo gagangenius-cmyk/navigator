@@ -439,6 +439,16 @@ export default function FeesManagement() {
 // crm_countries_type_program mapping row the fees API creates on save (see
 // src/app/api/admin/fees/route.ts), so it rides along as an extra field.
 type FeeFormValues = Partial<CrmFeeAttributes> & { programType?: number | null };
+type FeePaymentType = '' | 'upfront' | 'stagewise' | 'premium' | 'monthwise';
+
+function getInitialPaymentType(fee?: CrmFeeAttributes | null): FeePaymentType {
+  if (!fee) return '';
+  if (Number(fee.upfront) > 0) return 'upfront';
+  if ([fee.firstStage, fee.secondStage, fee.thirdStage, fee.forthStage, fee.fifthStage].some(value => Number(value) > 0)) return 'stagewise';
+  if ([fee.premium_fee_1, fee.premium_fee_2].some(value => Number(value) > 0)) return 'premium';
+  if ([fee.firstMonth, fee.secondMonth, fee.thirdMonth].some(value => Number(value) > 0)) return 'monthwise';
+  return '';
+}
 
 // Fee Form Modal Component
 interface FeeFormModalProps {
@@ -450,6 +460,7 @@ interface FeeFormModalProps {
 }
 
 function FeeFormModal({ title, initialData, lookup, onSubmit, onClose }: FeeFormModalProps) {
+  const [paymentType, setPaymentType] = useState<FeePaymentType>(() => getInitialPaymentType(initialData));
   const [formData, setFormData] = useState({
     service: initialData?.service ?? null,
     country: initialData?.country ?? null,
@@ -568,90 +579,105 @@ function FeeFormModal({ title, initialData, lookup, onSubmit, onClose }: FeeForm
               </SearchableSelect>
             </div>
             <div>
-              <label className={lbl}>Upfront *</label>
-              <input type="number" step="0.01" required value={formData.upfront}
-                onChange={e => setFormData(prev => ({ ...prev, upfront: parseFloat(e.target.value) || 0 }))}
-                className={inp} />
+              <label className={lbl}>Payment Type *</label>
+              <SearchableSelect
+                required
+                value={paymentType}
+                onChange={e => setPaymentType(e.target.value as FeePaymentType)}
+                className={inp}
+              >
+                <option value="">Select Payment Type</option>
+                <option value="upfront">Upfront</option>
+                <option value="stagewise">Stage-wise</option>
+                <option value="premium">Premium</option>
+                <option value="monthwise">Month-wise</option>
+              </SearchableSelect>
             </div>
-            <div>
-              <label className={lbl}>Professional Fee *</label>
-              <input type="number" step="0.01" required value={formData.prof_fee}
-                onChange={e => setFormData(prev => ({ ...prev, prof_fee: parseFloat(e.target.value) || 0 }))}
-                className={inp} />
-            </div>
-            <div>
-              <label className={lbl}>First Month *</label>
-              <input type="number" step="0.01" required value={formData.firstMonth}
-                onChange={e => setFormData(prev => ({ ...prev, firstMonth: parseFloat(e.target.value) || 0 }))}
-                className={inp} />
-            </div>
-            <div>
-              <label className={lbl}>Second Month *</label>
-              <input type="number" step="0.01" required value={formData.secondMonth}
-                onChange={e => setFormData(prev => ({ ...prev, secondMonth: parseFloat(e.target.value) || 0 }))}
-                className={inp} />
-            </div>
-            <div>
-              <label className={lbl}>Third Month *</label>
-              <input type="number" step="0.01" required value={formData.thirdMonth}
-                onChange={e => setFormData(prev => ({ ...prev, thirdMonth: parseFloat(e.target.value) || 0 }))}
-                className={inp} />
-            </div>
-            <div>
-              <label className={lbl}>Prof Fee Month *</label>
-              <input type="number" step="0.01" required value={formData.prof_fee_month}
-                onChange={e => setFormData(prev => ({ ...prev, prof_fee_month: parseFloat(e.target.value) || 0 }))}
-                className={inp} />
-            </div>
-            <div>
-              <label className={lbl}>First Stage *</label>
-              <input type="number" step="0.01" required value={formData.firstStage}
-                onChange={e => setFormData(prev => ({ ...prev, firstStage: parseFloat(e.target.value) || 0 }))}
-                className={inp} />
-            </div>
-            <div>
-              <label className={lbl}>Second Stage *</label>
-              <input type="number" step="0.01" required value={formData.secondStage}
-                onChange={e => setFormData(prev => ({ ...prev, secondStage: parseFloat(e.target.value) || 0 }))}
-                className={inp} />
-            </div>
-            <div>
-              <label className={lbl}>Third Stage *</label>
-              <input type="number" step="0.01" required value={formData.thirdStage}
-                onChange={e => setFormData(prev => ({ ...prev, thirdStage: parseFloat(e.target.value) || 0 }))}
-                className={inp} />
-            </div>
-            <div>
-              <label className={lbl}>Fourth Stage *</label>
-              <input type="number" step="0.01" required value={formData.forthStage}
-                onChange={e => setFormData(prev => ({ ...prev, forthStage: parseFloat(e.target.value) || 0 }))}
-                className={inp} />
-            </div>
-            <div>
-              <label className={lbl}>Fifth Stage</label>
-              <input type="number" step="0.01" value={formData.fifthStage}
-                onChange={e => setFormData(prev => ({ ...prev, fifthStage: parseFloat(e.target.value) || 0 }))}
-                className={inp} />
-            </div>
-            <div>
-              <label className={lbl}>Prof Fee Stage *</label>
-              <input type="number" step="0.01" required value={formData.prof_fee_stage}
-                onChange={e => setFormData(prev => ({ ...prev, prof_fee_stage: parseFloat(e.target.value) || 0 }))}
-                className={inp} />
-            </div>
-            <div>
-              <label className={lbl}>Premium Fee 1 (50%)</label>
-              <input type="number" step="0.01" value={formData.premium_fee_1}
-                onChange={e => { const v = parseFloat(e.target.value) || 0; setFormData(prev => ({ ...prev, premium_fee_1: v, premium_fee_2: v })); }}
-                className={inp} />
-            </div>
-            <div>
-              <label className={lbl}>Premium Fee 2 (50%)</label>
-              <input type="number" step="0.01" value={formData.premium_fee_2}
-                onChange={e => { const v = parseFloat(e.target.value) || 0; setFormData(prev => ({ ...prev, premium_fee_2: v })); }}
-                className={inp} />
-            </div>
-            <p className="md:col-span-3 -mt-2 text-xs text-gray-500">Premium fee is paid in two 50/50 installments. Premium Fee 2 fills in automatically with the same amount as Premium Fee 1; edit it only if the split differs.</p>
+
+            {paymentType === 'upfront' && (
+              <div>
+                <label className={lbl}>Upfront *</label>
+                <input type="number" step="0.01" required value={formData.upfront}
+                  onChange={e => setFormData(prev => ({ ...prev, upfront: parseFloat(e.target.value) || 0 }))}
+                  className={inp} />
+              </div>
+            )}
+
+            {paymentType === 'monthwise' && (
+              <>
+                <div>
+                  <label className={lbl}>Month 1 *</label>
+                  <input type="number" step="0.01" required value={formData.firstMonth}
+                    onChange={e => setFormData(prev => ({ ...prev, firstMonth: parseFloat(e.target.value) || 0 }))}
+                    className={inp} />
+                </div>
+                <div>
+                  <label className={lbl}>Month 2 *</label>
+                  <input type="number" step="0.01" required value={formData.secondMonth}
+                    onChange={e => setFormData(prev => ({ ...prev, secondMonth: parseFloat(e.target.value) || 0 }))}
+                    className={inp} />
+                </div>
+                <div>
+                  <label className={lbl}>Month 3 *</label>
+                  <input type="number" step="0.01" required value={formData.thirdMonth}
+                    onChange={e => setFormData(prev => ({ ...prev, thirdMonth: parseFloat(e.target.value) || 0 }))}
+                    className={inp} />
+                </div>
+              </>
+            )}
+
+            {paymentType === 'stagewise' && (
+              <>
+                <div>
+                  <label className={lbl}>Stage 1 *</label>
+                  <input type="number" step="0.01" required value={formData.firstStage}
+                    onChange={e => setFormData(prev => ({ ...prev, firstStage: parseFloat(e.target.value) || 0 }))}
+                    className={inp} />
+                </div>
+                <div>
+                  <label className={lbl}>Stage 2 *</label>
+                  <input type="number" step="0.01" required value={formData.secondStage}
+                    onChange={e => setFormData(prev => ({ ...prev, secondStage: parseFloat(e.target.value) || 0 }))}
+                    className={inp} />
+                </div>
+                <div>
+                  <label className={lbl}>Stage 3 *</label>
+                  <input type="number" step="0.01" required value={formData.thirdStage}
+                    onChange={e => setFormData(prev => ({ ...prev, thirdStage: parseFloat(e.target.value) || 0 }))}
+                    className={inp} />
+                </div>
+                <div>
+                  <label className={lbl}>Stage 4 *</label>
+                  <input type="number" step="0.01" required value={formData.forthStage}
+                    onChange={e => setFormData(prev => ({ ...prev, forthStage: parseFloat(e.target.value) || 0 }))}
+                    className={inp} />
+                </div>
+                <div>
+                  <label className={lbl}>Stage 5 *</label>
+                  <input type="number" step="0.01" required value={formData.fifthStage}
+                    onChange={e => setFormData(prev => ({ ...prev, fifthStage: parseFloat(e.target.value) || 0 }))}
+                    className={inp} />
+                </div>
+              </>
+            )}
+
+            {paymentType === 'premium' && (
+              <>
+                <div>
+                  <label className={lbl}>Premium 1 (50%) *</label>
+                  <input type="number" step="0.01" required value={formData.premium_fee_1}
+                    onChange={e => { const v = parseFloat(e.target.value) || 0; setFormData(prev => ({ ...prev, premium_fee_1: v, premium_fee_2: v })); }}
+                    className={inp} />
+                </div>
+                <div>
+                  <label className={lbl}>Premium 2 (50%) *</label>
+                  <input type="number" step="0.01" required value={formData.premium_fee_2}
+                    onChange={e => { const v = parseFloat(e.target.value) || 0; setFormData(prev => ({ ...prev, premium_fee_2: v })); }}
+                    className={inp} />
+                </div>
+                <p className="md:col-span-3 -mt-2 text-xs text-gray-500">Premium 2 fills automatically with the same amount as Premium 1; edit it if the split differs.</p>
+              </>
+            )}
             <div>
               <label className={lbl}>Status *</label>
               <SearchableSelect required value={formData.status}
