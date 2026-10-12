@@ -313,6 +313,13 @@ export default function FeesManagement() {
                 { label: 'Currency', value: currencyName(fee.currency) },
                 { label: 'Upfront', value: fee.upfront },
                 { label: 'Prof Fee', value: fee.prof_fee },
+                ...([
+                  ['Stage 1', fee.firstStage], ['Stage 2', fee.secondStage], ['Stage 3', fee.thirdStage],
+                  ['Stage 4', fee.forthStage], ['Stage 5', fee.fifthStage],
+                  ['Month 1', fee.firstMonth], ['Month 2', fee.secondMonth], ['Month 3', fee.thirdMonth],
+                ] as const)
+                  .filter(([, value]) => Number(value) > 0)
+                  .map(([label, value]) => ({ label, value })),
                 { label: 'Premium Fee 1', value: fee.premium_fee_1 || 0 },
                 { label: 'Premium Fee 2', value: fee.premium_fee_2 || 0 },
               ]}
@@ -395,6 +402,11 @@ export default function FeesManagement() {
                     <p><span className="font-medium">Fourth Stage:</span> {selectedFee.forthStage}</p>
                     <p><span className="font-medium">Fifth Stage:</span> {selectedFee.fifthStage || 0}</p>
                     <p><span className="font-medium">Prof Fee Stage:</span> {selectedFee.prof_fee_stage}</p>
+                  </div>
+                </div>
+                <div>
+                  <h4 className="font-semibold text-gray-700 mb-2">Premium Fees</h4>
+                  <div className="space-y-1.5">
                     <p><span className="font-medium">Premium Fee 1:</span> {selectedFee.premium_fee_1 || 0}</p>
                     <p><span className="font-medium">Premium Fee 2:</span> {selectedFee.premium_fee_2 || 0}</p>
                   </div>
@@ -439,15 +451,18 @@ export default function FeesManagement() {
 // crm_countries_type_program mapping row the fees API creates on save (see
 // src/app/api/admin/fees/route.ts), so it rides along as an extra field.
 type FeeFormValues = Partial<CrmFeeAttributes> & { programType?: number | null };
-type FeePaymentType = '' | 'upfront' | 'stagewise' | 'premium' | 'monthwise';
+type FeePaymentType = 'upfront' | 'stagewise' | 'premium' | 'monthwise';
 
-function getInitialPaymentType(fee?: CrmFeeAttributes | null): FeePaymentType {
-  if (!fee) return '';
-  if (Number(fee.upfront) > 0) return 'upfront';
-  if ([fee.firstStage, fee.secondStage, fee.thirdStage, fee.forthStage, fee.fifthStage].some(value => Number(value) > 0)) return 'stagewise';
-  if ([fee.premium_fee_1, fee.premium_fee_2].some(value => Number(value) > 0)) return 'premium';
-  if ([fee.firstMonth, fee.secondMonth, fee.thirdMonth].some(value => Number(value) > 0)) return 'monthwise';
-  return '';
+// A fee can carry several price groups at once (e.g. upfront + stages + premium),
+// so every group that already has a value is pre-selected when the form loads.
+function getInitialPaymentTypes(fee?: CrmFeeAttributes | null): FeePaymentType[] {
+  if (!fee) return [];
+  const types: FeePaymentType[] = [];
+  if (Number(fee.upfront) > 0) types.push('upfront');
+  if ([fee.firstStage, fee.secondStage, fee.thirdStage, fee.forthStage, fee.fifthStage].some(value => Number(value) > 0)) types.push('stagewise');
+  if ([fee.premium_fee_1, fee.premium_fee_2].some(value => Number(value) > 0)) types.push('premium');
+  if ([fee.firstMonth, fee.secondMonth, fee.thirdMonth].some(value => Number(value) > 0)) types.push('monthwise');
+  return types;
 }
 
 // Fee Form Modal Component
@@ -460,7 +475,8 @@ interface FeeFormModalProps {
 }
 
 function FeeFormModal({ title, initialData, lookup, onSubmit, onClose }: FeeFormModalProps) {
-  const [paymentType, setPaymentType] = useState<FeePaymentType>(() => getInitialPaymentType(initialData));
+  const [paymentTypes, setPaymentTypes] = useState<FeePaymentType[]>(() => getInitialPaymentTypes(initialData));
+  const hasType = (t: FeePaymentType) => paymentTypes.includes(t);
   const [formData, setFormData] = useState({
     service: initialData?.service ?? null,
     country: initialData?.country ?? null,
@@ -486,7 +502,14 @@ function FeeFormModal({ title, initialData, lookup, onSubmit, onClose }: FeeForm
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit(formData);
+    if (paymentTypes.length === 0) return;
+    // Groups that were unticked are cleared so stale amounts aren't kept.
+    const data = { ...formData };
+    if (!hasType('upfront')) data.upfront = 0;
+    if (!hasType('monthwise')) { data.firstMonth = 0; data.secondMonth = 0; data.thirdMonth = 0; }
+    if (!hasType('stagewise')) { data.firstStage = 0; data.secondStage = 0; data.thirdStage = 0; data.forthStage = 0; data.fifthStage = 0; }
+    if (!hasType('premium')) { data.premium_fee_1 = 0; data.premium_fee_2 = 0; }
+    onSubmit(data);
   };
 
   const inp = "mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm text-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500";
@@ -578,23 +601,21 @@ function FeeFormModal({ title, initialData, lookup, onSubmit, onClose }: FeeForm
                 ))}
               </SearchableSelect>
             </div>
-            <div>
-              <label className={lbl}>Payment Type *</label>
-              <SearchableSelect
-                required
-                value={paymentType}
-                onChange={e => setPaymentType(e.target.value as FeePaymentType)}
-                className={inp}
-              >
-                <option value="">Select Payment Type</option>
-                <option value="upfront">Upfront</option>
-                <option value="stagewise">Stage-wise</option>
-                <option value="premium">Premium</option>
-                <option value="monthwise">Month-wise</option>
-              </SearchableSelect>
+            <div className="md:col-span-2 lg:col-span-3">
+              <label className={lbl}>Payment Type * <span className="font-normal text-gray-500">(select one or more)</span></label>
+              <div className="mt-2 flex flex-wrap gap-4">
+                {([['upfront', 'Upfront'], ['stagewise', 'Stage-wise'], ['premium', 'Premium'], ['monthwise', 'Month-wise']] as const).map(([value, label]) => (
+                  <label key={value} className="inline-flex items-center gap-2 text-sm text-gray-700">
+                    <input type="checkbox" checked={hasType(value)}
+                      onChange={e => setPaymentTypes(prev => e.target.checked ? [...prev, value] : prev.filter(t => t !== value))} />
+                    {label}
+                  </label>
+                ))}
+              </div>
+              {paymentTypes.length === 0 && <p className="mt-1 text-xs text-red-600">Select at least one payment type.</p>}
             </div>
 
-            {paymentType === 'upfront' && (
+            {hasType('upfront') && (
               <div>
                 <label className={lbl}>Upfront *</label>
                 <input type="number" step="0.01" required value={formData.upfront}
@@ -603,7 +624,7 @@ function FeeFormModal({ title, initialData, lookup, onSubmit, onClose }: FeeForm
               </div>
             )}
 
-            {paymentType === 'monthwise' && (
+            {hasType('monthwise') && (
               <>
                 <div>
                   <label className={lbl}>Month 1 *</label>
@@ -626,7 +647,7 @@ function FeeFormModal({ title, initialData, lookup, onSubmit, onClose }: FeeForm
               </>
             )}
 
-            {paymentType === 'stagewise' && (
+            {hasType('stagewise') && (
               <>
                 <div>
                   <label className={lbl}>Stage 1 *</label>
@@ -661,7 +682,7 @@ function FeeFormModal({ title, initialData, lookup, onSubmit, onClose }: FeeForm
               </>
             )}
 
-            {paymentType === 'premium' && (
+            {hasType('premium') && (
               <>
                 <div>
                   <label className={lbl}>Premium 1 (50%) *</label>

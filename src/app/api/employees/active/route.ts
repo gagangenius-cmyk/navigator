@@ -30,8 +30,16 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(employees);
     }
 
-    const conditions = ['e.status = 1', 'r.type = :roleType'];
-    const replacements: Record<string, unknown> = { roleType };
+    // "counsellor" is a logical group, not a literal crm_role.type: after the
+    // role restructuring the individual-contributor tier is Immigration
+    // Advisor / Senior Immigration Advisor (legacy counsellor/sales types are
+    // kept so older role rows still resolve).
+    const roleTypes = roleType.toLowerCase() === 'counsellor' || roleType.toLowerCase() === 'counselor'
+      ? ['immigration_advisor', 'senior_immigration_advisor', 'counsellor', 'counselor', 'sales']
+      : [roleType];
+
+    const conditions = ['e.status = 1', 'r.type IN (:roleTypes)'];
+    const replacements: Record<string, unknown> = { roleTypes };
     if (branch) {
       conditions.push('e.branch = :branch');
       replacements.branch = Number(branch);

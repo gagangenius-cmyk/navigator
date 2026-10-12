@@ -40,6 +40,7 @@ const sourceSeeds = {
   2021: { name: 'CBI Skilled', category: 'Specific Segments' },
   2022: { name: 'Data 3rd Party', category: 'Referral / Third Party' },
   2023: { name: 'Website Pop up', category: 'Website' },
+  2024: { name: 'Personal Reference', category: 'Referral / Third Party' },
 };
 
 async function ensureCategoryColumn(connection) {
