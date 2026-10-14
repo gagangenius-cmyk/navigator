@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { CrmWorkflowService } from '@/services/crm-workflow-service';
 import { requireAuth, isAuthError } from '@/lib/apiAuth';
+import { assertOpportunityAccess } from '@/lib/leadAccess';
 
 export async function GET(
   request: NextRequest,
@@ -19,6 +20,9 @@ export async function GET(
         { status: 400 }
       );
     }
+
+    const accessError = await assertOpportunityAccess(auth, id);
+    if (accessError) return accessError;
 
     const workflow = await CrmWorkflowService.getWorkflowReview(id);
 

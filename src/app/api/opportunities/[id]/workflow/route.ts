@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { sequelize } from '@/lib/sequelize';
 import { verifyToken } from '@/lib/auth';
+import { assertOpportunityAccess } from '@/lib/leadAccess';
 
 const FINANCE_CHECKS = ['paymentReceived', 'paymentMethodMatches', 'transferReferenceVerified', 'pricingVerified', 'discountApproved', 'scheduleVerified', 'balanceVerified', 'invoiceVerified'];
 const COMPLIANCE_CHECKS = ['officialIdsVerified', 'documentExpiryVerified', 'clientDetailsMatch', 'discussionNotesVerified', 'programMappingVerified', 'branchAndCounselorVerified', 'financeApproved', 'paymentAndReceiptVerified', 'signedAgreementUploaded', 'contactDetailsVerified', 'duplicateCheckCompleted'];
@@ -24,8 +25,11 @@ function missingChecks(checklist: Record<string, unknown>, checks: string[]) {
 
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
-    if (!actor(request)) return NextResponse.json({ error: 'Authentication is required.' }, { status: 401 });
+    const user = actor(request);
+    if (!user) return NextResponse.json({ error: 'Authentication is required.' }, { status: 401 });
     const { id } = await context.params;
+    const accessError = await assertOpportunityAccess(user, Number(id));
+    if (accessError) return accessError;
     const [rows] = await sequelize.query(
       `SELECT w.*, o.opportunityNumber, o.opportunityName, o.stage, o.status, o.branchId,
               l.fname, l.lname, l.email, l.mobile, l.phone, l.nationality

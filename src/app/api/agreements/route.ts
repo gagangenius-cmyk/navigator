@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { models } from '@/models';
 import { requireAuth, isAuthError } from '@/lib/apiAuth';
+import { Op } from 'sequelize';
+import { assertOpportunityAccess, getScopedOpportunityIds } from '@/lib/leadAccess';
 
 const toPlain = (row: any) => row?.get ? row.get({ plain: true }) : row;
 
@@ -56,6 +58,9 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: 'Agreement not found' }, { status: 404 });
       }
 
+      const agreementAccessError = await assertOpportunityAccess(auth, Number(agreement.opportunityId));
+      if (agreementAccessError) return agreementAccessError;
+
       const normalized = normalizeAgreement(agreement);
       if (action === 'pdf') {
         return new NextResponse(JSON.stringify(normalized, null, 2), {
@@ -69,7 +74,9 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: true, agreement: normalized });
     }
 
-    const where = status ? { status, isDeleted: 0 } : { isDeleted: 0 };
+    const scopedIds = await getScopedOpportunityIds(auth);
+    const where: Record<string, unknown> = status ? { status, isDeleted: 0 } : { isDeleted: 0 };
+    if (scopedIds) where.opportunityId = { [Op.in]: scopedIds.length ? scopedIds : [-1] };
     const { rows, count } = await models.CrmcOpportunityAgreements.findAndCountAll({
       where,
       order: [['createdAt', 'DESC']],

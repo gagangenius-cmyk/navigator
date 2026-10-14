@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, isAuthError } from '@/lib/apiAuth';
 import { ClientPortalService } from '@/services/client-portal-service';
 import { checkLeadBranchScope } from '@/lib/branchScopeGuard';
+import { assertLeadAccess } from '@/lib/leadAccess';
 
 type Context = { params: Promise<{ leadId: string }> };
 
@@ -12,6 +13,9 @@ export async function GET(request: NextRequest, { params }: Context) {
   try {
     const leadId = Number((await params).leadId);
     if (!Number.isFinite(leadId)) return NextResponse.json({ error: 'Invalid lead id' }, { status: 400 });
+
+    const accessError = await assertLeadAccess(auth, leadId);
+    if (accessError) return accessError;
 
     const log = await ClientPortalService.listStatusLog(leadId);
     return NextResponse.json({ log });

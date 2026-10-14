@@ -5,6 +5,7 @@ import { put } from '@vercel/blob';
 import { requireAuth, isAuthError } from '@/lib/apiAuth';
 import { isBranchManagerOrCeo, isCeo } from '@/lib/roleChecks';
 import { sequelize } from '@/lib/sequelize';
+import { assertOpportunityAccess, getScopedOpportunityIds } from '@/lib/leadAccess';
 
 async function assertOpportunityBranchWritable(auth: { branch?: string | number | null }, opportunityId: unknown): Promise<string | null> {
   const id = Number(opportunityId);
@@ -38,10 +39,15 @@ export async function GET(request: NextRequest) {
     const page = Math.max(1, Number.parseInt(searchParams.get('page') || '1', 10));
     const limit = Math.max(1, Number.parseInt(searchParams.get('limit') || '20', 10));
 
-    let whereClause: any = {};
+    const whereClause: any = {};
 
     if (opportunityId) {
+      const accessError = await assertOpportunityAccess(auth, Number(opportunityId));
+      if (accessError) return accessError;
       whereClause.opportunityId = opportunityId;
+    } else {
+      const scopedIds = await getScopedOpportunityIds(auth);
+      if (scopedIds) whereClause.opportunityId = { [Op.in]: scopedIds.length ? scopedIds : [-1] };
     }
 
     if (status) {
