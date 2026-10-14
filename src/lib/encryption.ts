@@ -13,7 +13,12 @@ const ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH = 12; // recommended nonce size for GCM
 
 function getKey(): Buffer {
-  const raw = process.env.DATA_ENCRYPTION_KEY || process.env.ENCRYPTION_KEY || process.env.JWT_SECRET || 'navigator-next-fallback-key';
+  const raw = process.env.DATA_ENCRYPTION_KEY || process.env.ENCRYPTION_KEY || process.env.JWT_SECRET || (
+    process.env.NODE_ENV === 'production' ? '' : 'navigator-next-fallback-key'
+  );
+  if (!raw) {
+    throw new Error('DATA_ENCRYPTION_KEY (or ENCRYPTION_KEY / JWT_SECRET) is not set - refusing to encrypt with a known fallback key in production.');
+  }
   // Accept a raw key of any length (including a human-typed passphrase) by
   // hashing it down to exactly 32 bytes for AES-256.
   return crypto.createHash('sha256').update(raw).digest();

@@ -3,14 +3,16 @@ import { put } from '@vercel/blob';
 import { basename, join } from 'path';
 import { requireAuth, isAuthError } from '@/lib/apiAuth';
 
-// Simple UUID generator
-function generateUUID(): string {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-    const r = (Math.random() * 16) | 0;
-    const v = c === 'x' ? r : (r & 0x3 | 0x8);
-    return v.toString(16);
-  });
-}
+const EXTENSION_BY_TYPE: Record<string, string> = {
+  'image/jpeg': 'jpg',
+  'image/jpg': 'jpg',
+  'image/png': 'png',
+  'image/gif': 'gif',
+  'image/webp': 'webp',
+  'application/pdf': 'pdf',
+  'application/msword': 'doc',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+};
 
 export async function POST(request: NextRequest) {
   const auth = requireAuth(request);
@@ -27,11 +29,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Validate file type
-    const allowedTypes = [
-      'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp',
-      'application/pdf', 'application/msword',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    ];
+    const allowedTypes = Object.keys(EXTENSION_BY_TYPE);
     const fileType = file.type;
 
     if (!allowedTypes.includes(fileType)) {
@@ -51,8 +49,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Generate unique filename
-    const fileExtension = file.name.split('.').pop();
-    const uniqueFileName = `${generateUUID()}.${fileExtension}`;
+    // Extension comes from the validated MIME type, never from the
+    // user-supplied filename.
+    const fileExtension = EXTENSION_BY_TYPE[fileType];
+    const uniqueFileName = `${crypto.randomUUID()}.${fileExtension}`;
 
     // Vercel's serverless functions have a read-only filesystem, so files are
     // stored in Vercel Blob rather than written to local disk.

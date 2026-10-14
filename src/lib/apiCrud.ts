@@ -12,7 +12,7 @@ type CrudConfig = {
   statusFilter?: (status: string) => Record<string, unknown>;
   defaultOrder?: [string, 'ASC' | 'DESC'][];
   attributes?: string[];
-  defaults?: (body: Record<string, unknown>) => Record<string, unknown>;
+  defaults?: (body: Record<string, unknown>, auth: { id: number }) => Record<string, unknown>;
   before?: () => Promise<void>;
   /** Permissions allowed to call GET; any authenticated user if omitted. Also the default for POST/PUT when writePermissions isn't set. */
   requiredPermissions?: string[];
@@ -146,7 +146,7 @@ export const createCrudHandlers = (config: CrudConfig) => ({
       const body = parsed.body;
       const { id: _id, ...createData } = {
         ...body,
-        ...(config.defaults ? config.defaults(body) : {}),
+        ...(config.defaults ? config.defaults(body, auth) : {}),
       };
 
       const record = await config.model.create(createData);

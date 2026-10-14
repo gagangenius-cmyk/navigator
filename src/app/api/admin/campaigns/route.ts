@@ -7,9 +7,9 @@ const handlers = createCrudHandlers({
   searchFields: ['campaign'],
   filters: { status: 'status' },
   requiredPermissions: ['campaigns.manage'],
-  defaults: (body) => ({
+  defaults: (body, auth) => ({
     created: body.created || new Date(),
-    created_by: body.created_by || 1,
+    created_by: auth.id,
   }),
 });
 

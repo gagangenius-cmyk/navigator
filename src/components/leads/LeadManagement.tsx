@@ -599,53 +599,6 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
       const data = await response.json();
 
       if (response.ok) {
-        // Console log lead conversion data
-        console.log('=== LEAD CONVERSION DATA ===');
-        console.log('Total leads fetched:', data.leads?.length || 0);
-        console.log('Pagination:', data.pagination);
-
-        // Log conversion statistics
-        const conversionStats = {
-          total: data.leads?.length || 0,
-          prospect: data.leads?.filter((lead: any) => lead.status === 'Prospect')?.length || 0,
-          notInterested: data.leads?.filter((lead: any) => lead.status === 'Not Interested')?.length || 0,
-          dnq: data.leads?.filter((lead: any) => lead.status === 'DNQ')?.length || 0,
-          notAnswered: data.leads?.filter((lead: any) => lead.status === 'Not_answered')?.length || 0,
-          couldNotConnect: data.leads?.filter((lead: any) => lead.status === 'Could Not Connect')?.length || 0,
-          callBack: data.leads?.filter((lead: any) => lead.status === 'Call Back')?.length || 0,
-          abroadLead: data.leads?.filter((lead: any) => lead.status === 'Abroad Lead')?.length || 0
-        };
-
-        console.log('Conversion Statistics:', conversionStats);
-        console.log('Prospect Rate:', `${((conversionStats.prospect / conversionStats.total) * 100).toFixed(2)}%`);
-        console.log('Not Interested Rate:', `${((conversionStats.notInterested / conversionStats.total) * 100).toFixed(2)}%`);
-        console.log('DNQ Rate:', `${((conversionStats.dnq / conversionStats.total) * 100).toFixed(2)}%`);
-        console.log('Not Answered Rate:', `${((conversionStats.notAnswered / conversionStats.total) * 100).toFixed(2)}%`);
-        console.log('Could Not Connect Rate:', `${((conversionStats.couldNotConnect / conversionStats.total) * 100).toFixed(2)}%`);
-        console.log('Call Back Rate:', `${((conversionStats.callBack / conversionStats.total) * 100).toFixed(2)}%`);
-        console.log('Abroad Lead Rate:', `${((conversionStats.abroadLead / conversionStats.total) * 100).toFixed(2)}%`);
-
-        // Log individual leads with conversion info
-        data.leads?.forEach((lead: any, index: number) => {
-          console.log(`Lead ${index + 1}:`, {
-            id: lead.id,
-            name: `${lead.fname} ${lead.lname}`,
-            status: lead.status,
-            priority: lead.priority,
-            countryInterest: lead.country_interest,
-            serviceInterest: lead.service_interest,
-            created: lead.created,
-            isProspect: lead.status === 'Prospect',
-            isNotInterested: lead.status === 'Not Interested',
-            isDNQ: lead.status === 'DNQ',
-            isNotAnswered: lead.status === 'Not_answered',
-            isCouldNotConnect: lead.status === 'Could Not Connect',
-            isCallBack: lead.status === 'Call Back',
-            isAbroadLead: lead.status === 'Abroad Lead'
-          });
-        });
-        console.log('=== END CONVERSION DATA ===');
-
         setLeads(data.leads || []);
         setPagination(data.pagination);
         if (activeTab === 'duplicates') {

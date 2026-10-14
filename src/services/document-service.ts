@@ -53,7 +53,12 @@ type StoredDocument = {
 // src/app/api/generated-documents/[...path]/route.ts.
 const storageRoot = path.join(process.cwd(), 'private-storage', 'generated-documents');
 const publicBaseUrl = process.env.APP_URL || 'http://localhost:3000';
-const signingSecret = process.env.DOCUMENT_SIGNING_SECRET || process.env.JWT_SECRET || 'local-document-secret';
+const signingSecret = process.env.DOCUMENT_SIGNING_SECRET || process.env.JWT_SECRET || (
+  process.env.NODE_ENV === 'production' ? '' : 'local-document-secret'
+);
+if (!signingSecret && process.env.NODE_ENV === 'production' && process.env.NEXT_PHASE !== 'phase-production-build') {
+  throw new Error('DOCUMENT_SIGNING_SECRET (or JWT_SECRET) is not set - refusing to sign document links with a known fallback in production.');
+}
 
 const escapePdfText = (value: string) => value.replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
 
