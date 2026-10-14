@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { put } from '@vercel/blob';
 import { requireAuth, isAuthError } from '@/lib/apiAuth';
+import { assertLeadAccess } from '@/lib/leadAccess';
 
 const ALLOWED_CONTENT_TYPES = new Set([
   'image/jpeg', 'image/jpg', 'image/png', 'image/webp',
@@ -28,6 +29,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (!Number.isFinite(leadId)) {
       return NextResponse.json({ error: 'Invalid lead id' }, { status: 400 });
     }
+    const accessError = await assertLeadAccess(auth, leadId);
+    if (accessError) return accessError;
 
     const contentType = request.headers.get('content-type') || '';
     if (!contentType.includes('multipart/form-data')) {

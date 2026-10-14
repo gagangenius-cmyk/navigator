@@ -6,6 +6,7 @@ import { sendWhatsAppMessage } from '@/lib/whatsapp';
 import { logLeadRemark } from '@/lib/leadRemarks';
 import { checkRateLimit, recordFailedAttempt } from '@/lib/rateLimiter';
 import { captureError } from '@/lib/errorTracking';
+import { assertLeadAccess } from '@/lib/leadAccess';
 
 let dbReady = false;
 const ensureDB = async () => { if (!dbReady) { await connectDB(); dbReady = true; } };
@@ -25,6 +26,8 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
     if (!Number.isFinite(leadId)) {
       return NextResponse.json({ error: 'Valid lead id is required' }, { status: 400 });
     }
+    const accessError = await assertLeadAccess(auth, leadId);
+    if (accessError) return accessError;
 
     const body = await request.json().catch(() => ({}));
     const message = String(body.message || '').trim();

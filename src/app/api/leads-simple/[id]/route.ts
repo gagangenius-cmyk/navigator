@@ -5,6 +5,7 @@ import { verifyToken } from '@/lib/auth';
 import { isCeo } from '@/lib/roleChecks';
 import { notifyMetaLeadQuality } from '@/lib/meta/lead-quality-feedback';
 import { recordLeadAssignment } from '@/lib/leadRemarks';
+import { assertLeadAccess } from '@/lib/leadAccess';
 
 const ALLOWED_FIELDS = new Set([
   'status', 'priority', 'lead_quality', 'assignTo', 'branch', 'region',
@@ -29,6 +30,8 @@ export async function GET(
     const { id: idParam } = await params;
     const id = parseInt(idParam, 10);
     if (!id) return NextResponse.json({ error: 'Invalid ID' }, { status: 400 });
+    const accessError = await assertLeadAccess(currentUser, id);
+    if (accessError) return accessError;
 
     const [lead] = await sequelize.query(
       'SELECT * FROM crm_forum_leads WHERE id = ? LIMIT 1',
@@ -58,6 +61,8 @@ export async function PUT(
     const { id: idParam } = await params;
     const id = parseInt(idParam, 10);
     if (!id) return NextResponse.json({ error: 'Invalid ID' }, { status: 400 });
+    const accessError = await assertLeadAccess(currentUser, id);
+    if (accessError) return accessError;
 
     const body = await request.json();
 

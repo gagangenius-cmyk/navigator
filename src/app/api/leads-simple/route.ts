@@ -23,7 +23,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Your login does not have a branch assigned' }, { status: 422 });
     }
     
-    console.log('Creating lead:', data);
     const assignment = await resolveLeadAutoAssignment({
       branchId: counselorBranchId,
       preferredEmployeeId: currentUser.id,

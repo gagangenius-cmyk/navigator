@@ -13,6 +13,7 @@ import { isFinanceAndComplianceApproved, APPROVAL_REQUIRED_ERROR, CLIENT_STATUS_
 import { CACHE_TAGS, invalidateReportCaches } from '@/lib/reportCache';
 import { notifyMetaLeadQuality } from '@/lib/meta/lead-quality-feedback';
 import { fireLeadUpdatedTrigger, fireStageChangedTrigger } from '@/lib/workflowTriggers';
+import { assertLeadAccess } from '@/lib/leadAccess';
 
 let dbInitialized = false;
 
@@ -325,6 +326,8 @@ export async function GET(
   try {
     await ensureDBConnection();
     const { id } = await params;
+    const accessError = Number(id) ? await assertLeadAccess(auth, Number(id)) : null;
+    if (accessError) return accessError;
     const lead = await fetchLead(id);
 
     if (!lead) {
