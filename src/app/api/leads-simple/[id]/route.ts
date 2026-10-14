@@ -6,6 +6,7 @@ import { isCeo } from '@/lib/roleChecks';
 import { notifyMetaLeadQuality } from '@/lib/meta/lead-quality-feedback';
 import { recordLeadAssignment } from '@/lib/leadRemarks';
 import { assertLeadAccess } from '@/lib/leadAccess';
+import { logAudit } from '@/lib/auditLog';
 
 const ALLOWED_FIELDS = new Set([
   'status', 'priority', 'lead_quality', 'assignTo', 'branch', 'region',
@@ -104,6 +105,20 @@ export async function PUT(
       `UPDATE crm_forum_leads SET ${setClauses} WHERE id = ?`,
       { replacements: values, type: QueryTypes.UPDATE }
     );
+
+    // Money fields changed through this quick-edit path had no trail at all.
+    if (hasFinancialUpdate) {
+      void logAudit({
+        entityType: 'lead_financials',
+        entityId: id,
+        action: 'update',
+        summary: `Lead #${id} payment fields edited by ${currentUser.name || currentUser.id}`,
+        actorId: currentUser.id,
+        actorRole: currentUser.roleName || currentUser.type,
+        before: { payTotal: existing.payTotal, discount: existing.discount, paidYet: existing.paidYet },
+        after: { payTotal: updates.payTotal, discount: updates.discount, paidYet: updates.paidYet, payBalance: updates.payBalance },
+      });
+    }
 
     // assignTo is an allowed quick-edit field, but this path never stamped the
     // assigned-since date, logged the change, or told the new owner.
