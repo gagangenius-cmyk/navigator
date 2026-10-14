@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { CrmEmployee, CrmRole, CrmBranch, CrmRegion } from '@/models'
 import { Op } from 'sequelize'
 import { requireAuth, isAuthError } from '@/lib/apiAuth'
+import { checkRoleAssignable } from '@/lib/accessAdmin'
 
 export async function GET(request: NextRequest) {
   // Read-only listing also accepts counselors.manage - Branch Manager holds
@@ -82,6 +83,12 @@ export async function POST(request: NextRequest) {
   if (isAuthError(auth)) return auth
   try {
     const data = await request.json()
+
+    const newRoleId = Number(data.role)
+    if (data.role && Number.isFinite(newRoleId)) {
+      const allowed = await checkRoleAssignable(auth, newRoleId)
+      if (!allowed.ok) return NextResponse.json({ error: allowed.error }, { status: 403 })
+    }
 
     const employee = await CrmEmployee.create({
       ...data,

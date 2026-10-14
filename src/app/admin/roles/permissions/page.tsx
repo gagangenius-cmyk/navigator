@@ -1,6 +1,8 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
+import { isCeo } from '@/lib/roleChecks';
 
 type RoleOption = {
   id: number;
@@ -20,6 +22,12 @@ type PermissionRow = {
 };
 
 export default function RolePermissionsPage() {
+  const { user } = useAuth();
+  const canEdit = isCeo(user as any) || Boolean((user as any)?.permissions?.includes('all'));
+  const [newKey, setNewKey] = useState('');
+  const [newLabel, setNewLabel] = useState('');
+  const [newDescription, setNewDescription] = useState('');
+  const [creating, setCreating] = useState(false);
   const [roles, setRoles] = useState<RoleOption[]>([]);
   const [selectedRoleId, setSelectedRoleId] = useState<number | null>(null);
   const [permissions, setPermissions] = useState<PermissionRow[]>([]);
@@ -134,6 +142,39 @@ export default function RolePermissionsPage() {
     }
   };
 
+  const handleCreatePermission = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      setCreating(true);
+      setMessage(null);
+      const response = await fetch('/api/admin/permissions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ permission_key: newKey, label: newLabel, description: newDescription }),
+      });
+      const result = await response.json();
+      if (response.ok) {
+        setMessage({ type: 'success', text: `Permission "${result.permission_key}" created. Tick it below and save to grant it to this role.` });
+        setNewKey('');
+        setNewLabel('');
+        setNewDescription('');
+        if (selectedRoleId != null) {
+          // Keep unsaved ticks: re-fetch only adds the new row to the list.
+          const refreshed = await fetch(`/api/admin/roles/${selectedRoleId}/permissions`);
+          const refreshedBody = await refreshed.json();
+          if (refreshed.ok) setPermissions(refreshedBody.permissions || []);
+        }
+      } else {
+        setMessage({ type: 'error', text: result.error || 'Failed to create permission' });
+      }
+    } catch (error) {
+      console.error('Error creating permission:', error);
+      setMessage({ type: 'error', text: 'Failed to create permission' });
+    } finally {
+      setCreating(false);
+    }
+  };
+
   const selectedRole = roles.find((role) => role.id === selectedRoleId) || null;
 
   return (
@@ -146,6 +187,49 @@ export default function RolePermissionsPage() {
           every employee assigned that role/designation the next time they log in.
         </p>
       </div>
+
+      {canEdit ? (
+        <form onSubmit={handleCreatePermission} className="rounded-lg border border-slate-200 bg-white p-4">
+          <p className="text-sm font-semibold text-slate-900">Create a new permission</p>
+          <p className="mt-1 text-xs text-slate-500">
+            Key format is module.action (e.g. visa.approve). A new key only protects something once a page or API
+            checks for it; creating it here makes it assignable to roles.
+          </p>
+          <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-[1fr_1fr_1.4fr_auto]">
+            <input
+              required
+              value={newKey}
+              onChange={(e) => setNewKey(e.target.value)}
+              placeholder="visa.approve"
+              className="rounded-md border border-slate-300 px-3 py-2 font-mono text-sm"
+            />
+            <input
+              required
+              value={newLabel}
+              onChange={(e) => setNewLabel(e.target.value)}
+              placeholder="Label, e.g. Approve visa files"
+              className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+            />
+            <input
+              value={newDescription}
+              onChange={(e) => setNewDescription(e.target.value)}
+              placeholder="Description (optional)"
+              className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+            />
+            <button
+              type="submit"
+              disabled={creating}
+              className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50"
+            >
+              {creating ? 'Creating…' : 'Create'}
+            </button>
+          </div>
+        </form>
+      ) : (
+        <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          View only: only the CEO can create permissions or change what a role can access.
+        </p>
+      )}
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[280px_1fr]">
         <div className="rounded-lg border border-slate-200 bg-white">
@@ -187,7 +271,7 @@ export default function RolePermissionsPage() {
                 <button
                   type="button"
                   onClick={handleSave}
-                  disabled={saving || loadingPermissions}
+                  disabled={!canEdit || saving || loadingPermissions}
                   className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
                 >
                   {saving ? 'Saving…' : 'Save Changes'}

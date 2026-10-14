@@ -7,6 +7,7 @@ import { isCeo } from '@/lib/roleChecks';
 import { requireAuth, isAuthError } from '@/lib/apiAuth';
 import { logAudit } from '@/lib/auditLog';
 import { captureError } from '@/lib/errorTracking';
+import { checkRoleAssignable } from '@/lib/accessAdmin';
 import { isFullAdminEmployeeId, FULL_ADMIN_PROTECTED_MESSAGE } from '@/lib/fullAdminEmployeeGuard';
 
 let dbReady = false;
@@ -111,6 +112,11 @@ export async function POST(request: NextRequest) {
   if (isAuthError(auth)) return auth;
   try {
     const body = await request.json();
+    const newRoleId = Number(body.role);
+    if (body.role && Number.isFinite(newRoleId)) {
+      const allowed = await checkRoleAssignable(auth, newRoleId);
+      if (!allowed.ok) return NextResponse.json({ error: allowed.error }, { status: 403 });
+    }
     const employee = await HRService.createEmployee(body);
     return NextResponse.json(employee, { status: 201 });
   } catch (error) {
@@ -133,6 +139,15 @@ export async function PUT(request: NextRequest) {
     // fields) can be diffed and audit-logged below - a plain field edit
     // (phone number, address, ...) isn't worth a log entry.
     const before = await HRService.getEmployeeById(id);
+
+    // Role changes are the privilege-granting edit: only allow assigning a role
+    // the caller could legitimately hold themselves (CEO/full admin: any role).
+    const requestedRoleId = Number(body.role);
+    const currentRoleId = Number((before as { role?: number } | null)?.role);
+    if (body.role && Number.isFinite(requestedRoleId) && requestedRoleId !== currentRoleId) {
+      const allowed = await checkRoleAssignable(auth, requestedRoleId);
+      if (!allowed.ok) return NextResponse.json({ error: allowed.error }, { status: 403 });
+    }
 
     // A full-admin account (CEO/Director/Founder/Super Admin) can never be
     // deactivated through the plain edit/toggle form - only through nothing

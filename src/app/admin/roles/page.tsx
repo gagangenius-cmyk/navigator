@@ -15,6 +15,7 @@ import { Eye, Pencil, Trash2 } from 'lucide-react';
 export default function RolesManagement() {
   const { user } = useAuth();
   const canDelete = isCeo(user as any);
+  const canManageRoles = canDelete || Boolean((user as any)?.permissions?.includes('all'));
   const [roles, setRoles] = useState<CrmRoleAttributes[]>([]);
   const { sorted: sortedRoles, sortKey: roleSortKey, sortDirection: roleSortDirection, toggleSort: toggleRoleSort } = useSortableData(
     roles,
@@ -217,12 +218,22 @@ export default function RolesManagement() {
           <h1 className="text-3xl font-bold text-gray-900">Roles Management</h1>
           <p className="text-gray-600 mt-2">Manage and track all roles</p>
         </div>
-        <button 
-          onClick={() => setShowAddModal(true)}
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
-        >
-          Add New Role
-        </button>
+        <div className="flex items-center gap-3">
+          <a
+            href="/admin/roles/permissions"
+            className="border border-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            Manage Permissions
+          </a>
+          {canManageRoles && (
+            <button
+              onClick={() => setShowAddModal(true)}
+              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              Add New Role
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Search and Filters */}
@@ -298,7 +309,7 @@ export default function RolesManagement() {
               ]}
               actions={[
                 { key: 'view', icon: Eye, label: 'View', onClick: () => handleViewRole(role) },
-                { key: 'edit', icon: Pencil, label: 'Edit', onClick: () => handleEditRole(role) },
+                { key: 'edit', icon: Pencil, label: 'Edit', onClick: () => handleEditRole(role), hidden: !canManageRoles },
                 { key: 'delete', icon: Trash2, label: 'Delete', onClick: () => handleDeleteRole(role.id), colorClass: 'bg-red-50 text-red-700 hover:bg-red-100', hidden: !canDelete },
               ]}
             />

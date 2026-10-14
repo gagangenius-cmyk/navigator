@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { readWorkbookFromBase64, sheetToJson, parseExcelDateCode } from '@/lib/excelCompat';
 import { HRService } from '@/services/hr-service';
 import { requireAuth, isAuthError } from '@/lib/apiAuth';
+import { checkRoleAssignable } from '@/lib/accessAdmin';
 
 const departmentMap: Record<string, number> = {
   sales: 1,
@@ -91,6 +92,14 @@ export async function POST(request: NextRequest) {
           ['Full-time', 'Contract', 'Freelance', 'Part-time'] as const,
           'Full-time'
         );
+        const importedRole = numberOrNull(getCell(row, ['Role ID', 'RoleID', 'Role', 'role']));
+        if (importedRole) {
+          const allowed = await checkRoleAssignable(auth, importedRole);
+          if (!allowed.ok) {
+            errors.push({ row: rowNumber, error: allowed.error });
+            continue;
+          }
+        }
         const employee = await HRService.createEmployee({
           name,
           email: String(getCell(row, ['Email', 'email']) || '').trim() || null,
