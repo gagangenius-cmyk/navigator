@@ -205,6 +205,105 @@ grounded in `npm audit` output and actual dependency usage rather than guessing.
   `canApproveDiscountTier`, money- and approval-routing-critical). `npm test` runs the suite;
   `npm run test:watch` for local iteration.
 
+## Phase 6 — Enterprise Operations, Governance & Scale (planned)
+
+Written 2026-10-14 after a full-codebase audit (see the audit/fix commits of that date).
+Phases 1-5 built features and hardening; Phase 6 is about making the system *operable*,
+*provable* and *safe to change* at enterprise scale. Constraints: production has **no Redis**,
+single MySQL (`crm_next`), Vercel deploys, `crm_next` is the only database.
+
+### Already done in the 2026-10-14 pass
+Dubai-day "Today's Activity" + status changes; MySQL-backed rate limiter; production
+fail-closed secrets; upload hardening; per-lead access scope (`src/lib/leadAccess.ts`);
+13 runtime-only tables captured as migrations; junk/generated PII files untracked.
+
+### Workstreams (priority order)
+
+**P0 - Security & data protection (weeks 1-2)**
+1. Rotate DB password, JWT secret, API keys (credentials leaked in public repo); purge git
+   history (`git filter-repo`), force-push, re-clone everywhere. Add secret scanning
+   (gitleaks) to CI and pre-commit.
+2. Extend `assertLeadAccess` to the sibling record types that are fetched by id:
+   opportunities, documents, payments, receipts, agreements, quotations, client credentials,
+   follow-ups, appointments. Audit every `[id]` route (`find src/app/api -path '*[*' -name route.ts`)
+   for scope checks; add a unit test per route family.
+3. Make Vercel Blob uploads private (`access: 'private'`) and serve through a signed,
+   scope-checked download route. Move payslips/WPS/agreements to the same path.
+4. Sanitize HR letter HTML (`DMCLettersModule.tsx` `dangerouslySetInnerHTML`) with DOMPurify.
+5. Finance field permissions on `leads-simple/[id]` PUT (payTotal/discount/paidYet) -
+   require a finance permission; log every change via `logAudit`.
+6. CSP header (report-only first, then enforce), captcha/API-key on `web-to-leads`.
+
+**P0 - Data integrity (weeks 1-3)**
+1. `crm_forum_leads.id` AUTO_INCREMENT (remove `MAX(id)+1` in `leads-simple` POST) - needs a
+   maintenance window and a backup first.
+2. One migration runner (applied-migrations table, checksums, ordered, dry-run) replacing
+   ad-hoc `scripts/*.js`; CI applies migrations to a throwaway DB and diffs against models
+   (`scripts/audit-model-columns.ts` already exists - promote it to a CI gate).
+3. After migrations are applied everywhere, delete runtime `CREATE/ALTER TABLE` in 45 files
+   (HR first: 19 statements), and revoke DDL rights from the app DB user.
+4. Soft-delete conversion per `plans/soft-delete-conversion-plan.md`; FK constraints on core
+   tables (continue `20260914_core_fk_constraints.sql`).
+5. Backups: automated daily dump + PITR (binlog), restore drill every quarter, documented RPO/RTO
+   (target RPO 15 min, RTO 4 h).
+
+**P1 - Reliability & observability (weeks 3-5)**
+1. Staging environment + separate staging DB (stop testing on the only DB). Preview deploys
+   per PR with seeded fixtures.
+2. CI pipeline (GitHub Actions): typecheck, lint, vitest, build, Playwright smoke, `npm audit`,
+   migration check. Block merge on failure; protect `master`.
+3. Structured logging (pino) with request id + user id; Sentry release tracking; uptime
+   monitor on `/api/health`; alerts on cron failure (`crm_cron_run_log`) and job-queue backlog.
+4. Query performance: index review from slow-query log (`crm_remarks(lead_id,action,created_at)`
+   migration already added), combine the leads tab counts into one endpoint, cache report
+   aggregates; remove N+1s in `leads/route.ts`.
+5. Timezone policy: store UTC, display/aggregate in branch timezone (Dubai default), one helper
+   (`src/lib/dubaiTime.ts`) used by every "today/this month" query - the Today's Activity bug
+   class.
+
+**P1 - Quality (weeks 4-8)**
+1. Test pyramid: unit tests for pure logic (permissions scope, discount tiers, payment
+   balances, payroll/WPS, assignment engine), API integration tests against a disposable DB,
+   Playwright for the 10 critical journeys (login+MFA, lead create, assign, status change,
+   opportunity flow, payment verify, compliance approval, client activation, payslip, leave).
+   Coverage gate on `src/lib` and money paths.
+2. Type debt: enable `noImplicitAny` incrementally by directory; remove the 872 `any`s starting
+   with `src/lib`, models and finance routes. Generate API types from zod schemas; validate
+   every request body with zod (shared `parseBody` helper).
+3. Split mega-files: `LeadManagement.tsx` (4k lines) into table/filters/modals/hooks with
+   React Query; `api/leads/route.ts` (1.2k) into query-builder + service + handlers.
+4. Remove dead/duplicate routes after confirming usage: `admin/leads-crud`, `leads-crud-working`,
+   `lead-reassignments-working`, `leads/enhanced-route.ts`.
+
+**P2 - Enterprise governance (weeks 6-12)**
+1. RBAC v2: permission matrix per module with field-level rules, role-change approval,
+   periodic access review report, session list/revoke, device binding, mandatory MFA for
+   finance/admin roles, password policy + breach check.
+2. Audit trail completeness: `logAudit` on every mutating route (codemod + lint rule), export,
+   tamper-evident hashing, retention policy, data-access logging for PII views.
+3. Privacy/compliance: UAE PDPL data inventory, retention/erasure workflow, consent capture on
+   web-to-leads, PII masking in logs and exports, export approval workflow.
+4. Multi-branch/multi-entity: branch-level config (currency, timezone, VAT, templates),
+   consolidated reporting for CEO, inter-branch lead transfer approvals.
+5. Integrations platform: signed outgoing webhooks, API keys with scopes + rate limits,
+   versioned public API (`/api/v1`) with OpenAPI docs, SSO (SAML/OIDC) for staff.
+6. Performance at scale: read replica / reporting schema, partition `crm_remarks`, queue heavy
+   exports and reports (DB queue exists), pagination everywhere (cursor-based on big tables).
+
+### Milestones & exit criteria
+| Milestone | Exit criteria |
+|---|---|
+| M1 (wk 2) | Secrets rotated + history purged; secret scanning on; all `[id]` routes scope-checked |
+| M2 (wk 4) | CI green gate on master; staging live; backups + restore drill done |
+| M3 (wk 6) | Runtime DDL removed; migration runner in CI; leads.id auto-increment |
+| M4 (wk 8) | 10 critical e2e journeys + money-path unit tests; zod on all write routes |
+| M5 (wk 12) | RBAC v2, full audit coverage, PDPL workflow, SSO, versioned API |
+
+### Risks
+Migrations on the single live DB (mitigate: staging first, backup, off-hours); permission
+tightening can lock out legitimate users (mitigate: report-only/log mode, then enforce);
+large refactors of `LeadManagement` (mitigate: e2e journeys written *before* the split).
+
 ## Sequencing
 
 Land Phase 1 as its own reviewable change (no external dependency, closes the biggest
