@@ -239,11 +239,22 @@ export async function GET(request: NextRequest) {
       EXISTS (SELECT 1 FROM crm_opportunities orj JOIN crm_opportunity_workflow_reviews wrj ON wrj.opportunity_id = orj.id WHERE orj.leadId = l.id AND orj.is_deleted = 0 AND (wrj.finance_status = 'rejected' OR wrj.compliance_status = 'rejected'))
       OR EXISTS (SELECT 1 FROM crm_discount_approvals da WHERE da.leadId = l.id AND da.status = 'rejected')
     )`
-    // "Today's Activity": a remark, follow-up, or appointment logged today -
-    // the three crm_remarks.action values written by logLeadRemark() from,
-    // respectively, src/app/api/lead-remarks/route.ts, follow-up-reminders/route.ts,
-    // and appointments/route.ts.
-    const TODAY_ACTIVITY_SQL = `EXISTS (SELECT 1 FROM crm_remarks cr WHERE cr.lead_id = l.id AND cr.action IN ('remark_added', 'followup_added', 'appointment_booked', 'whatsapp_sent') AND DATE(cr.created_at) = CURDATE())`
+    // "Today's Activity": a remark, follow-up, appointment, WhatsApp or status
+    // change (including a move back to New Lead) logged today - the
+    // crm_remarks.action values written by logLeadRemark() from
+    // lead-remarks, follow-up-reminders, appointments, send-whatsapp and
+    // leads/[id] (status_changed).
+    // "Today" is the Dubai calendar day (UTC+4, no DST). crm_remarks.created_at
+    // is stored in UTC (Sequelize default), so compare against the UTC bounds
+    // of the Dubai day instead of CURDATE(), which follows the MySQL server's
+    // own timezone and would roll over at the wrong hour.
+    const DUBAI_OFFSET_MS = 4 * 60 * 60 * 1000
+    const dubaiNow = new Date(Date.now() + DUBAI_OFFSET_MS)
+    const dayStartUtcMs = Date.UTC(dubaiNow.getUTCFullYear(), dubaiNow.getUTCMonth(), dubaiNow.getUTCDate()) - DUBAI_OFFSET_MS
+    const toSqlUtc = (ms: number) => new Date(ms).toISOString().slice(0, 19).replace('T', ' ')
+    const todayStartUtc = toSqlUtc(dayStartUtcMs)
+    const todayEndUtc = toSqlUtc(dayStartUtcMs + 24 * 60 * 60 * 1000)
+    const TODAY_ACTIVITY_SQL = `EXISTS (SELECT 1 FROM crm_remarks cr WHERE cr.lead_id = l.id AND cr.action IN ('remark_added', 'followup_added', 'appointment_booked', 'whatsapp_sent', 'status_changed') AND cr.created_at >= ? AND cr.created_at < ?)`
 
     if (isMyLeadsView) {
       if (!isBranchManagerOrCeo(currentUser)) {
@@ -333,6 +344,7 @@ export async function GET(request: NextRequest) {
       }
     } else if (opportunityView === 'today-activity') {
       whereConditions.push(TODAY_ACTIVITY_SQL)
+      replacements.push(todayStartUtc, todayEndUtc)
       if (isBranchManager) {
         whereConditions.push('l.branch = ?')
         replacements.push(currentUser.branch)
