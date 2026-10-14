@@ -11,7 +11,7 @@ export async function POST(request: NextRequest) {
     }
 
     const rateLimitKey = `${getClientIp(request)}:${String(email).toLowerCase().trim()}`;
-    const rateLimit = checkRateLimit(rateLimitKey);
+    const rateLimit = await checkRateLimit(rateLimitKey);
     if (!rateLimit.allowed) {
       return NextResponse.json(
         { error: 'Too many login attempts. Please try again in a few minutes.' },
@@ -21,10 +21,10 @@ export async function POST(request: NextRequest) {
 
     const client = await ClientPortalService.authenticate(String(email).trim().toLowerCase(), String(password));
     if (!client) {
-      recordFailedAttempt(rateLimitKey);
+      await recordFailedAttempt(rateLimitKey);
       return NextResponse.json({ error: 'Invalid credentials, or your case is no longer verified — please contact your counselor' }, { status: 401 });
     }
-    clearRateLimit(rateLimitKey);
+    await clearRateLimit(rateLimitKey);
 
     const token = generateClientToken({ leadId: client.leadId, email: client.email, name: client.name });
 

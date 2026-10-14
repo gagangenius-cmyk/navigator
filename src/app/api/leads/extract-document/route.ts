@@ -27,14 +27,14 @@ export async function POST(request: NextRequest) {
 
   // Throttle by actor id - an LLM vision call has real per-request cost.
   const rateLimitKey = `extract-document:${currentUser.id}`;
-  const rateLimit = checkRateLimit(rateLimitKey, { windowMs: 15 * 60 * 1000, maxAttempts: 15 });
+  const rateLimit = await checkRateLimit(rateLimitKey, { windowMs: 15 * 60 * 1000, maxAttempts: 15 });
   if (!rateLimit.allowed) {
     return NextResponse.json(
       { error: 'Too many document scans in a short time. Please try again in a few minutes.' },
       { status: 429, headers: { 'Retry-After': String(rateLimit.retryAfterSeconds) } }
     );
   }
-  recordFailedAttempt(rateLimitKey, { windowMs: 15 * 60 * 1000 });
+  await recordFailedAttempt(rateLimitKey, { windowMs: 15 * 60 * 1000 });
 
   try {
     const formData = await request.formData();

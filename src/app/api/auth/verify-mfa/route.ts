@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
     // employee id (not username) since only the holder of a valid pending
     // token reaches this point at all.
     const rateLimitKey = `mfa:${getClientIp(request)}:${employeeId}`;
-    const rateLimit = checkRateLimit(rateLimitKey, { maxAttempts: 8, windowMs: 15 * 60 * 1000 });
+    const rateLimit = await checkRateLimit(rateLimitKey, { maxAttempts: 8, windowMs: 15 * 60 * 1000 });
     if (!rateLimit.allowed) {
       return NextResponse.json(
         { message: 'Too many attempts. Please try again in a few minutes.' },
@@ -39,10 +39,10 @@ export async function POST(request: NextRequest) {
 
     const ok = await verifyLoginCode(employeeId, code);
     if (!ok) {
-      recordFailedAttempt(rateLimitKey);
+      await recordFailedAttempt(rateLimitKey);
       return NextResponse.json({ message: 'Invalid verification code' }, { status: 401 });
     }
-    clearRateLimit(rateLimitKey);
+    await clearRateLimit(rateLimitKey);
 
     const authUser = await buildAuthSessionForEmployeeId(employeeId);
     if (!authUser) {

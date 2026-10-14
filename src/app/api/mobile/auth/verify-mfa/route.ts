@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
     }
 
     const rateLimitKey = `mobile-mfa:${getClientIp(request)}:${employeeId}`;
-    const rateLimit = checkRateLimit(rateLimitKey, { maxAttempts: 8, windowMs: 15 * 60 * 1000 });
+    const rateLimit = await checkRateLimit(rateLimitKey, { maxAttempts: 8, windowMs: 15 * 60 * 1000 });
     if (!rateLimit.allowed) {
       return mobileError('Too many attempts. Please try again in a few minutes.', 429, 'rate_limited', {
         'Retry-After': String(rateLimit.retryAfterSeconds),
@@ -31,10 +31,10 @@ export async function POST(request: NextRequest) {
     }
 
     if (!(await verifyLoginCode(employeeId, code))) {
-      recordFailedAttempt(rateLimitKey);
+      await recordFailedAttempt(rateLimitKey);
       return mobileError('Invalid verification code', 401, 'invalid_code');
     }
-    clearRateLimit(rateLimitKey);
+    await clearRateLimit(rateLimitKey);
 
     const authUser = await buildAuthSessionForEmployeeId(employeeId);
     if (!authUser) return mobileError('Account is no longer active', 401, 'account_inactive');

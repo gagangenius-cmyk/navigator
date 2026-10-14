@@ -93,14 +93,14 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const rateLimitKey = `live-chat-leads:${getClientIp(request)}`;
-    const rateLimit = checkRateLimit(rateLimitKey, INTAKE_RATE_LIMIT);
+    const rateLimit = await checkRateLimit(rateLimitKey, INTAKE_RATE_LIMIT);
     if (!rateLimit.allowed) {
       return json({ success: false, error: 'Too many submissions. Please try again later.' }, {
         status: 429,
         headers: { 'Retry-After': String(rateLimit.retryAfterSeconds) },
       });
     }
-    recordFailedAttempt(rateLimitKey, INTAKE_RATE_LIMIT);
+    await recordFailedAttempt(rateLimitKey, INTAKE_RATE_LIMIT);
 
     const data = await request.json() as Record<string, unknown>;
 

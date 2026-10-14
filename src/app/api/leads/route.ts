@@ -391,14 +391,14 @@ export async function GET(request: NextRequest) {
       // actor so a compromised or scripted session can't scrape the whole
       // table via repeated exports.
       const exportRateLimitKey = `leads-export:${currentUser.id}`
-      const exportRateLimit = checkRateLimit(exportRateLimitKey, { windowMs: 15 * 60 * 1000, maxAttempts: 10 })
+      const exportRateLimit = await checkRateLimit(exportRateLimitKey, { windowMs: 15 * 60 * 1000, maxAttempts: 10 })
       if (!exportRateLimit.allowed) {
         return NextResponse.json(
           { error: 'Too many exports in a short time. Please try again in a few minutes.' },
           { status: 429, headers: { 'Retry-After': String(exportRateLimit.retryAfterSeconds) } }
         )
       }
-      recordFailedAttempt(exportRateLimitKey, { windowMs: 15 * 60 * 1000 })
+      await recordFailedAttempt(exportRateLimitKey, { windowMs: 15 * 60 * 1000 })
 
       const leads = await sequelize.query<any>(`
         SELECT

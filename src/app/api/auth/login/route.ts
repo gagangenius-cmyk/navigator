@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
     // elsewhere can't lock out the legitimate user, and a legitimate user's
     // own mistyped attempts don't affect other accounts.
     const rateLimitKey = `${getClientIp(request)}:${String(username).toLowerCase().trim()}`;
-    const rateLimit = checkRateLimit(rateLimitKey);
+    const rateLimit = await checkRateLimit(rateLimitKey);
     if (!rateLimit.allowed) {
       return NextResponse.json(
         { message: 'Too many login attempts. Please try again in a few minutes.' },
@@ -31,13 +31,13 @@ export async function POST(request: NextRequest) {
     const authUser = await authenticateUser(username, password);
 
     if (!authUser) {
-      recordFailedAttempt(rateLimitKey);
+      await recordFailedAttempt(rateLimitKey);
       return NextResponse.json(
         { message: 'Invalid email or password' },
         { status: 401 }
       );
     }
-    clearRateLimit(rateLimitKey);
+    await clearRateLimit(rateLimitKey);
 
     // MFA-enrolled employees don't get the real session cookie yet — only a
     // short-lived pending token naming who they are, which

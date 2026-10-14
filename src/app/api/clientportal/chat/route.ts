@@ -84,14 +84,14 @@ export async function POST(request: NextRequest) {
   }
 
   const rateLimitKey = `clientportal-chat:${client.leadId}`;
-  const rateLimit = checkRateLimit(rateLimitKey, { windowMs: 15 * 60 * 1000, maxAttempts: 40 });
+  const rateLimit = await checkRateLimit(rateLimitKey, { windowMs: 15 * 60 * 1000, maxAttempts: 40 });
   if (!rateLimit.allowed) {
     return NextResponse.json(
       { error: 'Too many messages in a short time. Please try again in a few minutes.' },
       { status: 429, headers: { 'Retry-After': String(rateLimit.retryAfterSeconds) } }
     );
   }
-  recordFailedAttempt(rateLimitKey, { windowMs: 15 * 60 * 1000 });
+  await recordFailedAttempt(rateLimitKey, { windowMs: 15 * 60 * 1000 });
 
   const body = await request.json().catch(() => ({}));
   const uiMessages: UIMessage[] = Array.isArray(body.messages) ? body.messages : [];

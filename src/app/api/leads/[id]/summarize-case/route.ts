@@ -34,14 +34,14 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
     }
 
     const rateLimitKey = `summarize-case:${auth.id}`;
-    const rateLimit = checkRateLimit(rateLimitKey, { windowMs: 15 * 60 * 1000, maxAttempts: 20 });
+    const rateLimit = await checkRateLimit(rateLimitKey, { windowMs: 15 * 60 * 1000, maxAttempts: 20 });
     if (!rateLimit.allowed) {
       return NextResponse.json(
         { error: 'Too many summary requests in a short time. Please try again in a few minutes.' },
         { status: 429, headers: { 'Retry-After': String(rateLimit.retryAfterSeconds) } }
       );
     }
-    recordFailedAttempt(rateLimitKey, { windowMs: 15 * 60 * 1000 });
+    await recordFailedAttempt(rateLimitKey, { windowMs: 15 * 60 * 1000 });
 
     await ensureDB();
     const [lead] = await sequelize.query<{

@@ -36,14 +36,14 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
     }
 
     const rateLimitKey = `compliance-ai-review:${auth.id}`;
-    const rateLimit = checkRateLimit(rateLimitKey, { windowMs: 15 * 60 * 1000, maxAttempts: 30 });
+    const rateLimit = await checkRateLimit(rateLimitKey, { windowMs: 15 * 60 * 1000, maxAttempts: 30 });
     if (!rateLimit.allowed) {
       return NextResponse.json(
         { error: 'Too many AI reviews in a short time. Please try again in a few minutes.' },
         { status: 429, headers: { 'Retry-After': String(rateLimit.retryAfterSeconds) } }
       );
     }
-    recordFailedAttempt(rateLimitKey, { windowMs: 15 * 60 * 1000 });
+    await recordFailedAttempt(rateLimitKey, { windowMs: 15 * 60 * 1000 });
 
     await ensureDB();
     const [approval] = await sequelize.query<{

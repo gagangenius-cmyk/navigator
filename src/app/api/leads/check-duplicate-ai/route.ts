@@ -30,14 +30,14 @@ export async function POST(request: NextRequest) {
     }
 
     const rateLimitKey = `check-duplicate-ai:${auth.id}`;
-    const rateLimit = checkRateLimit(rateLimitKey, { windowMs: 15 * 60 * 1000, maxAttempts: 30 });
+    const rateLimit = await checkRateLimit(rateLimitKey, { windowMs: 15 * 60 * 1000, maxAttempts: 30 });
     if (!rateLimit.allowed) {
       return NextResponse.json(
         { error: 'Too many duplicate checks in a short time. Please try again in a few minutes.' },
         { status: 429, headers: { 'Retry-After': String(rateLimit.retryAfterSeconds) } }
       );
     }
-    recordFailedAttempt(rateLimitKey, { windowMs: 15 * 60 * 1000 });
+    await recordFailedAttempt(rateLimitKey, { windowMs: 15 * 60 * 1000 });
 
     const verdicts = await checkDuplicatesWithAI(newLead, candidates);
     return NextResponse.json({ verdicts });

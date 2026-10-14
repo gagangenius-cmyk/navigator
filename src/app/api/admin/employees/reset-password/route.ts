@@ -21,14 +21,14 @@ export async function POST(request: NextRequest) {
     // action, so the risk is a compromised/malicious admin session scripting
     // resets across many accounts, not an anonymous brute force.
     const rateLimitKey = `employee-reset-password:${auth.id}`;
-    const rateLimit = checkRateLimit(rateLimitKey, { windowMs: 15 * 60 * 1000, maxAttempts: 20 });
+    const rateLimit = await checkRateLimit(rateLimitKey, { windowMs: 15 * 60 * 1000, maxAttempts: 20 });
     if (!rateLimit.allowed) {
       return NextResponse.json(
         { error: 'Too many password resets. Please try again in a few minutes.' },
         { status: 429, headers: { 'Retry-After': String(rateLimit.retryAfterSeconds) } }
       );
     }
-    recordFailedAttempt(rateLimitKey, { windowMs: 15 * 60 * 1000 });
+    await recordFailedAttempt(rateLimitKey, { windowMs: 15 * 60 * 1000 });
 
     await ensureDB();
     const body = await request.json();

@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
     }
 
     const rateLimitKey = `mobile:${getClientIp(request)}:${username}`;
-    const rateLimit = checkRateLimit(rateLimitKey);
+    const rateLimit = await checkRateLimit(rateLimitKey);
     if (!rateLimit.allowed) {
       return mobileError('Too many login attempts. Please try again in a few minutes.', 429, 'rate_limited', {
         'Retry-After': String(rateLimit.retryAfterSeconds),
@@ -29,10 +29,10 @@ export async function POST(request: NextRequest) {
 
     const authUser = await authenticateUser(username, password);
     if (!authUser) {
-      recordFailedAttempt(rateLimitKey);
+      await recordFailedAttempt(rateLimitKey);
       return mobileError('Invalid username or password', 401, 'invalid_credentials');
     }
-    clearRateLimit(rateLimitKey);
+    await clearRateLimit(rateLimitKey);
 
     // MFA-enrolled employees get only a 5-minute pending token here; the app
     // trades it plus a TOTP code for the real session at /auth/verify-mfa.
