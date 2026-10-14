@@ -1,12 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { HRService } from '@/services/hr-service';
 import { requireAuth, isAuthError } from '@/lib/apiAuth';
+import { hasAnyHrPermission, isOwnEmployeeId } from '@/lib/hrAccess';
 
 export async function GET(request: NextRequest) {
   const auth = requireAuth(request, ['hr.view', 'hr.payroll', 'hr.self']);
   if (isAuthError(auth)) return auth;
   const employeeId = new URL(request.url).searchParams.get('employee_id');
   if (!employeeId) return NextResponse.json({ error: 'employee_id is required' }, { status: 400 });
+  if (!hasAnyHrPermission(auth, ['hr.view', 'hr.payroll']) && !isOwnEmployeeId(auth, employeeId)) {
+    return NextResponse.json({ error: 'You can only access your own HR records' }, { status: 403 });
+  }
   try {
     const compensation = await HRService.getCompensation(employeeId);
     const employee = await HRService.getEmployeeById(Number(employeeId));

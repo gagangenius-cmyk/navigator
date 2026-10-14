@@ -4,6 +4,7 @@ import { put } from '@vercel/blob';
 import { QueryTypes } from 'sequelize';
 import { sequelize } from '@/lib/sequelize';
 import { requireAuth, isAuthError } from '@/lib/apiAuth';
+import { hasAnyHrPermission, isOwnEmployeeId } from '@/lib/hrAccess';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -31,6 +32,9 @@ export async function GET(request: NextRequest, context: RouteContext) {
   const auth = requireAuth(request, ['hr.view', 'hr.self']);
   if (isAuthError(auth)) return auth;
   const { id } = await context.params;
+  if (!hasAnyHrPermission(auth, ['hr.view']) && !isOwnEmployeeId(auth, id)) {
+    return NextResponse.json({ error: 'You can only access your own HR records' }, { status: 403 });
+  }
   await ensureTable();
   const documents = await sequelize.query(
     `SELECT document_id, employee_id, document_type, document_url, expiry_date, notes, created_at

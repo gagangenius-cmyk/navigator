@@ -2,6 +2,7 @@
 
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { useState, useRef, useCallback, useEffect } from 'react';
+import DOMPurify from 'dompurify';
 import { Search, Download, Printer, Eye, Edit2, X, User, RefreshCw, Mail } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -968,7 +969,7 @@ function LetterPreview({ data }: { data: LetterData }) {
 
         {data.opening && <div style={{ fontWeight:700, color:data.openingColor||G2, marginBottom:10 }}>{data.opening}</div>}
 
-        <div style={{ textAlign:'justify', whiteSpace:'pre-wrap', marginBottom:4 }} dangerouslySetInnerHTML={{ __html: data.body }}/>
+        <div style={{ textAlign:'justify', whiteSpace:'pre-wrap', marginBottom:4 }} dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(data.body, { ALLOWED_TAGS: ['strong', 'b', 'em', 'i', 'u', 'br', 'p', 'ul', 'ol', 'li', 'span'], ALLOWED_ATTR: [] }) }}/>
 
         <TableRows/>
 

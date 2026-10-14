@@ -42,6 +42,7 @@
     "bcryptjs": "^3.0.3",
     "bullmq": "^6.3.9",
     "chart.js": "^4.5.1",
+    "dompurify": "^3.4.15",
     "dotenv": "^17.2.3",
     "exceljs": "^4.4.0",
     "framer-motion": "^12.25.0",

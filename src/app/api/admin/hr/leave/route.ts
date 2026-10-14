@@ -5,6 +5,7 @@ import { sequelize } from '@/lib/sequelize';
 import { requireAuth, isAuthError } from '@/lib/apiAuth';
 import { getActiveLeaveTypeNames } from '@/lib/leaveTypes';
 import { isBranchManagerOrCeo, isCeo } from '@/lib/roleChecks';
+import { hasAnyHrPermission, isOwnEmployeeId } from '@/lib/hrAccess';
 
 const reviewStatuses = ['Approved', 'Rejected', 'Cancelled'] as const;
 
@@ -23,7 +24,9 @@ export async function GET(request: NextRequest) {
   if (isAuthError(auth)) return auth;
   try {
     const { searchParams } = new URL(request.url);
-    const employeeId = searchParams.get('employee_id') || undefined;
+    // hr.self-only callers are pinned to their own records, never a query-string id.
+    const canSeeOthers = hasAnyHrPermission(auth, ['hr.view']);
+    const employeeId = canSeeOthers ? (searchParams.get('employee_id') || undefined) : String(auth.id);
     const year = Number.parseInt(searchParams.get('year') || String(new Date().getFullYear()), 10);
     const requests = await HRService.listLeaveManagementRequests({
       employeeId,
@@ -58,6 +61,9 @@ export async function POST(request: NextRequest) {
     const leaveType = typeof body.leave_type === 'string' ? body.leave_type : '';
 
     if (!employeeId) return NextResponse.json({ error: 'employee_id is required' }, { status: 400 });
+    if (!hasAnyHrPermission(auth, ['hr.create']) && !isOwnEmployeeId(auth, employeeId)) {
+      return NextResponse.json({ error: 'You can only access your own HR records' }, { status: 403 });
+    }
     if (!leaveTypes.includes(leaveType)) return NextResponse.json({ error: 'leave_type is invalid' }, { status: 400 });
     if (!startDate) return NextResponse.json({ error: 'start_date is required' }, { status: 400 });
     if (!endDate) return NextResponse.json({ error: 'end_date is required' }, { status: 400 });
