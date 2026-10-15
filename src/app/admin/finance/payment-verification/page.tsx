@@ -281,8 +281,8 @@ export default function PaymentVerificationPage() {
       {/* Review modal */}
       {selected && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-lg rounded-xl bg-white shadow-2xl">
-            <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
+          <div className="flex max-h-[92vh] w-full max-w-5xl flex-col rounded-xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between shrink-0 border-b border-gray-200 px-6 py-4">
               <h2 className="text-lg font-semibold text-gray-900">Review Payment</h2>
               <button onClick={() => { setSelected(null); setMsg(''); }}
                 className="rounded p-1 text-gray-400 hover:text-gray-600">
@@ -290,7 +290,8 @@ export default function PaymentVerificationPage() {
               </button>
             </div>
 
-            <div className="px-6 py-4 space-y-4">
+            <div className="grid flex-1 gap-5 overflow-y-auto px-6 py-4 md:grid-cols-2">
+              <div className="space-y-4">
               {/* Payment summary */}
               <div className="rounded-lg bg-gray-50 p-4 space-y-2 text-sm">
                 <div className="flex justify-between">
@@ -333,29 +334,6 @@ export default function PaymentVerificationPage() {
                 )}
               </div>
 
-              {/* Proof of payment */}
-              {selected.proofOfPaymentUrl ? (
-                <div className="rounded-lg border border-green-200 bg-green-50 px-3 py-2.5 text-sm">
-                  <div className="flex items-center gap-2">
-                    <CheckCircle className="h-4 w-4 text-green-600 shrink-0" />
-                    <span className="text-green-800 font-medium">Proof of Payment uploaded:</span>
-                    <a href={selected.proofOfPaymentUrl} target="_blank" rel="noreferrer"
-                      className="truncate text-green-700 text-xs underline hover:text-green-900">
-                      {selected.proofOfPaymentUrl.split('/').pop()}
-                    </a>
-                  </div>
-                  {/^https?:\/\/.*\.(png|jpe?g|gif|webp)$/i.test(selected.proofOfPaymentUrl) && (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={selected.proofOfPaymentUrl} alt="Proof of payment" className="mt-2 max-h-64 rounded-lg border border-green-200 object-contain" />
-                  )}
-                </div>
-              ) : (
-                <div className="flex items-center gap-2 rounded-lg border border-yellow-200 bg-yellow-50 px-3 py-2.5 text-sm text-yellow-800">
-                  <Clock className="h-4 w-4 shrink-0" />
-                  No proof of payment uploaded by counsellor.
-                </div>
-              )}
-
               {/* Current status */}
               <div className="flex items-center gap-2">
                 <span className="text-sm text-gray-500">Current status:</span>
@@ -384,9 +362,35 @@ export default function PaymentVerificationPage() {
                   {msg}
                 </div>
               )}
+              </div>
+              {/* Proof preview (right) */}
+              <div className="space-y-4">
+              {/* Proof of payment */}
+              {selected.proofOfPaymentUrl ? (
+                <div className="rounded-lg border border-green-200 bg-green-50 px-3 py-2.5 text-sm">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle className="h-4 w-4 text-green-600 shrink-0" />
+                    <span className="text-green-800 font-medium">Proof of Payment uploaded:</span>
+                    <a href={selected.proofOfPaymentUrl} target="_blank" rel="noreferrer"
+                      className="truncate text-green-700 text-xs underline hover:text-green-900">
+                      {selected.proofOfPaymentUrl.split('/').pop()}
+                    </a>
+                  </div>
+                  {/^https?:\/\/.*\.(png|jpe?g|gif|webp)$/i.test(selected.proofOfPaymentUrl) && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={selected.proofOfPaymentUrl} alt="Proof of payment" className="mt-2 max-h-[60vh] w-full rounded-lg border border-green-200 object-contain" />
+                  )}
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 rounded-lg border border-yellow-200 bg-yellow-50 px-3 py-2.5 text-sm text-yellow-800">
+                  <Clock className="h-4 w-4 shrink-0" />
+                  No proof of payment uploaded by counsellor.
+                </div>
+              )}
+              </div>
             </div>
 
-            <div className="flex items-center justify-end gap-3 border-t border-gray-200 px-6 py-4">
+            <div className="flex shrink-0 items-center justify-end gap-3 border-t border-gray-200 px-6 py-4">
               <button onClick={() => { setSelected(null); setMsg(''); }}
                 className="rounded-lg border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50">
                 Cancel
