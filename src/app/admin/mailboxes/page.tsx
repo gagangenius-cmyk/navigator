@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Mail, Plus, RefreshCw, Trash2, CheckCircle, AlertCircle, Power } from 'lucide-react';
+import { Mail, Plus, RefreshCw, Trash2, CheckCircle, AlertCircle, Power, Pencil } from 'lucide-react';
 
 interface Mailbox {
   id: number;
@@ -11,7 +11,12 @@ interface Mailbox {
   display_name: string | null;
   smtp_host: string;
   smtp_port: number;
+  smtp_secure: number;
   imap_host: string | null;
+  imap_port: number | null;
+  imap_secure: number;
+  username: string;
+  signature: string | null;
   is_active: number;
   daily_limit: number;
   sent_today: number;
@@ -38,6 +43,7 @@ export default function MailboxesAdminPage() {
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [busyId, setBusyId] = useState<number | null>(null);
+  const [editingId, setEditingId] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -57,23 +63,55 @@ export default function MailboxesAdminPage() {
 
   useEffect(() => { load(); }, [load]);
 
+  const startEdit = (mb: Mailbox) => {
+    setEditingId(mb.id);
+    setForm({
+      employeeId: String(mb.employee_id), email: mb.email, displayName: mb.display_name || '', username: mb.username, password: '',
+      smtpHost: mb.smtp_host, smtpPort: String(mb.smtp_port), smtpSecure: Boolean(mb.smtp_secure),
+      imapHost: mb.imap_host || '', imapPort: String(mb.imap_port || 993), imapSecure: Boolean(mb.imap_secure),
+      dailyLimit: String(mb.daily_limit), signature: mb.signature || '',
+    });
+    setShowForm(true);
+    setError('');
+    setNotice('');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const closeForm = () => {
+    setShowForm(false);
+    setEditingId(null);
+    setForm(emptyForm);
+  };
+
   const create = async () => {
     setSaving(true);
     setError('');
     try {
-      const res = await fetch('/api/admin/mailboxes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, employeeId: Number(form.employeeId) }),
-      });
+      const res = editingId
+        ? await fetch(`/api/admin/mailboxes/${editingId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            // Blank password is ignored by the API = keep the stored one.
+            body: JSON.stringify({
+              displayName: form.displayName, username: form.username, password: form.password,
+              smtpHost: form.smtpHost, smtpPort: Number(form.smtpPort), smtpSecure: form.smtpSecure,
+              imapHost: form.imapHost, imapPort: Number(form.imapPort), imapSecure: form.imapSecure,
+              dailyLimit: Number(form.dailyLimit), signature: form.signature,
+            }),
+          })
+        : await fetch('/api/admin/mailboxes', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ...form, employeeId: Number(form.employeeId) }),
+          });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Failed to connect mailbox');
-      setForm(emptyForm);
-      setShowForm(false);
-      setNotice('Mailbox connected. Use "Test" to verify the credentials.');
+      if (!res.ok) throw new Error(json.error || 'Failed to save mailbox');
+      const wasEditing = Boolean(editingId);
+      closeForm();
+      setNotice(wasEditing ? 'Mailbox updated. Use "Test" to verify the new settings.' : 'Mailbox connected. Use "Test" to verify the credentials.');
       await load();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to connect mailbox');
+      setError(e instanceof Error ? e.message : 'Failed to save mailbox');
     } finally {
       setSaving(false);
     }
@@ -111,7 +149,7 @@ export default function MailboxesAdminPage() {
           <h1 className="flex items-center gap-2 text-3xl font-bold text-gray-900"><Mail className="h-7 w-7 text-blue-600" /> Counselor Mailboxes</h1>
           <p className="mt-2 text-gray-600">Connect each counselor&apos;s own SMTP/IMAP mailbox. Counselors send and receive client email from the CRM; passwords are encrypted and never shown.</p>
         </div>
-        <button onClick={() => setShowForm((v) => !v)} className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700">
+        <button onClick={() => (showForm ? closeForm() : setShowForm(true))} className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700">
           <Plus className="h-4 w-4" /> Connect Mailbox
         </button>
       </div>
@@ -121,16 +159,17 @@ export default function MailboxesAdminPage() {
 
       {showForm && (
         <div className="rounded-lg bg-white p-6 shadow space-y-4">
-          <h2 className="font-semibold text-gray-900">Connect a mailbox</h2>
+          <h2 className="font-semibold text-gray-900">{editingId ? `Edit mailbox — ${form.email}` : 'Connect a mailbox'}</h2>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             <label className="text-sm">Counselor
-              <select className={field} value={form.employeeId} onChange={(e) => setForm({ ...form, employeeId: e.target.value })}>
+              <select className={field} disabled={Boolean(editingId)} value={form.employeeId} onChange={(e) => setForm({ ...form, employeeId: e.target.value })}>
                 <option value="">Select…</option>
+                {editingId && <option value={form.employeeId}>{mailboxes.find((m) => m.id === editingId)?.employee_name}</option>}
                 {employees.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
               </select>
             </label>
             <label className="text-sm">Email address
-              <input className={field} value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value, username: form.username || e.target.value })} placeholder="counselor@company.com" />
+              <input className={field} disabled={Boolean(editingId)} value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value, username: form.username || e.target.value })} placeholder="counselor@company.com" />
             </label>
             <label className="text-sm">Display name
               <input className={field} value={form.displayName} onChange={(e) => setForm({ ...form, displayName: e.target.value })} />
@@ -138,7 +177,7 @@ export default function MailboxesAdminPage() {
             <label className="text-sm">Login username
               <input className={field} value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} />
             </label>
-            <label className="text-sm">Password / app password
+            <label className="text-sm">{editingId ? 'New password (leave blank to keep current)' : 'Password / app password'}
               <input type="password" autoComplete="new-password" className={field} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
             </label>
             <label className="text-sm">Daily send limit
@@ -167,9 +206,9 @@ export default function MailboxesAdminPage() {
             <textarea rows={3} className={field} value={form.signature} onChange={(e) => setForm({ ...form, signature: e.target.value })} />
           </label>
           <div className="flex justify-end gap-3">
-            <button onClick={() => setShowForm(false)} className="rounded-lg border border-gray-300 px-4 py-2 text-sm">Cancel</button>
+            <button onClick={closeForm} className="rounded-lg border border-gray-300 px-4 py-2 text-sm">Cancel</button>
             <button onClick={create} disabled={saving} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:bg-gray-400">
-              {saving ? 'Connecting…' : 'Connect'}
+              {saving ? 'Saving…' : editingId ? 'Save changes' : 'Connect'}
             </button>
           </div>
         </div>
@@ -201,6 +240,7 @@ export default function MailboxesAdminPage() {
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex justify-end gap-2">
+                    <button disabled={busyId === mb.id} onClick={() => startEdit(mb)} title="Edit" className="rounded-md bg-gray-100 px-2 py-1 text-xs text-gray-700 hover:bg-gray-200"><Pencil className="h-3.5 w-3.5" /></button>
                     <button disabled={busyId === mb.id} onClick={() => act(mb, 'test')} className="rounded-md bg-blue-50 px-2 py-1 text-xs text-blue-700 hover:bg-blue-100">Test</button>
                     <button disabled={busyId === mb.id || !mb.imap_host} onClick={() => act(mb, 'sync')} title="Fetch new mail now" className="rounded-md bg-gray-100 px-2 py-1 text-xs text-gray-700 hover:bg-gray-200"><RefreshCw className="h-3.5 w-3.5" /></button>
                     <button disabled={busyId === mb.id} onClick={() => act(mb, 'toggle')} title={mb.is_active ? 'Disable' : 'Enable'} className="rounded-md bg-amber-50 px-2 py-1 text-xs text-amber-700 hover:bg-amber-100"><Power className="h-3.5 w-3.5" /></button>
