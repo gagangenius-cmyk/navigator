@@ -76,6 +76,37 @@ export const ensureMailboxTables = async () => {
           INDEX idx_mailbox_lead (lead_id)
         )
       `);
+      // Enterprise upgrade: folders, stars, cc, attachments. Added with
+      // column-exists checks because the tables may already exist in production.
+      const addColumn = async (table: string, column: string, ddl: string) => {
+        const [row] = await sequelize.query<{ n: number }>(
+          'SELECT COUNT(*) AS n FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = :table AND column_name = :column',
+          { replacements: { table, column }, type: QueryTypes.SELECT },
+        );
+        if (Number(row.n) > 0) return false;
+        await sequelize.query(`ALTER TABLE ${table} ADD COLUMN ${column} ${ddl}`);
+        return true;
+      };
+      const folderAdded = await addColumn('crm_mailbox_messages', 'folder', "VARCHAR(16) NOT NULL DEFAULT 'inbox'");
+      if (folderAdded) {
+        await sequelize.query("UPDATE crm_mailbox_messages SET folder = 'sent' WHERE direction = 'out'");
+        await sequelize.query('ALTER TABLE crm_mailbox_messages ADD INDEX idx_mailbox_folder (mailbox_id, folder, message_date)');
+      }
+      await addColumn('crm_mailbox_messages', 'is_starred', 'TINYINT(1) NOT NULL DEFAULT 0');
+      await addColumn('crm_mailbox_messages', 'has_attachments', 'TINYINT(1) NOT NULL DEFAULT 0');
+      await addColumn('crm_mailbox_messages', 'cc_addresses', 'TEXT NULL');
+      await sequelize.query(`
+        CREATE TABLE IF NOT EXISTS crm_mailbox_attachments (
+          id BIGINT AUTO_INCREMENT PRIMARY KEY,
+          message_id BIGINT NOT NULL,
+          filename VARCHAR(255) NOT NULL,
+          content_type VARCHAR(150) NULL,
+          size INT NOT NULL DEFAULT 0,
+          data LONGBLOB NULL,
+          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          INDEX idx_mailbox_att_message (message_id)
+        )
+      `);
     })().catch((error) => {
       tablesReady = null;
       throw error;
@@ -83,6 +114,14 @@ export const ensureMailboxTables = async () => {
   }
   await tablesReady;
 };
+
+export const MAX_ATTACHMENT_BYTES = 4 * 1024 * 1024; // Vercel request-body ceiling is ~4.5MB
+const MAX_SYNC_ATTACHMENT_BYTES = 5 * 1024 * 1024;
+
+export const parseAddressList = (value: unknown): string[] =>
+  String(value || '').split(/[,;\s]+/).map((v) => v.trim().toLowerCase()).filter(Boolean);
+
+const EMAIL_RE = /^[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]+$/;
 
 export interface MailboxRow {
   id: number;
@@ -208,10 +247,23 @@ async function findLeadIdByEmail(address: string | null | undefined): Promise<nu
 
 const escapeHtml = (value: string) => value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
-export async function sendFromMailbox(mb: MailboxRow, input: { to: string; subject: string; body: string; inReplyTo?: string | null; leadId?: number | null }) {
+export interface OutgoingAttachment { filename: string; content: Buffer; contentType?: string }
+
+export async function sendFromMailbox(mb: MailboxRow, input: {
+  to: string; cc?: string; bcc?: string; subject: string; body: string;
+  inReplyTo?: string | null; leadId?: number | null; attachments?: OutgoingAttachment[];
+}) {
   if (!mb.is_active) throw new Error('This mailbox is disabled');
-  const to = input.to.trim();
-  if (!/^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+$/.test(to)) throw new Error('Enter a single valid recipient email address');
+  const toList = parseAddressList(input.to);
+  const ccList = parseAddressList(input.cc);
+  const bccList = parseAddressList(input.bcc);
+  const everyone = [...toList, ...ccList, ...bccList];
+  if (!toList.length) throw new Error('Add at least one recipient');
+  if (everyone.length > 25) throw new Error('Too many recipients (maximum 25)');
+  const bad = everyone.find((address) => !EMAIL_RE.test(address));
+  if (bad) throw new Error(`"${bad}" is not a valid email address`);
+  const attachments = input.attachments || [];
+  if (attachments.reduce((sum, a) => sum + a.content.length, 0) > MAX_ATTACHMENT_BYTES) throw new Error('Attachments are too large (4 MB total limit)');
 
   const [{ sentToday }] = await sequelize.query<{ sentToday: number }>(
     "SELECT COUNT(*) AS sentToday FROM crm_mailbox_messages WHERE mailbox_id = :id AND direction = 'out' AND status = 'ok' AND created_at >= CURDATE()",
@@ -222,29 +274,56 @@ export async function sendFromMailbox(mb: MailboxRow, input: { to: string; subje
   await assertPublicHost(mb.smtp_host);
   const text = mb.signature ? `${input.body}\n\n--\n${mb.signature}` : input.body;
   const html = `<div style="white-space:pre-wrap;font-family:Arial,sans-serif;font-size:14px">${escapeHtml(text)}</div>`;
-  const leadId = input.leadId ?? (await findLeadIdByEmail(to));
+  const leadId = input.leadId ?? (await findLeadIdByEmail(toList[0]));
+
+  // Keep a whole conversation under one thread key: a reply inherits the
+  // parent message's thread, not just the parent's own message-id.
+  let threadKey: string | null = input.inReplyTo || null;
+  if (input.inReplyTo) {
+    const [parent] = await sequelize.query<{ thread_key: string | null }>(
+      'SELECT thread_key FROM crm_mailbox_messages WHERE mailbox_id = :id AND message_id = :messageId LIMIT 1',
+      { replacements: { id: mb.id, messageId: input.inReplyTo }, type: QueryTypes.SELECT },
+    );
+    if (parent?.thread_key) threadKey = parent.thread_key;
+  }
 
   try {
     const info = await smtpTransport(mb).sendMail({
       from: mb.display_name ? { name: mb.display_name, address: mb.email } : mb.email,
-      to,
+      to: toList,
+      ...(ccList.length ? { cc: ccList } : {}),
+      ...(bccList.length ? { bcc: bccList } : {}),
       subject: input.subject,
       text,
       html,
+      attachments: attachments.map((a) => ({ filename: a.filename, content: a.content, contentType: a.contentType })),
       ...(input.inReplyTo ? { inReplyTo: input.inReplyTo, references: input.inReplyTo } : {}),
     });
-    await sequelize.query(
-      `INSERT INTO crm_mailbox_messages (mailbox_id, direction, message_id, in_reply_to, thread_key, from_address, from_name, to_addresses, subject, body_text, body_html, lead_id, is_read)
-       VALUES (:mailboxId, 'out', :messageId, :inReplyTo, :threadKey, :from, :fromName, :to, :subject, :text, :html, :leadId, 1)`,
-      { replacements: { mailboxId: mb.id, messageId: info.messageId || null, inReplyTo: input.inReplyTo || null, threadKey: input.inReplyTo || info.messageId || null, from: mb.email, fromName: mb.display_name, to, subject: input.subject.slice(0, 990), text, html, leadId } },
-    );
+    const [rowId] = await sequelize.query(
+      `INSERT INTO crm_mailbox_messages (mailbox_id, direction, folder, message_id, in_reply_to, thread_key, from_address, from_name, to_addresses, cc_addresses, subject, body_text, body_html, lead_id, is_read, has_attachments)
+       VALUES (:mailboxId, 'out', 'sent', :messageId, :inReplyTo, :threadKey, :from, :fromName, :to, :cc, :subject, :text, :html, :leadId, 1, :hasAttachments)`,
+      {
+        type: QueryTypes.INSERT,
+        replacements: {
+          mailboxId: mb.id, messageId: info.messageId || null, inReplyTo: input.inReplyTo || null, threadKey: threadKey || info.messageId || null,
+          from: mb.email, fromName: mb.display_name, to: toList.join(', '), cc: ccList.join(', ') || null,
+          subject: input.subject.slice(0, 990), text, html, leadId, hasAttachments: attachments.length ? 1 : 0,
+        },
+      },
+    ) as unknown as [number, number];
+    for (const a of attachments) {
+      await sequelize.query(
+        'INSERT INTO crm_mailbox_attachments (message_id, filename, content_type, size, data) VALUES (:messageId, :filename, :contentType, :size, :data)',
+        { replacements: { messageId: Number(rowId), filename: a.filename.slice(0, 250), contentType: a.contentType || null, size: a.content.length, data: a.content } },
+      );
+    }
     return { messageId: info.messageId };
   } catch (error) {
     const message = shortError(error);
     await sequelize.query(
-      `INSERT INTO crm_mailbox_messages (mailbox_id, direction, from_address, to_addresses, subject, body_text, lead_id, is_read, status, error)
-       VALUES (:mailboxId, 'out', :from, :to, :subject, :text, :leadId, 1, 'failed', :error)`,
-      { replacements: { mailboxId: mb.id, from: mb.email, to, subject: input.subject.slice(0, 990), text, leadId, error: message } },
+      `INSERT INTO crm_mailbox_messages (mailbox_id, direction, folder, from_address, to_addresses, cc_addresses, subject, body_text, lead_id, is_read, status, error)
+       VALUES (:mailboxId, 'out', 'sent', :from, :to, :cc, :subject, :text, :leadId, 1, 'failed', :error)`,
+      { replacements: { mailboxId: mb.id, from: mb.email, to: toList.join(', '), cc: ccList.join(', ') || null, subject: input.subject.slice(0, 990), text, leadId, error: message } },
     );
     await sequelize.query('UPDATE crm_employee_mailboxes SET last_error = :error WHERE id = :id', { replacements: { id: mb.id, error: `SMTP send: ${message}` } });
     throw new Error(message);
@@ -277,18 +356,32 @@ export async function syncMailbox(mb: MailboxRow, maxMessages = 50): Promise<{ f
         const inReplyTo = parsed.inReplyTo || null;
         const references = Array.isArray(parsed.references) ? parsed.references[0] : parsed.references;
         const leadId = await findLeadIdByEmail(from?.address);
-        await sequelize.query(
-          `INSERT IGNORE INTO crm_mailbox_messages (mailbox_id, direction, imap_uid, message_id, in_reply_to, thread_key, from_address, from_name, to_addresses, subject, body_text, body_html, lead_id, message_date)
-           VALUES (:mailboxId, 'in', :uid, :messageId, :inReplyTo, :threadKey, :from, :fromName, :to, :subject, :text, :html, :leadId, :date)`,
-          { replacements: {
-            mailboxId: mb.id, uid, messageId, inReplyTo,
-            threadKey: references || inReplyTo || messageId,
-            from: from?.address?.toLowerCase() || null, fromName: from?.name || null,
-            to: mb.email, subject: (parsed.subject || '(no subject)').slice(0, 990),
-            text: parsed.text || null, html: typeof parsed.html === 'string' ? parsed.html : null,
-            leadId, date: parsed.date || new Date(),
-          } },
-        );
+        const ccText = (Array.isArray(parsed.cc) ? parsed.cc : parsed.cc ? [parsed.cc] : [])
+          .flatMap((c) => c.value.map((v) => v.address)).filter(Boolean).join(', ') || null;
+        const files = (parsed.attachments || []).filter((a) => a.content && a.content.length <= MAX_SYNC_ATTACHMENT_BYTES);
+        const [insertedId, affected] = await sequelize.query(
+          `INSERT IGNORE INTO crm_mailbox_messages (mailbox_id, direction, folder, imap_uid, message_id, in_reply_to, thread_key, from_address, from_name, to_addresses, cc_addresses, subject, body_text, body_html, lead_id, has_attachments, message_date)
+           VALUES (:mailboxId, 'in', 'inbox', :uid, :messageId, :inReplyTo, :threadKey, :from, :fromName, :to, :cc, :subject, :text, :html, :leadId, :hasAttachments, :date)`,
+          {
+            type: QueryTypes.INSERT,
+            replacements: {
+              mailboxId: mb.id, uid, messageId, inReplyTo,
+              threadKey: references || inReplyTo || messageId,
+              from: from?.address?.toLowerCase() || null, fromName: from?.name || null,
+              to: mb.email, cc: ccText, subject: (parsed.subject || '(no subject)').slice(0, 990),
+              text: parsed.text || null, html: typeof parsed.html === 'string' ? parsed.html : null,
+              leadId, hasAttachments: files.length ? 1 : 0, date: parsed.date || new Date(),
+            },
+          },
+        ) as unknown as [number, number];
+        if (Number(affected) > 0) {
+          for (const file of files) {
+            await sequelize.query(
+              'INSERT INTO crm_mailbox_attachments (message_id, filename, content_type, size, data) VALUES (:messageId, :filename, :contentType, :size, :data)',
+              { replacements: { messageId: Number(insertedId), filename: (file.filename || 'attachment').slice(0, 250), contentType: file.contentType || null, size: file.content.length, data: file.content } },
+            );
+          }
+        }
         lastUid = uid;
         fetched += 1;
       }
