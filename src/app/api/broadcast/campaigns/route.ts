@@ -5,6 +5,7 @@ import { connectDB } from '@/lib/sequelize';
 import { CrmBroadcastCampaigns, CrmMessageTemplateVersions, CrmMessageTemplates, CrmContactSegments } from '@/models';
 import { canViewAllBranches, canAccessSegment } from '@/lib/roleChecks';
 import { variableMappingSchema } from '@/lib/broadcastVariableMapping';
+import { parseSenderSettings, setSenderSettings } from '@/lib/broadcastSender';
 
 const CAMPAIGN_PERMISSION = ['campaigns.manage'];
 
@@ -91,6 +92,7 @@ export async function POST(request: NextRequest) {
       createdBy: auth.id,
     });
 
+    await setSenderSettings(campaign.id, parseSenderSettings(body));
     return NextResponse.json({ success: true, campaign }, { status: 201 });
   } catch (error) {
     console.error('Failed to create broadcast campaign:', error);

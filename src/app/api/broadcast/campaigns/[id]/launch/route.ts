@@ -17,6 +17,9 @@ import { segmentAstToSequelizeWhere, type SegmentGroupNode } from '@/lib/broadca
 import { canAccessBranchScopedRecord, canAccessSegment } from '@/lib/roleChecks';
 import { checkTemplateApprovedForLaunch, computePublishedConfigHash, isRecipientEligible } from '@/lib/broadcastPreflight';
 import { resolveRecipientAddress, resolveVariableMapping, type VariableMapping } from '@/lib/broadcastVariableMapping';
+import { purposeForCategory } from '@/lib/broadcastPurpose';
+import { resolveContextForLeads } from '@/lib/broadcastContext';
+import { getSenderSettings } from '@/lib/broadcastSender';
 import { recipientIdempotencyKey, suppressionAddressHash } from '@/lib/broadcastDedupeKeys';
 
 const CAMPAIGN_PERMISSION = ['campaigns.manage'];
@@ -83,6 +86,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       attributes: ['id', 'fname', 'lname', 'email', 'mobile', 'whatsapp_number'],
     });
 
+    const purpose = purposeForCategory(template.category);
+    const senderSettings = await getSenderSettings(campaign.id);
+    if (senderSettings.mode === 'owner_mailbox' && (purpose !== 'transactional' || template.channel !== 'email')) {
+      return NextResponse.json({ success: false, error: "Sending from counselors' own mailboxes is only allowed for email templates in a service category (Appointment, Follow-up, Payment reminder, Service update)." }, { status: 422 });
+    }
+    const contextByLead = await resolveContextForLeads(leads.map((l) => l.id));
+
     const isScheduledForLater = Boolean(campaign.scheduledAtUtc && campaign.scheduledAtUtc.getTime() > Date.now());
     const initialRecipientStatus: 'pending' | 'queued' = isScheduledForLater ? 'pending' : 'queued';
     const mapping = (campaign.variableMapping as VariableMapping | null) ?? {};
@@ -103,11 +113,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       const addressHash = suppressionAddressHash(address);
       const [isSuppressed, consent] = await Promise.all([
         CrmMessageSuppressions.findOne({ where: { channel: template.channel, addressHash } }),
-        CrmContactChannelConsents.findOne({ where: { leadId: lead.id, channel: template.channel, purpose: 'marketing' } }),
+        CrmContactChannelConsents.findOne({ where: { leadId: lead.id, channel: template.channel, purpose } }),
       ]);
 
       const eligibility = isRecipientEligible({
-        purpose: 'marketing',
+        purpose,
         consentState: consent?.consentState ?? 'unknown',
         isSuppressed: Boolean(isSuppressed),
       });
@@ -125,7 +135,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         channel: template.channel,
         addressSnapshot: address,
         templateVersionId: version.id,
-        renderedVariables: resolveVariableMapping(mapping, lead),
+        renderedVariables: resolveVariableMapping(mapping, lead, contextByLead.get(lead.id)),
         status: initialRecipientStatus,
         idempotencyKey: recipientIdempotencyKey(campaign.id, lead.id, template.channel),
       });

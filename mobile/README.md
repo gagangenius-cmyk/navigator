@@ -102,6 +102,14 @@ npm start                                              # expo start --dev-client
 iOS needs an Apple Developer account and a registered device (`eas device:create`), then
 `eas build --profile development --platform ios`.
 
+**iOS checklist (cannot be built on Windows - it runs in Expo's cloud via EAS Build):**
+1. `eas login`, then `eas init --account <your-expo-account>` once (links this app to an EAS project and writes its id).
+2. Apple Developer Program membership (paid). `eas build --profile preview --platform ios` prompts for your Apple ID
+   and creates the certificate and provisioning profile for bundle id `com.globalnavigator.crm`.
+3. Internal (ad hoc) installs need each iPhone registered first: `eas device:create` and open the link on the phone.
+4. For the App Store / TestFlight use `--profile production`, then `eas submit --platform ios`.
+5. Push on iOS additionally needs the APNs key in section 4.
+
 ## 4. Push notifications (needs your credentials)
 
 Push cannot work until these exist. None of them are in the repo.

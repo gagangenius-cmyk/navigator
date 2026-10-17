@@ -9,7 +9,8 @@ import {
   CrmMessageSuppressions,
   CrmContactChannelConsents,
 } from '@/models';
-import { sendEmail } from './mailer';
+import { sendCampaignEmail, getSenderSettings, MailboxThrottledError, type SenderSettings } from './broadcastSender';
+import { purposeForCategory } from './broadcastPurpose';
 import { sendSmsMessage } from './sms';
 import { renderTemplateText, renderTemplateHtml, MissingTemplateVariablesError } from './broadcastTemplateRender';
 import { isRecipientEligible } from './broadcastPreflight';
@@ -104,14 +105,14 @@ async function dispatchToProvider(
   address: string,
   version: { components: unknown; exportHtml: string | null },
   values: Record<string, string>,
-  context: { actorId: null; leadId: number | null }
+  context: { actorId: null; leadId: number | null },
+  sender: SenderSettings
 ): Promise<{ providerMessageId: string | null }> {
   if (channel === 'email') {
     const email = version.components as EmailTemplateComponents;
     const subject = renderTemplateText(email.subject, values);
     const html = version.exportHtml ? renderTemplateHtml(version.exportHtml, values) : subject;
-    const result = await sendEmail({ to: address, subject, html, text: subject });
-    return { providerMessageId: (result as { id?: string })?.id ?? null };
+    return sendCampaignEmail({ settings: sender, leadId: context.leadId, to: address, subject, html });
   }
 
   if (channel === 'sms') {
@@ -181,15 +182,22 @@ export async function processBroadcastRecipient(recipientId: number): Promise<Br
   // Re-check suppression/consent immediately before sending too - both
   // could have changed (a reply, an unsubscribe click, a manual
   // suppression) in the time between launch-time snapshot and this send.
+  const version = await CrmMessageTemplateVersions.findByPk(recipient.templateVersionId);
+  const template = version ? await CrmMessageTemplates.findByPk(version.templateId) : null;
+  // Appointment / follow-up / payment-reminder templates are service
+  // messages (opt-out respected, no marketing opt-in required) - see
+  // broadcastPurpose.ts. Same rule the launch step applied.
+  const purpose = purposeForCategory(template?.category);
+
   const addressHash = suppressionAddressHash(recipient.addressSnapshot);
   const [isSuppressed, consent] = await Promise.all([
     CrmMessageSuppressions.findOne({ where: { channel: recipient.channel, addressHash } }),
     recipient.leadId
-      ? CrmContactChannelConsents.findOne({ where: { leadId: recipient.leadId, channel: recipient.channel, purpose: 'marketing' } })
+      ? CrmContactChannelConsents.findOne({ where: { leadId: recipient.leadId, channel: recipient.channel, purpose } })
       : Promise.resolve(null),
   ]);
   const eligibility = isRecipientEligible({
-    purpose: 'marketing',
+    purpose,
     consentState: consent?.consentState ?? 'unknown',
     isSuppressed: Boolean(isSuppressed),
   });
@@ -200,17 +208,20 @@ export async function processBroadcastRecipient(recipientId: number): Promise<Br
     return 'skipped';
   }
 
-  const version = await CrmMessageTemplateVersions.findByPk(recipient.templateVersionId);
-  const template = version ? await CrmMessageTemplates.findByPk(version.templateId) : null;
-
   try {
     if (!version || !template) throw new Error('Template version no longer exists');
+    // Counselor-mailbox sending is only ever honored for service messages;
+    // marketing always uses the company sender whatever the setting says.
+    const senderSettings: SenderSettings = purpose === 'transactional'
+      ? await getSenderSettings(recipient.campaignId)
+      : { mode: 'company', fallback: 'company' };
     const { providerMessageId } = await dispatchToProvider(
       recipient.channel,
       recipient.addressSnapshot,
       { components: version.components, exportHtml: version.exportHtml },
       (recipient.renderedVariables as Record<string, string> | null) ?? {},
-      { actorId: null, leadId: recipient.leadId }
+      { actorId: null, leadId: recipient.leadId },
+      senderSettings
     );
 
     await recipient.update({
@@ -229,6 +240,13 @@ export async function processBroadcastRecipient(recipientId: number): Promise<Br
     await maybeCompleteCampaign(recipient.campaignId);
     return 'sent';
   } catch (error) {
+    if (error instanceof MailboxThrottledError) {
+      // Temporary: keep the recipient queued and look at it again later.
+      await recipient.update({ claimedAt: null, claimedBy: null });
+      const { enqueueBroadcastRecipient } = await import('./queues/broadcastQueue');
+      await enqueueBroadcastRecipient(recipient.id, RATE_LIMIT_RETRY_DELAY_MS);
+      return 'not_due';
+    }
     const message = error instanceof MissingTemplateVariablesError ? error.message : (error instanceof Error ? error.message : String(error));
     await recipient.update({
       status: 'failed',

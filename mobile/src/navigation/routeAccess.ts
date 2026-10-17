@@ -23,6 +23,12 @@ interface AccessRule {
 
 export const ROUTE_ACCESS: Partial<Record<RouteName, AccessRule>> = {
   Leads: { permissions: ['leads.view'] },
+  // Same gate as the web module: counselors / CRO / anyone who works leads. The server
+  // additionally requires a mailbox to be connected to the user's account by the CEO.
+  Mail: { permissions: ['leads.view'] },
+  MailInbox: { permissions: ['leads.view'] },
+  MailThread: { permissions: ['leads.view'] },
+  MailCompose: { permissions: ['leads.view'] },
   LeadDetail: { permissions: ['leads.view'] },
   LeadForm: { permissions: ['leads.create', 'leads.update'] },
   LeadPool: { permissions: ['leads.view'] },

@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select-simple';
 import { EmailTemplateEditor, type EmailTemplateSaveResult } from '@/components/broadcast/EmailTemplateEditor';
 import { estimateSmsSegments } from '@/lib/broadcastTemplateRender';
+import { TEMPLATE_CATEGORIES } from '@/lib/broadcastPurpose';
 
 type Channel = 'email' | 'whatsapp' | 'sms';
 
@@ -15,6 +16,7 @@ interface TemplateDetail {
   id: number;
   channel: Channel;
   name: string;
+  category?: string | null;
   status: string;
   currentDraftVersionId: number | null;
   currentPublishedVersionId: number | null;
@@ -38,6 +40,7 @@ export default function TemplateEditorPage() {
   const [template, setTemplate] = useState<TemplateDetail | null>(null);
   const [versions, setVersions] = useState<TemplateVersion[]>([]);
   const [name, setName] = useState('');
+  const [category, setCategory] = useState('marketing');
   const [channel, setChannel] = useState<Channel | null>(isNew ? null : null);
   const [whatsappBody, setWhatsappBody] = useState('');
   const [whatsappFooter, setWhatsappFooter] = useState('');
@@ -64,6 +67,7 @@ export default function TemplateEditorPage() {
         setTemplate(data.template);
         setVersions(data.versions);
         setName(data.template.name);
+        setCategory(data.template.category || 'marketing');
         setChannel(data.template.channel);
         const latest = data.versions.find((v: TemplateVersion) => v.id === data.template.currentDraftVersionId) ?? data.versions[0];
         if (latest?.channel === 'whatsapp') {
@@ -92,7 +96,7 @@ export default function TemplateEditorPage() {
         const res = await fetch('/api/broadcast/templates', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ channel, name, components, ...extra }),
+          body: JSON.stringify({ channel, name, category, components, ...extra }),
         });
         const data = await res.json();
         if (!res.ok || !data.success) throw new Error(data.error || 'Failed to create template');
@@ -157,6 +161,25 @@ export default function TemplateEditorPage() {
             <label className="flex flex-1 flex-col gap-1 text-sm font-medium">
               Name
               <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Welcome Email" />
+            </label>
+            <label className="flex w-56 flex-col gap-1 text-sm font-medium">
+              Type
+              <Select
+                value={category}
+                onValueChange={async (value) => {
+                  setCategory(value);
+                  if (template) {
+                    const res = await fetch(`/api/broadcast/templates/${template.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ category: value }) });
+                    if (res.ok) setNotice('Template type updated');
+                    else setError('Failed to update template type');
+                  }
+                }}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {TEMPLATE_CATEGORIES.map((c) => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
             </label>
             <label className="flex w-48 flex-col gap-1 text-sm font-medium">
               Channel

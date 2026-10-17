@@ -96,6 +96,8 @@ export const ensureMailboxTables = async () => {
       await addColumn('crm_mailbox_messages', 'has_attachments', 'TINYINT(1) NOT NULL DEFAULT 0');
       await addColumn('crm_mailbox_messages', 'cc_addresses', 'TEXT NULL');
       await addColumn('crm_mailbox_messages', 'trashed_at', 'DATETIME NULL');
+      // 'manual' = typed by the counselor, 'broadcast' = campaign send on their behalf.
+      await addColumn('crm_mailbox_messages', 'source', "VARCHAR(12) NOT NULL DEFAULT 'manual'");
       // Off by default: Gmail / Microsoft 365 already keep their own copy of
       // anything sent over SMTP, so appending would create duplicates.
       await addColumn('crm_employee_mailboxes', 'save_to_sent', 'TINYINT(1) NOT NULL DEFAULT 0');
@@ -276,6 +278,9 @@ export interface OutgoingAttachment { filename: string; content: Buffer; content
 export async function sendFromMailbox(mb: MailboxRow, input: {
   to: string; cc?: string; bcc?: string; subject: string; body: string;
   inReplyTo?: string | null; leadId?: number | null; attachments?: OutgoingAttachment[];
+  // Campaign sends: caller supplies the rendered HTML and is subject to the
+  // separate broadcast cap instead of the counselor's personal daily limit.
+  html?: string; source?: 'manual' | 'broadcast';
 }) {
   if (!mb.is_active) throw new Error('This mailbox is disabled');
   const toList = parseAddressList(input.to);
@@ -289,15 +294,20 @@ export async function sendFromMailbox(mb: MailboxRow, input: {
   const attachments = input.attachments || [];
   if (attachments.reduce((sum, a) => sum + a.content.length, 0) > MAX_ATTACHMENT_BYTES) throw new Error('Attachments are too large (4 MB total limit)');
 
-  const [{ sentToday }] = await sequelize.query<{ sentToday: number }>(
-    "SELECT COUNT(*) AS sentToday FROM crm_mailbox_messages WHERE mailbox_id = :id AND direction = 'out' AND status = 'ok' AND created_at >= CURDATE()",
-    { replacements: { id: mb.id }, type: QueryTypes.SELECT },
-  );
-  if (Number(sentToday) >= mb.daily_limit) throw new Error(`Daily send limit of ${mb.daily_limit} reached for this mailbox`);
+  const source = input.source || 'manual';
+  if (source === 'manual') {
+    const [{ sentToday }] = await sequelize.query<{ sentToday: number }>(
+      "SELECT COUNT(*) AS sentToday FROM crm_mailbox_messages WHERE mailbox_id = :id AND direction = 'out' AND status = 'ok' AND source = 'manual' AND created_at >= CURDATE()",
+      { replacements: { id: mb.id }, type: QueryTypes.SELECT },
+    );
+    if (Number(sentToday) >= mb.daily_limit) throw new Error(`Daily send limit of ${mb.daily_limit} reached for this mailbox`);
+  }
 
   await assertPublicHost(mb.smtp_host);
   const text = mb.signature ? `${input.body}\n\n--\n${mb.signature}` : input.body;
-  const html = `<div style="white-space:pre-wrap;font-family:Arial,sans-serif;font-size:14px">${escapeHtml(text)}</div>`;
+  const html = input.html
+    ? (mb.signature ? `${input.html}<p style="font-family:Arial,sans-serif;font-size:13px;color:#555;white-space:pre-wrap">-- <br>${escapeHtml(mb.signature)}</p>` : input.html)
+    : `<div style="white-space:pre-wrap;font-family:Arial,sans-serif;font-size:14px">${escapeHtml(text)}</div>`;
   const leadId = input.leadId ?? (await findLeadIdByEmail(toList[0]));
 
   // Keep a whole conversation under one thread key: a reply inherits the
@@ -332,14 +342,14 @@ export async function sendFromMailbox(mb: MailboxRow, input: {
       });
     }
     const [rowId] = await sequelize.query(
-      `INSERT INTO crm_mailbox_messages (mailbox_id, direction, folder, message_id, in_reply_to, thread_key, from_address, from_name, to_addresses, cc_addresses, subject, body_text, body_html, lead_id, is_read, has_attachments)
-       VALUES (:mailboxId, 'out', 'sent', :messageId, :inReplyTo, :threadKey, :from, :fromName, :to, :cc, :subject, :text, :html, :leadId, 1, :hasAttachments)`,
+      `INSERT INTO crm_mailbox_messages (mailbox_id, direction, folder, message_id, in_reply_to, thread_key, from_address, from_name, to_addresses, cc_addresses, subject, body_text, body_html, lead_id, is_read, has_attachments, source)
+       VALUES (:mailboxId, 'out', 'sent', :messageId, :inReplyTo, :threadKey, :from, :fromName, :to, :cc, :subject, :text, :html, :leadId, 1, :hasAttachments, :source)`,
       {
         type: QueryTypes.INSERT,
         replacements: {
           mailboxId: mb.id, messageId: info.messageId || null, inReplyTo: input.inReplyTo || null, threadKey: threadKey || info.messageId || null,
           from: mb.email, fromName: mb.display_name, to: toList.join(', '), cc: ccList.join(', ') || null,
-          subject: input.subject.slice(0, 990), text, html, leadId, hasAttachments: attachments.length ? 1 : 0,
+          subject: input.subject.slice(0, 990), text, html, leadId, hasAttachments: attachments.length ? 1 : 0, source,
         },
       },
     ) as unknown as [number, number];
@@ -445,6 +455,30 @@ export async function purgeOldTrash(days = Number(process.env.MAIL_TRASH_RETENTI
     await sequelize.query('DELETE FROM crm_mailbox_messages WHERE id IN (:ids)', { replacements: { ids } });
   }
   return { purged: ids.length, retentionDays: days };
+}
+
+// Today's campaign sends from this mailbox, against the broadcast-only cap
+// (MAIL_BROADCAST_DAILY_LIMIT, default 150 per mailbox). Kept apart from the
+// counselor's personal daily limit so a campaign can neither lock them out of
+// their own inbox nor be blocked by their normal sending.
+export async function broadcastSentToday(mailboxId: number) {
+  const [row] = await sequelize.query<{ n: number }>(
+    "SELECT COUNT(*) AS n FROM crm_mailbox_messages WHERE mailbox_id = :mailboxId AND direction = 'out' AND status = 'ok' AND source = 'broadcast' AND created_at >= CURDATE()",
+    { replacements: { mailboxId }, type: QueryTypes.SELECT },
+  );
+  return Number(row?.n || 0);
+}
+export const broadcastDailyLimit = () => Number(process.env.MAIL_BROADCAST_DAILY_LIMIT) || 150;
+
+export async function getMailboxForLeadOwner(leadId: number): Promise<MailboxRow | null> {
+  await ensureMailboxTables();
+  const [row] = await sequelize.query<MailboxRow>(
+    `SELECT m.* FROM crm_forum_leads l
+     JOIN crm_employee_mailboxes m ON m.employee_id = COALESCE(NULLIF(l.Counsilor, 0), l.assignTo)
+     WHERE l.id = :leadId AND m.is_active = 1 LIMIT 1`,
+    { replacements: { leadId }, type: QueryTypes.SELECT },
+  );
+  return row || null;
 }
 
 export async function syncAllMailboxes() {

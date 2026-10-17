@@ -3,6 +3,8 @@ import { useApprovalCounts } from '@/features/approvals/hooks';
 import { ApprovalDashboardScreen } from '@/features/approvals/screens/ApprovalDashboardScreen';
 import { DashboardScreen } from '@/features/dashboard/screens/DashboardScreen';
 import { LeadsTabScreen } from '@/features/leads/screens/LeadListScreen';
+import { useMailUnread } from '@/features/mail/hooks';
+import { MailScreen } from '@/features/mail/screens/MailScreen';
 import { useAppBadge, useUnreadCount } from '@/features/notifications/hooks';
 import { NotificationsScreen } from '@/features/notifications/screens/NotificationsScreen';
 import { MoreScreen } from '@/features/profile/screens/MoreScreen';
@@ -19,12 +21,14 @@ const ICONS: Record<keyof TabParamList, [IconName, IconName]> = {
   Home: ['home', 'home-outline'],
   Leads: ['people', 'people-outline'],
   Approvals: ['shield-checkmark', 'shield-checkmark-outline'],
+  Mail: ['mail', 'mail-outline'],
   Notifications: ['notifications', 'notifications-outline'],
   More: ['menu', 'menu-outline'],
 };
 
 const GuardedLeads = withAccess('Leads', LeadsTabScreen);
 const GuardedApprovals = withAccess('Approvals', ApprovalDashboardScreen);
+const GuardedMail = withAccess('Mail', MailScreen);
 
 /** The bottom tab bar. Tabs are derived from the user's permissions, so nobody sees a tab they cannot use. */
 export function AppTabs() {
@@ -32,6 +36,10 @@ export function AppTabs() {
   const { colors } = useTheme();
   const unread = useUnreadCount();
   const approvals = useApprovalCounts();
+  const mailUnread = useMailUnread();
+  // Counselors / CRO get Mail as a tab; approvers (CEO, branch managers) already have five
+  // tabs, so for them it lives under More > Work instead of crowding the bar.
+  const showMailTab = canAccess('Mail', user) && !canAccess('Approvals', user);
   useAppBadge();
 
   return (
@@ -52,6 +60,7 @@ export function AppTabs() {
       {canAccess('Approvals', user) ? (
         <Tab.Screen name="Approvals" component={GuardedApprovals} options={{ title: 'Approvals', tabBarBadge: approvals.total || undefined }} />
       ) : null}
+      {showMailTab ? <Tab.Screen name="Mail" component={GuardedMail} options={{ title: 'Mail', tabBarBadge: mailUnread || undefined }} /> : null}
       <Tab.Screen name="Notifications" component={NotificationsScreen} options={{ title: 'Alerts', tabBarBadge: unread || undefined }} />
       <Tab.Screen name="More" component={MoreScreen} options={{ title: 'More' }} />
     </Tab.Navigator>

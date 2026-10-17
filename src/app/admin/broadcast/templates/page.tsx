@@ -4,11 +4,13 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { TEMPLATE_CATEGORIES } from '@/lib/broadcastPurpose';
 
 interface TemplateRow {
   id: number;
   channel: 'email' | 'whatsapp' | 'sms';
   name: string;
+  category?: string | null;
   status: 'draft' | 'pending_review' | 'approved' | 'rejected' | 'archived';
   language: string;
   updatedAt: string;
@@ -27,6 +29,25 @@ export default function TemplateLibraryPage() {
   const [templates, setTemplates] = useState<TemplateRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [installing, setInstalling] = useState(false);
+
+  async function installStarters() {
+    setInstalling(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/broadcast/templates/starters', { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error || 'Failed to install starter templates');
+      setNotice(`${data.created.length} template(s) installed, ${data.skipped.length} already existed.`);
+      const list = await (await fetch('/api/broadcast/templates')).json();
+      if (list.success) setTemplates(list.templates);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to install starter templates');
+    } finally {
+      setInstalling(false);
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -52,9 +73,12 @@ export default function TemplateLibraryPage() {
           <h1 className="text-2xl font-semibold text-[var(--cmg-ink)]">Template Library</h1>
           <p className="text-sm text-[var(--cmg-muted)]">Email, WhatsApp, and SMS message templates for broadcast campaigns.</p>
         </div>
-        <Link href="/admin/broadcast/templates/new">
-          <Button>New template</Button>
-        </Link>
+        <div className="flex gap-2">
+          <Button variant="outline" disabled={installing} onClick={installStarters}>{installing ? 'Installing…' : 'Install appointment & follow-up templates'}</Button>
+          <Link href="/admin/broadcast/templates/new">
+            <Button>New template</Button>
+          </Link>
+        </div>
       </div>
 
       <Card>
@@ -64,6 +88,7 @@ export default function TemplateLibraryPage() {
         <CardContent>
           {loading && <p className="text-sm text-[var(--cmg-muted)]">Loading…</p>}
           {error && <p className="text-sm text-[var(--cmg-red)]">{error}</p>}
+          {notice && <p className="text-sm text-green-700">{notice}</p>}
           {!loading && !error && templates.length === 0 && (
             <p className="text-sm text-[var(--cmg-muted)]">No templates yet. Create your first one to get started.</p>
           )}
@@ -72,6 +97,7 @@ export default function TemplateLibraryPage() {
               <thead>
                 <tr className="border-b border-[var(--cmg-border)] text-left text-[var(--cmg-muted)]">
                   <th className="py-2 pr-4 font-medium">Name</th>
+                  <th className="py-2 pr-4 font-medium">Type</th>
                   <th className="py-2 pr-4 font-medium">Channel</th>
                   <th className="py-2 pr-4 font-medium">Language</th>
                   <th className="py-2 pr-4 font-medium">Status</th>
@@ -86,6 +112,7 @@ export default function TemplateLibraryPage() {
                         {template.name}
                       </Link>
                     </td>
+                    <td className="py-2 pr-4">{TEMPLATE_CATEGORIES.find((c) => c.value === template.category)?.label ?? 'Marketing / promotion'}</td>
                     <td className="py-2 pr-4">{CHANNEL_LABEL[template.channel]}</td>
                     <td className="py-2 pr-4">{template.language}</td>
                     <td className="py-2 pr-4">

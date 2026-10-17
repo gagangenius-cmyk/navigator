@@ -15,6 +15,15 @@ describe('canAccess (route-level RBAC)', () => {
     expect(canAccess('ConfirmDecision', counselor)).toBe(false);
   });
 
+  it('gives Mail to anyone who works leads (counselors, CRO, CEO) and keeps it from HR / Accounts', () => {
+    for (const route of ['Mail', 'MailInbox', 'MailThread', 'MailCompose'] as const) {
+      expect(canAccess(route, counselor)).toBe(true);
+      expect(canAccess(route, ceo)).toBe(true);
+      expect(canAccess(route, hr)).toBe(false);
+      expect(canAccess(route, accounts)).toBe(false);
+    }
+  });
+
   it('keeps leads away from roles without leads.view', () => {
     expect(canAccess('Leads', accounts)).toBe(false);
     expect(canAccess('LeadDetail', hr)).toBe(false);

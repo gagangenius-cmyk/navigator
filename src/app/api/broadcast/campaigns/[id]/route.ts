@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getSenderSettings, parseSenderSettings, setSenderSettings } from '@/lib/broadcastSender';
 import { requireAuth, isAuthError } from '@/lib/apiAuth';
 import { connectDB } from '@/lib/sequelize';
 import { CrmBroadcastCampaigns, CrmBroadcastRecipients, CrmContactSegments, sequelize } from '@/models';
@@ -35,6 +36,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       success: true,
       campaign,
       recipientCounts: Object.fromEntries(statusCounts.map((row) => [row.status, Number(row.count)])),
+      sender: await getSenderSettings(campaign.id),
     });
   } catch (error) {
     console.error('Failed to fetch broadcast campaign:', error);
@@ -74,6 +76,9 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     if (body.scheduledTimezone !== undefined) updates.scheduledTimezone = body.scheduledTimezone;
 
     await campaign.update(updates);
+    if (body.senderMode !== undefined || body.senderFallback !== undefined) {
+      await setSenderSettings(campaign.id, parseSenderSettings(body));
+    }
     return NextResponse.json({ success: true, campaign });
   } catch (error) {
     console.error('Failed to update broadcast campaign:', error);

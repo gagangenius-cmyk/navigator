@@ -10,6 +10,7 @@ export type TabParamList = {
   Home: undefined;
   Leads: undefined;
   Approvals: { segment?: ApprovalSegment; highlightId?: string } | undefined;
+  Mail: undefined;
   Notifications: undefined;
   More: undefined;
 };
@@ -18,6 +19,9 @@ export type AppStackParamList = {
   Tabs: NavigatorScreenParams<TabParamList> | undefined;
   LeadDetail: { leadId: number };
   LeadForm: { leadId?: number } | undefined;
+  MailInbox: undefined;
+  MailThread: { messageId: number };
+  MailCompose: { draft?: import('@/features/mail/types').ComposeDraft } | undefined;
   FollowUps: undefined;
   Appointments: undefined;
   LeadPool: undefined;

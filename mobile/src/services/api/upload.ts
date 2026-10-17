@@ -18,18 +18,30 @@ export interface PickedFile {
  * Content-Type (with the multipart boundary), and uploads need a longer timeout than a
  * normal API call.
  */
-export async function uploadFile<T = unknown>(
+export function uploadFile<T = unknown>(
   path: string,
   file: PickedFile,
   fields: Record<string, string> = {},
   fieldName = 'file',
+): Promise<T> {
+  return uploadFiles<T>(path, [file], fields, fieldName);
+}
+
+/** Same as uploadFile() but with any number of files under one field name (e.g. email attachments). */
+export async function uploadFiles<T = unknown>(
+  path: string,
+  files: PickedFile[],
+  fields: Record<string, string> = {},
+  fieldName = 'files',
 ): Promise<T> {
   await ensureFreshAccessToken();
 
   const form = new FormData();
   // React Native's fetch/FormData accepts this {uri, name, type} shape in place of a
   // real File/Blob - it streams the file from disk rather than reading it into JS memory.
-  form.append(fieldName, { uri: file.uri, name: file.name, type: file.type || 'application/octet-stream' } as unknown as Blob);
+  for (const file of files) {
+    form.append(fieldName, { uri: file.uri, name: file.name, type: file.type || 'application/octet-stream' } as unknown as Blob);
+  }
   for (const [key, value] of Object.entries(fields)) form.append(key, value);
 
   const controller = new AbortController();

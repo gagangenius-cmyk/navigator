@@ -8,6 +8,9 @@ import { PayslipsScreen } from '@/features/hr/screens/PayslipsScreen';
 import { TeamAttendanceScreen } from '@/features/hr/screens/TeamAttendanceScreen';
 import { ItTicketsScreen } from '@/features/it-support/screens/ItTicketsScreen';
 import { AppointmentsScreen } from '@/features/leads/screens/AppointmentsScreen';
+import { MailComposeScreen } from '@/features/mail/screens/MailComposeScreen';
+import { MailScreen } from '@/features/mail/screens/MailScreen';
+import { MailThreadScreen } from '@/features/mail/screens/MailThreadScreen';
 import { FollowUpsScreen } from '@/features/leads/screens/FollowUpsScreen';
 import { LeadDetailScreen } from '@/features/leads/screens/LeadDetailScreen';
 import { LeadFormScreen } from '@/features/leads/screens/LeadFormScreen';
@@ -28,6 +31,9 @@ const Stack = createNativeStackNavigator<AppStackParamList>();
 const Screens = {
   LeadDetail: withAccess('LeadDetail', LeadDetailScreen),
   LeadForm: withAccess('LeadForm', LeadFormScreen),
+  MailInbox: withAccess('MailInbox', MailScreen),
+  MailThread: withAccess('MailThread', MailThreadScreen),
+  MailCompose: withAccess('MailCompose', MailComposeScreen),
   FollowUps: withAccess('FollowUps', FollowUpsScreen),
   Appointments: withAccess('Appointments', AppointmentsScreen),
   LeadPool: withAccess('LeadPool', LeadPoolScreen),
@@ -56,6 +62,9 @@ export function AppStack() {
       <Stack.Screen name="Tabs" component={AppTabs} options={{ headerShown: false }} />
       <Stack.Screen name="LeadDetail" component={Screens.LeadDetail} options={{ title: 'Lead' }} />
       <Stack.Screen name="LeadForm" component={Screens.LeadForm} options={({ route }) => ({ title: route.params?.leadId ? 'Edit lead' : 'New lead' })} />
+      <Stack.Screen name="MailInbox" component={Screens.MailInbox} options={{ title: 'Mail' }} />
+      <Stack.Screen name="MailThread" component={Screens.MailThread} options={{ title: 'Conversation' }} />
+      <Stack.Screen name="MailCompose" component={Screens.MailCompose} options={{ title: 'New message', presentation: 'modal' }} />
       <Stack.Screen name="FollowUps" component={Screens.FollowUps} options={{ title: 'Follow-ups' }} />
       <Stack.Screen name="Appointments" component={Screens.Appointments} options={{ title: 'Appointments' }} />
       <Stack.Screen name="LeadPool" component={Screens.LeadPool} options={{ title: 'Lead pool' }} />

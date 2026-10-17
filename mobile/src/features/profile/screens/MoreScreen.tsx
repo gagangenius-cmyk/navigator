@@ -18,6 +18,7 @@ const SECTIONS: { title: string; items: MenuItem[] }[] = [
   {
     title: 'Work',
     items: [
+      { route: 'MailInbox', access: 'MailInbox', icon: 'mail', title: 'Mail', subtitle: 'Your email inbox, sent and replies' },
       { route: 'FollowUps', access: 'FollowUps', icon: 'alarm', title: 'Follow-ups', subtitle: 'Calls and tasks you scheduled' },
       { route: 'Appointments', access: 'Appointments', icon: 'calendar', title: 'Appointments', subtitle: 'Client meetings' },
       { route: 'LeadPool', access: 'LeadPool', icon: 'water', title: 'Lead pool', subtitle: 'Unassigned leads waiting for an owner' },

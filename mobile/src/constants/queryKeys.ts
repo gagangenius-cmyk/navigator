@@ -22,6 +22,11 @@ export const queryKeys = {
   approvalSummary: ['approvals', 'summary'] as const,
   balances: ['balances'] as const,
 
+  mail: ['mail'] as const,
+  mailList: (folder: string, search: string, unreadOnly: boolean) => ['mail', 'list', folder, search, unreadOnly] as const,
+  mailThread: (id: number) => ['mail', 'thread', id] as const,
+  mailUnread: ['mail', 'unread'] as const,
+
   notifications: ['notifications'] as const,
   followUps: (filter: string) => ['follow-ups', filter] as const,
   appointments: (filter: string) => ['appointments', filter] as const,
