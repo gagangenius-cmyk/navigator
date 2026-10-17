@@ -188,6 +188,61 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // Per-opportunity ledger: a client can settle an opportunity in any number
+    // of receipts, so each row is annotated with its position in that series
+    // (installmentNo of installmentCount, rejected receipts excluded) and the
+    // opportunity's LIVE total/paid/balance - a row's own remainingBalance is
+    // only a snapshot from the moment that receipt was made. isLatest marks the
+    // one receipt per opportunity the UI should hang "Collect Balance" on.
+    const ledgerByPayment: Record<number, { installmentNo: number | null; installmentCount: number; isLatest: boolean }> = {};
+    const liveByOpportunity: Record<number, { total: number; paid: number; balance: number }> = {};
+    if (opportunityIds.length) {
+      const [seriesRows, liveRows] = await Promise.all([
+        sequelize.query<{ id: number; opportunityId: number; accountantStatus: string | null }>(
+          `SELECT id, opportunityId, accountantStatus
+           FROM crm_opportunity_payments
+           WHERE opportunityId IN (:opportunityIds)
+           ORDER BY createdAt ASC, id ASC`,
+          { replacements: { opportunityIds }, type: QueryTypes.SELECT },
+        ),
+        sequelize.query<{ opportunityId: number; payTotal: string | null; paidYet: string | null; payBalance: string | null }>(
+          `SELECT o.id AS opportunityId,
+                  COALESCE(ct.pay_total, l.payTotal) AS payTotal,
+                  COALESCE(ct.paid_yet, l.paidYet) AS paidYet,
+                  COALESCE(ct.pay_balance, l.payBalance) AS payBalance
+           FROM crm_opportunities o
+           LEFT JOIN crm_forum_leads l ON l.id = o.leadId
+           LEFT JOIN crm_contracts ct ON ct.opportunity_id = o.id AND ct.is_deleted = 0
+           WHERE o.id IN (:opportunityIds)`,
+          { replacements: { opportunityIds }, type: QueryTypes.SELECT },
+        ),
+      ]);
+      const counters: Record<number, number> = {};
+      const lastValid: Record<number, number> = {};
+      for (const row of seriesRows) {
+        if (row.accountantStatus === 'rejected') {
+          ledgerByPayment[row.id] = { installmentNo: null, installmentCount: 0, isLatest: false };
+          continue;
+        }
+        counters[row.opportunityId] = (counters[row.opportunityId] || 0) + 1;
+        lastValid[row.opportunityId] = row.id;
+        ledgerByPayment[row.id] = { installmentNo: counters[row.opportunityId], installmentCount: 0, isLatest: false };
+      }
+      for (const row of seriesRows) {
+        const entry = ledgerByPayment[row.id];
+        if (entry.installmentNo === null) continue;
+        entry.installmentCount = counters[row.opportunityId];
+        entry.isLatest = lastValid[row.opportunityId] === row.id;
+      }
+      for (const row of liveRows) {
+        liveByOpportunity[row.opportunityId] = {
+          total: Number(row.payTotal || 0),
+          paid: Number(row.paidYet || 0),
+          balance: Number(row.payBalance || 0),
+        };
+      }
+    }
+
     // The Payment stage's "remark" and admin-fee checkbox are never stored on
     // crm_opportunity_payments itself (only on the legacy crm_pay_history
     // ledger, linked by receipt number) — pull them back here so a printed
@@ -228,6 +283,12 @@ export async function GET(request: NextRequest) {
       branchVatGstPercent: p.branchVatGstPercent ?? branchByOpportunity[p.opportunityId]?.branchVatGstPercent ?? null,
       branchAbbrv: branchByOpportunity[p.opportunityId]?.branchAbbrv || null,
       remark: remarkByReceiptNumber[p.receiptNumber || p.paymentNumber] || null,
+      installmentNo: ledgerByPayment[p.id]?.installmentNo ?? null,
+      installmentCount: ledgerByPayment[p.id]?.installmentCount ?? 0,
+      isLatestForOpportunity: ledgerByPayment[p.id]?.isLatest ?? false,
+      opportunityTotal: liveByOpportunity[p.opportunityId]?.total ?? null,
+      opportunityPaid: liveByOpportunity[p.opportunityId]?.paid ?? null,
+      opportunityBalance: liveByOpportunity[p.opportunityId]?.balance ?? null,
       adminFeeIncluded: adminFeeByReceiptNumber[p.receiptNumber || p.paymentNumber]?.adminFeeIncluded || false,
       adminFeeAmount: adminFeeByReceiptNumber[p.receiptNumber || p.paymentNumber]?.adminFeeAmount || 0,
       includeVat: adminFeeByReceiptNumber[p.receiptNumber || p.paymentNumber]?.includeVat ?? true,

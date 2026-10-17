@@ -32,6 +32,8 @@ function AddPaymentContent() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [receipt, setReceipt] = useState<any>(null);
+  const [history, setHistory] = useState<any[]>([]);
+  const [balanceAfter, setBalanceAfter] = useState<number | null>(null);
   const [currencyCode, setCurrencyCode] = useState('AED');
 
   const [form, setForm] = useState({
@@ -71,6 +73,22 @@ function AddPaymentContent() {
     })();
   }, [leadId]);
 
+  useEffect(() => {
+    if (!opportunityId) return;
+    (async () => {
+      try {
+        const res = await fetch(`/api/opportunity-payments?opportunityId=${opportunityId}`);
+        if (!res.ok) return;
+        const rows = await res.json();
+        if (Array.isArray(rows)) {
+          setHistory(rows.filter((r) => r.accountantStatus !== 'rejected').sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()));
+        }
+      } catch {
+        // history is informational only - the form works without it
+      }
+    })();
+  }, [opportunityId]);
+
   if (!leadId || !opportunityId) {
     return (
       <div className="p-6">
@@ -80,6 +98,8 @@ function AddPaymentContent() {
       </div>
     );
   }
+
+  const remainingAfter = Math.max(Number(lead?.payBalance || 0) - (form.paidAmount || 0), 0);
 
   const handleSubmit = async () => {
     if (!lead) return;
@@ -138,6 +158,7 @@ function AddPaymentContent() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Failed to record payment');
+      setBalanceAfter(Number(json.data?.lead?.payBalance ?? Math.max(Number(lead.payBalance || 0) - form.paidAmount, 0)));
       setReceipt(json.data?.receipt || json.data || json);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to record payment');
@@ -164,6 +185,13 @@ function AddPaymentContent() {
             Receipt <span className="font-semibold">{receipt.receiptNumber || receipt.paymentNumber}</span> has been created
             and submitted to Accounts for verification.
           </p>
+          {balanceAfter !== null && (
+            <p className={`mt-3 text-sm font-semibold ${balanceAfter > 0 ? 'text-amber-700' : 'text-green-800'}`}>
+              {balanceAfter > 0
+                ? `Remaining balance: ${currencyCode} ${balanceAfter.toLocaleString()} — you can collect it again from Balance Payments.`
+                : 'Fully paid — no balance remaining.'}
+            </p>
+          )}
           <p className="mt-1 text-xs text-green-600">
             It will show as "Pending" in Payments (Lead Management) until an accountant verifies it in Payment Verification.
           </p>
@@ -212,6 +240,30 @@ function AddPaymentContent() {
         </div>
       )}
 
+      {history.length > 0 && (
+        <div className="mb-6 overflow-x-auto rounded-lg border border-gray-200 bg-white">
+          <div className="border-b border-gray-200 px-4 py-2 text-sm font-semibold text-gray-900">
+            Payment history ({history.length} receipt{history.length === 1 ? '' : 's'} so far)
+          </div>
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 text-left text-xs uppercase text-gray-500">
+              <tr><th className="px-4 py-2">#</th><th className="px-4 py-2">Receipt</th><th className="px-4 py-2">Date</th><th className="px-4 py-2">Paid</th><th className="px-4 py-2">Status</th></tr>
+            </thead>
+            <tbody>
+              {history.map((h, i) => (
+                <tr key={h.id} className="border-t border-gray-100">
+                  <td className="px-4 py-2">{i + 1}</td>
+                  <td className="px-4 py-2">{h.receiptNumber || h.paymentNumber}</td>
+                  <td className="px-4 py-2">{h.paymentDate ? new Date(h.paymentDate).toLocaleDateString() : '—'}</td>
+                  <td className="px-4 py-2 font-medium">{currencyCode} {Number(h.paidAmount || 0).toLocaleString()}</td>
+                  <td className="px-4 py-2 capitalize">{h.accountantStatus === 'verified' ? 'Approved' : 'Pending approval'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
       {error && (
         <div className="mb-4 flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           <AlertCircle className="h-4 w-4" /> {error}
@@ -240,6 +292,12 @@ function AddPaymentContent() {
               onChange={(e) => setForm({ ...form, paidAmount: parseFloat(e.target.value) || 0 })}
               className="w-full p-3 border rounded-lg"
             />
+          </div>
+          <div className="rounded-lg bg-gray-50 px-3 py-2 text-sm">
+            <span className="text-gray-600">Balance after this payment: </span>
+            <span className={`font-semibold ${remainingAfter > 0 ? 'text-amber-700' : 'text-green-700'}`}>
+              {currencyCode} {remainingAfter.toLocaleString()}
+            </span>
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Payment Method</label>

@@ -69,6 +69,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Proof of payment is required before submitting a payment.' }, { status: 422 });
     }
 
+    // Lock only the lead row (not the joined employee/service rows) so that
+    // concurrent receipts for the same client are serialised and each reads
+    // the paidYet/payBalance left behind by the previous one.
+    await sequelize.query('SELECT id FROM crm_forum_leads WHERE id = ? FOR UPDATE', { replacements: [leadId], transaction });
+
     // Step 1: Validate lead exists
     const [leadRows] = await sequelize.query(`
       SELECT l.id, l.fname, l.lname, l.client_actual_name, l.email, l.phone, l.mobile, l.address,
@@ -79,7 +84,7 @@ export async function POST(request: NextRequest) {
       LEFT JOIN crm_service s ON s.id = l.service_interest
       WHERE l.id = ?
       LIMIT 1
-    `, { replacements: [leadId] });
+    `, { replacements: [leadId], transaction });
     const lead = (leadRows as any[])[0];
 
     if (!lead) {
@@ -200,6 +205,27 @@ export async function POST(request: NextRequest) {
     });
     const paidAmount = Number(paymentData.paidAmount || paymentData.amount || 0);
     const totalAmount = Number(paymentData.totalAmount || paymentData.amount || lead.payTotal || 0);
+    // True outstanding balance AFTER this payment: earlier installments
+    // (lead.paidYet) count too, so a partial balance payment doesn't show
+    // "total - this installment" as the remainder on its receipt.
+    const leadPayTotal = Number(lead.payTotal || 0);
+    const balanceAfterPayment = leadPayTotal > 0
+      ? Math.max(leadPayTotal - (Number(lead.paidYet || 0) + paidAmount), 0)
+      : Math.max(totalAmount - paidAmount, 0);
+    // Instalment receipts (anything after the P1 deposit) can never collect
+    // more than what is still owed. The lead row is locked FOR UPDATE above, so
+    // two receipts submitted at the same moment are serialised and the second
+    // one sees the first one's reduced balance instead of overpaying.
+    if (leadPayTotal > 0 && (body.paymentTag || 'P1') !== 'P1') {
+      const outstanding = Math.max(leadPayTotal - Number(lead.paidYet || 0), 0);
+      if (paidAmount - outstanding > 0.005) {
+        await transaction.rollback();
+        return NextResponse.json(
+          { error: `Amount exceeds the outstanding balance of ${outstanding.toFixed(2)}. Reload and try again.` },
+          { status: 422 },
+        );
+      }
+    }
     const taxAmount = Number(receiptData.taxAmount || 0);
     const discountAmount = Number(receiptData.discountAmount || 0);
     // Admin fee amount is always derived server-side from the branch, never
@@ -253,8 +279,8 @@ export async function POST(request: NextRequest) {
       dueDate: paymentData.dueDate || new Date(),
       description: receiptData.description || `Payment receipt for ${lead.fname} ${lead.lname}`,
       paidAmount,
-      remainingBalance: Math.max(totalAmount - paidAmount, 0),
-      balanceAmount: Math.max(totalAmount - paidAmount, 0),
+      remainingBalance: balanceAfterPayment,
+      balanceAmount: balanceAfterPayment,
       createdBy: loggedInUser?.id || paymentData.createdBy || lead.assignTo,
       notes: receiptData.notes || '',
       receiptNumber,

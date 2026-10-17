@@ -72,6 +72,12 @@ interface OpportunityPayment {
   adminFeeIncluded?: boolean;
   adminFeeAmount?: number;
   receiptUrl?: string | null;
+  installmentNo?: number | null;
+  installmentCount?: number;
+  isLatestForOpportunity?: boolean;
+  opportunityTotal?: number | null;
+  opportunityPaid?: number | null;
+  opportunityBalance?: number | null;
   dmcOpportunity?: {
     id: number;
     opportunityName: string;
@@ -120,6 +126,7 @@ export default function PaymentsManagement() {
   }, [activeTab, pagination.page, pagination.limit, debouncedSearchTerm]);
 
   const toNumber = (value: unknown) => Number(value || 0);
+  const getLiveBalance = (payment: OpportunityPayment) => payment.opportunityBalance ?? payment.remainingBalance;
 
   const normalizeOpportunityPayment = (payment: any): OpportunityPayment => ({
     ...payment,
@@ -127,6 +134,9 @@ export default function PaymentsManagement() {
     amount: toNumber(payment.amount),
     paidAmount: toNumber(payment.paidAmount),
     remainingBalance: toNumber(payment.remainingBalance),
+    opportunityTotal: payment.opportunityTotal == null ? null : toNumber(payment.opportunityTotal),
+    opportunityPaid: payment.opportunityPaid == null ? null : toNumber(payment.opportunityPaid),
+    opportunityBalance: payment.opportunityBalance == null ? null : toNumber(payment.opportunityBalance),
     taxAmount: toNumber(payment.taxAmount),
     discountAmount: toNumber(payment.discountAmount),
     adminFeeAmount: toNumber(payment.adminFeeAmount),
@@ -242,7 +252,7 @@ export default function PaymentsManagement() {
       client: (p) => p.clientName,
       service: (p) => getServiceLabel(p.serviceName) || p.dmcOpportunity?.opportunityName,
       amount: (p) => p.paidAmount,
-      balance: (p) => p.remainingBalance,
+      balance: (p) => getLiveBalance(p),
       method: (p) => p.paymentMethod,
       status: (p) => p.status,
       verification: (p) => p.accountantStatus,
@@ -423,6 +433,11 @@ export default function PaymentsManagement() {
                 titleBadges={
                   <>
                     <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-600">{payment.receiptNumber || 'No receipt'}</span>
+                    {payment.installmentNo ? (
+                      <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-semibold text-indigo-700">
+                        Receipt {payment.installmentNo} of {payment.installmentCount}
+                      </span>
+                    ) : null}
                     <span className={`inline-flex px-2 py-0.5 text-xs font-semibold rounded-full ${getPaymentMethodColor(payment.paymentMethod)}`}>
                       {payment.paymentMethod || 'N/A'}
                     </span>
@@ -445,8 +460,14 @@ export default function PaymentsManagement() {
                 ]}
                 stats={[
                   { label: 'Service', value: getServiceLabel(payment.serviceName) || payment.dmcOpportunity?.opportunityName || 'Service', sub: payment.branchName || undefined },
-                  { label: 'Amount', value: `${payment.currency} ${payment.paidAmount.toFixed(2)}`, sub: `Total ${payment.totalAmount.toFixed(2)}` },
-                  { label: 'Balance', value: `${payment.currency} ${payment.remainingBalance.toFixed(2)}`, sub: payment.remainingBalance > 0 ? 'Outstanding' : 'Settled' },
+                  { label: 'This Receipt', value: `${payment.currency} ${payment.paidAmount.toFixed(2)}`, sub: `Contract total ${(payment.opportunityTotal ?? payment.totalAmount).toFixed(2)}` },
+                  {
+                    label: 'Balance Now',
+                    value: `${payment.currency} ${getLiveBalance(payment).toFixed(2)}`,
+                    sub: getLiveBalance(payment) > 0
+                      ? `Outstanding${payment.opportunityPaid != null ? ` · paid ${payment.opportunityPaid.toFixed(2)}` : ''}`
+                      : 'Settled',
+                  },
                   { label: 'Payment Date', value: payment.paymentDate?.toLocaleDateString() || 'No date' },
                 ]}
                 actions={[
@@ -467,7 +488,10 @@ export default function PaymentsManagement() {
                     label: 'Collect Balance',
                     onClick: () => router.push(`/admin/balance-payments/pay?leadId=${payment.dmcOpportunity?.leadId}&opportunityId=${payment.opportunityId}`),
                     colorClass: 'bg-blue-50 text-blue-700 hover:bg-blue-100',
-                    hidden: !(payment.remainingBalance > 0 && payment.accountantStatus !== 'rejected' && payment.opportunityId && payment.dmcOpportunity?.leadId),
+                    // One button per opportunity (on its newest valid receipt),
+                    // driven by the live balance - older receipts of the same
+                    // opportunity keep a stale snapshot and must not offer it.
+                    hidden: !(payment.isLatestForOpportunity && getLiveBalance(payment) > 0 && payment.opportunityId && payment.dmcOpportunity?.leadId),
                   },
                   {
                     key: 'edit',
