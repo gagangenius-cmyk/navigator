@@ -5,7 +5,8 @@ import { useSortableData } from '@/components/ui/sortable-th';
 import { RecordCard, RecordList, SortButtonRow } from '@/components/shared/ResponsiveRecordList';
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { FileText, Receipt, User, Wallet, ChevronLeft, ChevronRight, Pencil } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { FileText, Receipt, User, Wallet, ChevronLeft, ChevronRight, Pencil, CreditCard } from 'lucide-react';
 import { useDebounce } from '@/hooks/useDebounce';
 import { isBranchManagerOrCeo } from '@/lib/roleChecks';
 import { AddThirdPartyPaymentDrawer } from '@/components/Payments/AddThirdPartyPaymentDrawer';
@@ -74,6 +75,7 @@ interface OpportunityPayment {
   dmcOpportunity?: {
     id: number;
     opportunityName: string;
+    leadId?: number | null;
   };
   createdEmployee?: {
     id: number;
@@ -87,6 +89,7 @@ interface FilterOption {
 }
 
 export default function PaymentsManagement() {
+  const router = useRouter();
   const { user, currencyCode } = useAuth();
   const canEditPayments = isBranchManagerOrCeo(user);
   const [opportunityPayments, setOpportunityPayments] = useState<OpportunityPayment[]>([]);
@@ -443,7 +446,7 @@ export default function PaymentsManagement() {
                 stats={[
                   { label: 'Service', value: getServiceLabel(payment.serviceName) || payment.dmcOpportunity?.opportunityName || 'Service', sub: payment.branchName || undefined },
                   { label: 'Amount', value: `${payment.currency} ${payment.paidAmount.toFixed(2)}`, sub: `Total ${payment.totalAmount.toFixed(2)}` },
-                  { label: 'Balance', value: `${payment.currency} ${payment.remainingBalance.toFixed(2)}` },
+                  { label: 'Balance', value: `${payment.currency} ${payment.remainingBalance.toFixed(2)}`, sub: payment.remainingBalance > 0 ? 'Outstanding' : 'Settled' },
                   { label: 'Payment Date', value: payment.paymentDate?.toLocaleDateString() || 'No date' },
                 ]}
                 actions={[
@@ -454,6 +457,17 @@ export default function PaymentsManagement() {
                     onClick: () => window.open(`/admin/leads/receipt/${payment.opportunityId}`, '_blank'),
                     colorClass: 'bg-green-50 text-green-700 hover:bg-green-100',
                     hidden: !(payment.accountantStatus === 'verified' && payment.opportunityId),
+                  },
+                  {
+                    // Collect the outstanding balance: opens the Add Payment
+                    // form (same flow as Balance Payments) which creates a NEW
+                    // receipt for the remaining amount and sends it to Accounts.
+                    key: 'collect-balance',
+                    icon: CreditCard,
+                    label: 'Collect Balance',
+                    onClick: () => router.push(`/admin/balance-payments/pay?leadId=${payment.dmcOpportunity?.leadId}&opportunityId=${payment.opportunityId}`),
+                    colorClass: 'bg-blue-50 text-blue-700 hover:bg-blue-100',
+                    hidden: !(payment.remainingBalance > 0 && payment.accountantStatus !== 'rejected' && payment.opportunityId && payment.dmcOpportunity?.leadId),
                   },
                   {
                     key: 'edit',

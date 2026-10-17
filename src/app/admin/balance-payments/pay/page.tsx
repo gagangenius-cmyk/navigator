@@ -87,6 +87,10 @@ function AddPaymentContent() {
       setError('Enter a valid amount to pay.');
       return;
     }
+    if (form.paidAmount > Number(lead.payBalance || 0)) {
+      setError(`Amount cannot exceed the outstanding balance (${currencyCode} ${Number(lead.payBalance || 0).toLocaleString()}).`);
+      return;
+    }
     if (!(form.proofOfPayment instanceof File)) {
       setError('Upload proof of payment before recording the payment.');
       return;
