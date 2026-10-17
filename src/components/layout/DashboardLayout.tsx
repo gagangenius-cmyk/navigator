@@ -179,6 +179,7 @@ const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
         { name: 'Invoices', href: '/admin/invoices', icon: FileText, permissions: ['sales.view', 'admin.access'] },
         { name: 'Discount Management', href: '/admin/discount-approvals', icon: DollarSign, permissions: ['sales.update', 'admin.access'] },
         { name: 'Balance Payments', href: '/admin/balance-payments', icon: DollarSign },
+        { name: 'Mail', href: '/admin/mail', icon: Mail, permissions: ['leads.view'] },
         { name: 'Compliance Approvals', href: '/admin/compliance-approvals', icon: Shield, permissions: ['leads.view', 'admin.access'] },
         { name: 'Lead Pool', href: '/admin/lead-pool', icon: Users, permissions: ['leads.view', 'transfers.manage'] },
         { name: 'Lead Assignment', href: '/admin/lead-assignment-availability', icon: UserPlus, permissions: ['sales.view', 'sales.update', 'admin.access'] },
@@ -332,6 +333,7 @@ const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
         { name: 'Market Sources', href: '/admin/market-sources', icon: BarChart3, permission: 'marketing.manage' },
         { name: 'Campaigns', href: '/admin/campaigns', icon: MessageSquare, permission: 'campaigns.manage' },
         { name: 'Email Templates', href: '/admin/email-templates', icon: Mail, permission: 'templates.manage' },
+        { name: 'Counselor Mailboxes', href: '/admin/mailboxes', icon: Mail, permission: 'mailboxes.manage' },
         { name: 'Legacy Modules', href: '/admin/legacy-modules', icon: Database, permission: 'settings.manage' },
         { name: 'Settings', href: '/admin/settings', icon: Settings, permission: 'settings.manage' },
       ]

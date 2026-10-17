@@ -47,6 +47,7 @@ export default function RoleBasedSidebar({ userRole = 'employee', userDepartment
         { id: 'compliance-approvals', label: 'Compliance Approvals', icon: '🛡️', href: '/admin/compliance-approvals' },
         { id: 'lead-transfers', label: 'Lead Transfers', icon: '🔄', href: '/admin/lead-transfers' },
         { id: 'email-templates', label: 'Email Templates', icon: '📧', href: '/admin/email-templates' },
+        { id: 'mailboxes', label: 'Counselor Mailboxes', icon: '📮', href: '/admin/mailboxes' },
         // Only /admin/contracts itself has a real backend (fetches from a
         // live API) - the 7 sub-pages this dropdown used to link to
         // (generator/templates/signing/preview/archive/analytics/content)

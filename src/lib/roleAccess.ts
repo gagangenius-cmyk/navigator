@@ -155,6 +155,8 @@ export const canAccessAdminPath = (user: AccessUser | null | undefined, pathname
     { test: (value) => value === '/admin/market-sources', permissions: ['marketing.manage'] },
     { test: (value) => value === '/admin/campaigns', permissions: ['campaigns.manage'] },
     { test: (value) => value === '/admin/email-templates', permissions: ['templates.manage'] },
+    { test: (value) => value === '/admin/mailboxes', permissions: ['mailboxes.manage'] },
+    { test: (value) => value === '/admin/mail', permissions: ['leads.view'] },
     { test: (value) => value === '/admin/legacy-modules', permissions: ['settings.manage'] },
   ];
 
