@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { connectDB } from '@/lib/sequelize';
-import { syncAllMailboxes } from '@/lib/mailboxes';
+import { syncAllMailboxes, purgeOldTrash } from '@/lib/mailboxes';
 
 export const maxDuration = 300;
 
@@ -21,5 +21,8 @@ export async function POST(request: NextRequest) {
     return new NextResponse('Unauthorized', { status: 401 });
   }
   await connectDB();
-  return NextResponse.json({ success: true, ...(await syncAllMailboxes()) });
+  const sync = await syncAllMailboxes();
+  // Cheap indexed delete; runs on every sweep so retention is enforced without a second job.
+  const trash = await purgeOldTrash().catch(() => ({ purged: 0, retentionDays: 0 }));
+  return NextResponse.json({ success: true, ...sync, trash });
 }

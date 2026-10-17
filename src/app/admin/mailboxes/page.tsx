@@ -17,6 +17,7 @@ interface Mailbox {
   imap_secure: number;
   username: string;
   signature: string | null;
+  save_to_sent: number;
   is_active: number;
   daily_limit: number;
   sent_today: number;
@@ -30,7 +31,7 @@ const emptyForm = {
   employeeId: '', email: '', displayName: '', username: '', password: '',
   smtpHost: '', smtpPort: '587', smtpSecure: false,
   imapHost: '', imapPort: '993', imapSecure: true,
-  dailyLimit: '200', signature: '',
+  dailyLimit: '200', signature: '', saveToSent: false,
 };
 
 export default function MailboxesAdminPage() {
@@ -69,7 +70,7 @@ export default function MailboxesAdminPage() {
       employeeId: String(mb.employee_id), email: mb.email, displayName: mb.display_name || '', username: mb.username, password: '',
       smtpHost: mb.smtp_host, smtpPort: String(mb.smtp_port), smtpSecure: Boolean(mb.smtp_secure),
       imapHost: mb.imap_host || '', imapPort: String(mb.imap_port || 993), imapSecure: Boolean(mb.imap_secure),
-      dailyLimit: String(mb.daily_limit), signature: mb.signature || '',
+      dailyLimit: String(mb.daily_limit), signature: mb.signature || '', saveToSent: Boolean(mb.save_to_sent),
     });
     setShowForm(true);
     setError('');
@@ -96,7 +97,7 @@ export default function MailboxesAdminPage() {
               displayName: form.displayName, username: form.username, password: form.password,
               smtpHost: form.smtpHost, smtpPort: Number(form.smtpPort), smtpSecure: form.smtpSecure,
               imapHost: form.imapHost, imapPort: Number(form.imapPort), imapSecure: form.imapSecure,
-              dailyLimit: Number(form.dailyLimit), signature: form.signature,
+              dailyLimit: Number(form.dailyLimit), signature: form.signature, saveToSent: form.saveToSent,
             }),
           })
         : await fetch('/api/admin/mailboxes', {
@@ -202,6 +203,10 @@ export default function MailboxesAdminPage() {
               <input type="checkbox" checked={form.imapSecure} onChange={(e) => setForm({ ...form, imapSecure: e.target.checked })} /> IMAP over SSL (993)
             </label>
           </div>
+          <label className="flex items-start gap-2 text-sm">
+            <input type="checkbox" className="mt-1" checked={form.saveToSent} onChange={(e) => setForm({ ...form, saveToSent: e.target.checked })} />
+            <span>Also save sent mail in the counselor&apos;s Sent folder on the mail server (shows in Outlook / phone). Leave off for Gmail and Microsoft 365, which already do this.</span>
+          </label>
           <label className="block text-sm">Signature (optional)
             <textarea rows={3} className={field} value={form.signature} onChange={(e) => setForm({ ...form, signature: e.target.value })} />
           </label>

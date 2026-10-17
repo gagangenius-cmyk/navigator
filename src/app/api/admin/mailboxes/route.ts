@@ -57,15 +57,15 @@ export async function POST(request: NextRequest) {
     await ensureMailboxTables();
     await sequelize.query(
       `INSERT INTO crm_employee_mailboxes
-        (employee_id, email, display_name, smtp_host, smtp_port, smtp_secure, imap_host, imap_port, imap_secure, username, password_enc, signature, daily_limit, created_by)
-       VALUES (:employeeId, :email, :displayName, :smtpHost, :smtpPort, :smtpSecure, :imapHost, :imapPort, :imapSecure, :username, :passwordEnc, :signature, :dailyLimit, :createdBy)`,
+        (employee_id, email, display_name, smtp_host, smtp_port, smtp_secure, imap_host, imap_port, imap_secure, username, password_enc, signature, daily_limit, save_to_sent, created_by)
+       VALUES (:employeeId, :email, :displayName, :smtpHost, :smtpPort, :smtpSecure, :imapHost, :imapPort, :imapSecure, :username, :passwordEnc, :signature, :dailyLimit, :saveToSent, :createdBy)`,
       {
         replacements: {
           employeeId, email, displayName: b.displayName || null, smtpHost,
           smtpPort: Number(b.smtpPort) || 587, smtpSecure: b.smtpSecure ? 1 : 0,
           imapHost, imapPort: Number(b.imapPort) || 993, imapSecure: b.imapSecure === false ? 0 : 1,
           username, passwordEnc: encryptMailboxPassword(password), signature: b.signature || null,
-          dailyLimit: Math.max(1, Number(b.dailyLimit) || 200), createdBy: auth.id,
+          dailyLimit: Math.max(1, Number(b.dailyLimit) || 200), saveToSent: b.saveToSent ? 1 : 0, createdBy: auth.id,
         },
       },
     );

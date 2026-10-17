@@ -31,6 +31,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     if (b.imapSecure !== undefined) set('imap_secure', 'imapSecure', b.imapSecure ? 1 : 0);
     if (b.username !== undefined && String(b.username).trim()) set('username', 'username', String(b.username).trim());
     if (b.dailyLimit !== undefined) set('daily_limit', 'dailyLimit', Math.max(1, Number(b.dailyLimit) || 200));
+    if (b.saveToSent !== undefined) set('save_to_sent', 'saveToSent', b.saveToSent ? 1 : 0);
     if (b.isActive !== undefined) set('is_active', 'isActive', b.isActive ? 1 : 0);
     // Blank password = keep the stored one.
     if (b.password) set('password_enc', 'passwordEnc', encryptMailboxPassword(String(b.password)));

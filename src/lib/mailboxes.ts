@@ -95,6 +95,10 @@ export const ensureMailboxTables = async () => {
       await addColumn('crm_mailbox_messages', 'is_starred', 'TINYINT(1) NOT NULL DEFAULT 0');
       await addColumn('crm_mailbox_messages', 'has_attachments', 'TINYINT(1) NOT NULL DEFAULT 0');
       await addColumn('crm_mailbox_messages', 'cc_addresses', 'TEXT NULL');
+      await addColumn('crm_mailbox_messages', 'trashed_at', 'DATETIME NULL');
+      // Off by default: Gmail / Microsoft 365 already keep their own copy of
+      // anything sent over SMTP, so appending would create duplicates.
+      await addColumn('crm_employee_mailboxes', 'save_to_sent', 'TINYINT(1) NOT NULL DEFAULT 0');
       await sequelize.query(`
         CREATE TABLE IF NOT EXISTS crm_mailbox_attachments (
           id BIGINT AUTO_INCREMENT PRIMARY KEY,
@@ -137,6 +141,7 @@ export interface MailboxRow {
   username: string;
   password_enc: string;
   signature: string | null;
+  save_to_sent: number;
   daily_limit: number;
   is_active: number;
   last_test_at: string | null;
@@ -247,6 +252,25 @@ async function findLeadIdByEmail(address: string | null | undefined): Promise<nu
 
 const escapeHtml = (value: string) => value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
+// Copies a sent message into the mailbox's own Sent folder over IMAP (folder
+// found via the Sent special-use flag, falling back to a "Sent"-like name).
+async function appendToSentFolder(mb: MailboxRow, mailOptions: Record<string, unknown>) {
+  await assertPublicHost(mb.imap_host as string);
+  const rendered = await nodemailer.createTransport({ streamTransport: true, buffer: true }).sendMail(mailOptions as Parameters<ReturnType<typeof nodemailer.createTransport>['sendMail']>[0]);
+  const raw = (rendered as unknown as { message: Buffer }).message;
+  const client = imapClient(mb);
+  await client.connect();
+  try {
+    const folders = await client.list();
+    const sent = folders.find((f) => f.specialUse === '\\Sent')?.path
+      || folders.find((f) => /^(inbox\.)?sent( items| mail)?$/i.test(f.path))?.path
+      || 'Sent';
+    await client.append(sent, raw, ['\\Seen']);
+  } finally {
+    await client.logout().catch(() => undefined);
+  }
+}
+
 export interface OutgoingAttachment { filename: string; content: Buffer; contentType?: string }
 
 export async function sendFromMailbox(mb: MailboxRow, input: {
@@ -288,7 +312,7 @@ export async function sendFromMailbox(mb: MailboxRow, input: {
   }
 
   try {
-    const info = await smtpTransport(mb).sendMail({
+    const mailOptions = {
       from: mb.display_name ? { name: mb.display_name, address: mb.email } : mb.email,
       to: toList,
       ...(ccList.length ? { cc: ccList } : {}),
@@ -298,7 +322,15 @@ export async function sendFromMailbox(mb: MailboxRow, input: {
       html,
       attachments: attachments.map((a) => ({ filename: a.filename, content: a.content, contentType: a.contentType })),
       ...(input.inReplyTo ? { inReplyTo: input.inReplyTo, references: input.inReplyTo } : {}),
-    });
+    };
+    const info = await smtpTransport(mb).sendMail(mailOptions);
+    if (mb.save_to_sent && mb.imap_host) {
+      // Best-effort: the email is already delivered, so a failure to file the
+      // copy must never turn a successful send into an error.
+      await appendToSentFolder(mb, { ...mailOptions, messageId: info.messageId }).catch((error) => {
+        console.error('Could not copy sent mail to the IMAP Sent folder:', error);
+      });
+    }
     const [rowId] = await sequelize.query(
       `INSERT INTO crm_mailbox_messages (mailbox_id, direction, folder, message_id, in_reply_to, thread_key, from_address, from_name, to_addresses, cc_addresses, subject, body_text, body_html, lead_id, is_read, has_attachments)
        VALUES (:mailboxId, 'out', 'sent', :messageId, :inReplyTo, :threadKey, :from, :fromName, :to, :cc, :subject, :text, :html, :leadId, 1, :hasAttachments)`,
@@ -396,6 +428,23 @@ export async function syncMailbox(mb: MailboxRow, maxMessages = 50): Promise<{ f
     throw error;
   }
   return { fetched };
+}
+
+// Permanently removes messages (and their attachments) that have sat in Trash
+// longer than the retention period, so attachment blobs can't grow the
+// database without bound. Archive and other folders are never touched.
+export async function purgeOldTrash(days = Number(process.env.MAIL_TRASH_RETENTION_DAYS) || 30) {
+  await ensureMailboxTables();
+  const old = await sequelize.query<{ id: number }>(
+    "SELECT id FROM crm_mailbox_messages WHERE folder = 'trash' AND trashed_at IS NOT NULL AND trashed_at < (NOW() - INTERVAL :days DAY) LIMIT 5000",
+    { replacements: { days }, type: QueryTypes.SELECT },
+  );
+  const ids = old.map((r) => r.id);
+  if (ids.length) {
+    await sequelize.query('DELETE FROM crm_mailbox_attachments WHERE message_id IN (:ids)', { replacements: { ids } });
+    await sequelize.query('DELETE FROM crm_mailbox_messages WHERE id IN (:ids)', { replacements: { ids } });
+  }
+  return { purged: ids.length, retentionDays: days };
 }
 
 export async function syncAllMailboxes() {

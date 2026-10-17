@@ -113,7 +113,7 @@ const ACTIONS: Record<string, string> = {
   star: 'is_starred = 1',
   unstar: 'is_starred = 0',
   archive: "folder = 'archive'",
-  trash: "folder = 'trash'",
+  trash: "folder = 'trash', trashed_at = NOW()",
   restore: "folder = IF(direction = 'in', 'inbox', 'sent')",
 };
 
