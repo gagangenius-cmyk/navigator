@@ -48,7 +48,8 @@ export async function fetchFormName(formId: string): Promise<string | null> {
 export async function fetchCampaigns(adAccountId: string): Promise<MetaCampaign[]> {
   const fields = 'id,name,status,objective,daily_budget,lifetime_budget,insights{spend,impressions,clicks}';
   const results: MetaCampaign[] = [];
-  const token = await getMetaPageAccessToken();
+  // The Marketing API rejects Page tokens, so prefer a user/system-user token with ads_read.
+  const token = process.env.META_ADS_ACCESS_TOKEN || (await getMetaPageAccessToken());
   let nextUrl: string | null =
     `${BASE}/${apiVersion()}/act_${adAccountId}/campaigns?fields=${fields}&limit=100&access_token=${token}`;
 
