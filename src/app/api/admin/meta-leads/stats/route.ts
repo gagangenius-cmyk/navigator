@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
   const today = new Date().toISOString().split('T')[0];
   const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0];
 
-  const [[todayStats], [weekStats], [deliveryStats], [recentLeads], [recentFailures]] =
+  const [[todayStats], [weekStats], [deliveryStats], recentLeads, recentFailures] =
     await Promise.all([
       sequelize.query<{ today_count: number }>(
         `SELECT COUNT(*) AS today_count FROM crm_meta_leads WHERE DATE(created_at) = :today`,
