@@ -66,7 +66,7 @@ export async function testCrmDelivery(): Promise<DeliveryResult> {
     UTMSource: 'Facebook Lead Ads',
     Education: 'Bachelor',
     DestinationCountry: 'Canada',
-    LeadSource: 'Facebook Lead Ads',
+    LeadSource: 'Meta (Facebook/Instagram)',
     roundrobin: 'true',
   };
   return deliverToCrm(samplePayload);

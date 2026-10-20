@@ -67,7 +67,7 @@ export function buildCrmPayload(
   // Built-in synthetic fields that can be referenced by meta_field_key
   const synthetic: Record<string, string> = {
     '__utm_source': 'Facebook Lead Ads',
-    '__lead_source': 'Facebook Lead Ads',
+    '__lead_source': 'Meta (Facebook/Instagram)',
     '__roundrobin': 'true',
     '__campaign_id': lead.campaignId ?? '',
     '__campaign_name': lead.campaignName ?? '',
@@ -83,7 +83,7 @@ export function buildCrmPayload(
     email: '',
     phone: '',
     UTMSource: 'Facebook Lead Ads',
-    LeadSource: 'Facebook Lead Ads',
+    LeadSource: 'Meta (Facebook/Instagram)',
     roundrobin: 'true',
     // Always carried through regardless of field mappings — this is what
     // lets the CRM later report lead quality back to Meta for this lead.
