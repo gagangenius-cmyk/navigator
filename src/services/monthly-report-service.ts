@@ -39,6 +39,8 @@ function salesTable(rows: SalesReportRow[]) {
     <tr>
       <td style="padding:4px 8px;border-bottom:1px solid #eee">${escapeHtml(r.client)}</td>
       <td style="padding:4px 8px;border-bottom:1px solid #eee">${escapeHtml(r.branch)}</td>
+      <td style="padding:4px 8px;border-bottom:1px solid #eee">${escapeHtml(r.country)}</td>
+      <td style="padding:4px 8px;border-bottom:1px solid #eee">${escapeHtml(r.program)}</td>
       <td style="padding:4px 8px;border-bottom:1px solid #eee;text-align:right">${fmtAed(r.totalFeeAed)}</td>
       <td style="padding:4px 8px;border-bottom:1px solid #eee;text-align:right;color:#0a7d33">${fmtAed(r.paidAed)}</td>
       <td style="padding:4px 8px;border-bottom:1px solid #eee;text-align:right;color:#c0392b">${fmtAed(r.balanceAed)}</td>
@@ -47,6 +49,8 @@ function salesTable(rows: SalesReportRow[]) {
     <thead><tr style="background:#f5f5f5">
       <th style="padding:4px 8px;text-align:left">Client</th>
       <th style="padding:4px 8px;text-align:left">Branch</th>
+      <th style="padding:4px 8px;text-align:left">Country</th>
+      <th style="padding:4px 8px;text-align:left">Program</th>
       <th style="padding:4px 8px;text-align:right">Total</th>
       <th style="padding:4px 8px;text-align:right">Collected</th>
       <th style="padding:4px 8px;text-align:right">Balance</th>

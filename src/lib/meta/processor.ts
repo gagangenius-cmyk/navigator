@@ -18,6 +18,7 @@ import { sequelize } from '@/lib/sequelize';
 import { fetchLeadFromMeta, fetchFormName } from './graph-api';
 import { parseFieldData, buildCrmPayload } from './mapping-engine';
 import { deliverToCrm, nextRetryAt } from './crm-delivery';
+import { ensureFormSynced } from './sync';
 import type { MetaLeadMapping, MetaLeadParsed } from './types';
 
 // Leads are inserted directly into this CRM's own database (see
@@ -121,8 +122,31 @@ export async function processWebhookEvent(eventId: number): Promise<void> {
     const joinedName = [firstName, lastName].filter(Boolean).join(' ');
     const fullName  = (fields['full_name'] ?? joinedName) || null;
 
-    // Fetch form name (best-effort)
-    const formName = rawLead.form_id ? await fetchFormName(rawLead.form_id) : null;
+    // A brand-new form is discovered and auto-mapped here, before the payload
+    // is built, so its questions are mapped from the very first lead.
+    const formName = rawLead.form_id
+      ? (await ensureFormSynced(rawLead.form_id, rawLead.page_id ?? null)) ?? (await fetchFormName(rawLead.form_id))
+      : null;
+
+    // Campaign name: from the lead itself, else the synced campaign cache.
+    const campaignId = rawLead.campaign_id ?? event.campaign_id ?? null;
+    let campaignName = rawLead.campaign_name ?? null;
+    if (!campaignName && campaignId) {
+      const [cached] = await sequelize.query<{ campaign_name: string | null }>(
+        `SELECT campaign_name FROM crm_meta_campaign_cache WHERE campaign_id = :id LIMIT 1`,
+        { replacements: { id: campaignId }, type: QueryTypes.SELECT },
+      );
+      campaignName = cached?.campaign_name ?? null;
+    }
+    if (campaignId && campaignName) {
+      // New campaign seen on a lead before the next campaign sync - record it now.
+      await sequelize.query(
+        `INSERT INTO crm_meta_campaign_cache (campaign_id, campaign_name, last_synced_at)
+         VALUES (:id, :name, NOW())
+         ON DUPLICATE KEY UPDATE campaign_name = COALESCE(campaign_name, VALUES(campaign_name))`,
+        { replacements: { id: campaignId, name: campaignName }, type: QueryTypes.INSERT },
+      ).catch(() => {});
+    }
 
     const parsed: MetaLeadParsed = {
       metaLeadId: rawLead.id,
@@ -132,12 +156,12 @@ export async function processWebhookEvent(eventId: number): Promise<void> {
       pageId: rawLead.page_id ?? null,
       formId: rawLead.form_id ?? null,
       formName,
-      campaignId: rawLead.campaign_id ?? event.campaign_id ?? null,
-      campaignName: null,
+      campaignId,
+      campaignName,
       adsetId: rawLead.adset_id ?? event.adset_id ?? null,
-      adsetName: null,
+      adsetName: rawLead.adset_name ?? null,
       adId: rawLead.ad_id ?? event.ad_id ?? null,
-      adName: null,
+      adName: rawLead.ad_name ?? null,
       metaCreatedTime: rawLead.created_time ?? null,
       rawLeadData: rawLead,
       fields,

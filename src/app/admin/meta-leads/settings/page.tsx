@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import AutoSyncPanel from './AutoSyncPanel';
 import { Save, CheckCircle, XCircle, Zap, Activity } from 'lucide-react';
 
 interface Settings {
@@ -254,6 +255,8 @@ export default function MetaSettingsPage() {
           <Save className="h-4 w-4" /> {saving ? 'Saving...' : 'Save Settings'}
         </button>
       </div>
+
+      <AutoSyncPanel />
 
       {/* Test Connections */}
       <div className="rounded-xl border border-gray-200 bg-white p-5 space-y-3">

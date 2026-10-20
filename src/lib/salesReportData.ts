@@ -16,6 +16,7 @@ export interface SalesReportRow {
   id: number; name: string; client: string;
   counselorId: number | null; counselor: string;
   branchId: number | null; branch: string;
+  country: string; program: string;
   status: string; date: string;
   currencyCode: string;
   totalFeeLocal: number; paidLocal: number; balanceLocal: number;
@@ -64,6 +65,9 @@ export async function getSalesReportData(params: SalesReportParams): Promise<{
       LEFT JOIN crm_forum_leads l ON l.id = o.leadId
       LEFT JOIN crm_employee e ON e.id = o.assignedTo
       LEFT JOIN crm_branch b ON b.id = o.branchId
+      LEFT JOIN crm_country_proces cp ON cp.id = CAST(l.country_interest AS UNSIGNED)
+      LEFT JOIN crm_service sv ON sv.id = CAST(l.service_interest AS UNSIGNED)
+      LEFT JOIN crm_program_type pt ON pt.id = CAST(l.service_interest AS UNSIGNED)
       LEFT JOIN crm_branch_exchange_rate_map bm ON bm.branch_id = o.branchId
       LEFT JOIN crm_exchange_rate er ON er.id = bm.exchange_rate_id AND er.status = 1
       LEFT JOIN (
@@ -81,6 +85,7 @@ export async function getSalesReportData(params: SalesReportParams): Promise<{
     sequelize.query<{
       id: number; opportunityName: string; client: string;
       counselorId: number; counselor: string; branchId: number; branch: string;
+      country: string; program: string;
       status: string; created: string; currencyCode: string; rateToAed: number;
       totalFeeLocal: number; paidLocal: number; balanceLocal: number;
       totalFeeAed: number; paidAed: number; balanceAed: number;
@@ -92,6 +97,8 @@ export async function getSalesReportData(params: SalesReportParams): Promise<{
         CONCAT(COALESCE(l.fname,''),' ',COALESCE(l.lname,'')) AS client,
         e.id AS counselorId, COALESCE(e.name,'Unassigned') AS counselor,
         b.id AS branchId, COALESCE(b.branch,'N/A') AS branch,
+        COALESCE(NULLIF(cp.name,''), NULLIF(l.country_interest,''), '') AS country,
+        COALESCE(NULLIF(sv.name,''), NULLIF(pt.type,''), NULLIF(l.service_interest,''), '') AS program,
         o.status,
         DATE_FORMAT(o.createdAt,'%Y-%m-%d') AS created,
         COALESCE(er.currency_code,'AED') AS currencyCode,
@@ -150,6 +157,8 @@ export async function getSalesReportData(params: SalesReportParams): Promise<{
       counselor: r.counselor,
       branchId: r.branchId,
       branch: r.branch,
+      country: r.country || '',
+      program: r.program || '',
       status: r.status,
       date: r.created,
       currencyCode: r.currencyCode || 'AED',

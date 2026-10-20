@@ -15,6 +15,8 @@
 
 import { type CreationAttributes } from 'sequelize';
 import { CrmcForumLeads } from '@/models/CrmcForumLeads';
+import { sequelize } from '@/lib/sequelize';
+import { ensureMetaCampaignNameColumn } from '@/lib/ensureMetaCampaignNameColumn';
 import { checkForDuplicate } from '@/lib/duplicateLeadCheck';
 import { logLeadRemark, recordLeadAssignment } from '@/lib/leadRemarks';
 import { resolveLeadReferenceId } from '@/lib/leadReferenceResolver';
@@ -86,6 +88,9 @@ export async function ingestWebToLead(
   // leads sourced from Meta Lead Ads — links this row back to Meta so lead
   // quality can be reported back via the Conversions API later.
   const metaLeadgenId = readField(data, ['MetaLeadId', 'metaLeadId']) || null;
+  const metaCampaignName = readField(data, ['CampaignName', 'campaignName']);
+  const metaFormName = readField(data, ['FormName', 'formName']);
+  const additionalInfo = readField(data, ['AdditionalInfo']);
 
   // Branch wins if the form sent one we recognize. Otherwise, prefer the
   // visitor's own resident country when it matches a branch we operate in
@@ -263,6 +268,9 @@ export async function ingestWebToLead(
       Education: education,
       'Immigration Type': immigrationType,
       Destination: destinationCountry,
+      'Meta Campaign': metaCampaignName,
+      'Meta Form': metaFormName,
+      'Form Answers': additionalInfo,
     }),
     created: now,
     created_by: 1,
@@ -289,6 +297,19 @@ export async function ingestWebToLead(
   } as unknown as CreationAttributes<CrmcForumLeads>;
 
   const lead = await (CrmcForumLeads as any).create(leadPayload);
+
+  // Meta ad campaign name (kept off the Sequelize model - see
+  // ensureMetaCampaignNameColumn.ts). Best-effort: never fail an inbound lead.
+  if (metaCampaignName) {
+    try {
+      await ensureMetaCampaignNameColumn();
+      await sequelize.query('UPDATE crm_forum_leads SET meta_campaign_name = :name WHERE id = :id', {
+        replacements: { name: metaCampaignName.slice(0, 255), id: lead.id },
+      });
+    } catch (error) {
+      console.error('[web-to-leads] Failed to store meta_campaign_name:', error);
+    }
+  }
 
   // This endpoint predates insertLeadRecord() (src/lib/leadDefaults.ts) and
   // has its own INSERT (via CrmcForumLeads.create above) rather than routing
@@ -328,6 +349,9 @@ export async function ingestWebToLead(
       'Service Interest': immigrationType,
       'Destination Country': destinationCountry,
       'Resident Country': residentCountry,
+      'Meta Campaign': metaCampaignName,
+      'Meta Form': metaFormName,
+      'Form Answers': additionalInfo,
     }) || 'Lead created via website form.',
     actorRole: 'web_lead',
   });

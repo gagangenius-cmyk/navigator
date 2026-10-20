@@ -14,7 +14,27 @@ export interface MetaRawLead {
   adset_id?: string;
   campaign_id?: string;
   form_id?: string;
+  /** Names are returned by the lead node itself when the token allows it */
+  ad_name?: string;
+  adset_name?: string;
+  campaign_name?: string;
   field_data: MetaFieldData[];
+}
+
+/** One question on a Meta Instant Form (from /{page}/leadgen_forms) */
+export interface MetaFormQuestion {
+  key: string;
+  label?: string;
+  type?: string;
+}
+
+export interface MetaLeadForm {
+  id: string;
+  name: string;
+  status?: string;
+  locale?: string;
+  created_time?: string;
+  questions?: MetaFormQuestion[];
 }
 
 /** Parsed and enriched version stored in crm_meta_leads */

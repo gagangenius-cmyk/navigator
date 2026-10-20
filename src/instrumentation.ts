@@ -28,6 +28,9 @@ export async function register() {
     const { startMetaLeadsRetryCron } = await import('@/lib/meta-leads-retry-cron');
     await startMetaLeadsRetryCron();
 
+    const { startMetaSyncCron } = await import('@/lib/meta-sync-cron');
+    await startMetaSyncCron();
+
     // Broadcast/workflow automation (docs/broadcast-architecture.md)
     // deliberately does NOT register a cron here, unlike every job above -
     // its worker (BullMQ Workers + scheduler) runs as its own standalone

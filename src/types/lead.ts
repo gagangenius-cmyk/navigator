@@ -20,6 +20,7 @@ export interface Lead {
   market_source: string;
   market_source_label?: string;
   meta_leadgen_id?: string | null;
+  meta_campaign_name?: string | null;
   lead_score?: number | null;
   lead_score_label?: 'Hot' | 'Warm' | 'Cold' | null;
   lead_score_reasons?: string[] | string | null;

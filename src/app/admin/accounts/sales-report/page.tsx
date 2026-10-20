@@ -12,6 +12,7 @@ interface SalesRow {
   id: number; name: string; client: string;
   counselorId: number | null; counselor: string;
   branchId: number | null; branch: string;
+  country: string; program: string;
   status: string; date: string;
   currencyCode: string;
   totalFeeLocal: number; paidLocal: number; balanceLocal: number;
@@ -58,6 +59,8 @@ export default function SalesReportPage() {
       client: (r) => r.client,
       counselor: (r) => r.counselor,
       branch: (r) => r.branch,
+      country: (r) => r.country,
+      program: (r) => r.program,
       total: (r) => r.totalFeeAed,
       collected: (r) => r.paidAed,
       balance: (r) => r.balanceAed,
@@ -153,6 +156,8 @@ export default function SalesReportPage() {
         'Opportunity': r.name,
         'Counselor': r.counselor,
         'Branch': r.branch,
+        'Country': r.country,
+        'Program': r.program,
         'Currency': r.currencyCode,
         'Total (Local)': r.totalFeeLocal,
         'Paid (Local)': r.paidLocal,
@@ -348,6 +353,8 @@ export default function SalesReportPage() {
                     stats={[
                       { label: 'Counselor', value: r.counselor },
                       { label: 'Branch', value: r.branch },
+                      { label: 'Country', value: r.country || '—' },
+                      { label: 'Program', value: r.program || '—' },
                       { label: 'Total', value: fmtAed(r.totalFeeAed) },
                       { label: 'Collected', value: <span className="text-green-700">{fmtAed(r.paidAed)}</span> },
                       { label: 'Balance', value: <span className="text-red-600">{fmtAed(r.balanceAed)}</span> },

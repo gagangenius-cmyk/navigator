@@ -117,6 +117,22 @@ export function buildCrmPayload(
     }
   }
 
+  // Campaign/form context for the lead remark
+  if (lead.campaignName) payload.CampaignName = lead.campaignName;
+  if (lead.formName) payload.FormName = lead.formName;
+
+  // Any answer no mapping consumed (new/custom form questions) is carried
+  // through as free text instead of being dropped, so a freshly added form
+  // field reaches the CRM even before someone maps it to a dedicated column.
+  const consumed = new Set<string>([
+    'full_name', 'first_name', 'last_name', 'email', 'phone_number', 'phone',
+    ...effective.map(m => m.meta_field_key.toLowerCase().replace(/[\s-]/g, '_')),
+  ]);
+  const extras = Object.entries(fields)
+    .filter(([k, v]) => v && !consumed.has(k))
+    .map(([k, v]) => `${k.replace(/_/g, ' ').trim()}: ${v}`);
+  if (extras.length) payload.AdditionalInfo = extras.join(' | ');
+
   // Ensure required fields have sensible defaults
   if (!payload.lastName && lead.fullName) payload.lastName = lead.fullName;
   if (!payload.email && lead.email) payload.email = lead.email;

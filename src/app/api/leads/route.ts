@@ -10,6 +10,7 @@ import { resolveLeadReferenceId, resolveLeadReferences } from '@/lib/leadReferen
 import { resolveBranchReference } from '@/lib/branchResolver'
 import { recordLeadAssignment, logLeadRemark } from '@/lib/leadRemarks'
 import { ensureClientActualNameColumn } from '@/lib/ensureClientActualNameColumn'
+import { ensureMetaCampaignNameColumn } from '@/lib/ensureMetaCampaignNameColumn'
 import { buildDefaultLeadData, insertLeadRecord } from '@/lib/leadDefaults'
 import { captureError } from '@/lib/errorTracking'
 import { fireLeadCreatedTrigger } from '@/lib/workflowTriggers'
@@ -77,6 +78,7 @@ export async function GET(request: NextRequest) {
     // Ensure database connection is established
     await ensureDBConnection();
     await ensureClientActualNameColumn();
+    await ensureMetaCampaignNameColumn();
     await ensureLeadScoreTable();
 
     const { searchParams } = new URL(request.url)
@@ -488,7 +490,7 @@ export async function GET(request: NextRequest) {
         l.service_interest, l.market_source, l.priority, l.status, l.lead_quality,
         l.regdate, l.payTotal, l.paidYet, l.payBalance, l.lead_remark, l.created,
         l.assignTo, l.branch, l.region, l.stepComplete,
-        l.opportunity_id, l.opportunity_status, l.campaign, l.meta_leadgen_id,
+        l.opportunity_id, l.opportunity_status, l.campaign, l.meta_leadgen_id, l.meta_campaign_name,
         lsc.score as lead_score, lsc.label as lead_score_label, lsc.reasons as lead_score_reasons,
         (SELECT remark FROM crm_forum_leads_remarks WHERE \`lead\` = l.id ORDER BY id DESC LIMIT 1) as latest_remark,
         (SELECT id FROM crm_forum_leads_remarks WHERE \`lead\` = l.id ORDER BY id DESC LIMIT 1) as latest_remark_id,

@@ -2321,7 +2321,7 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
                               <div className="min-w-0 rounded-md bg-gray-50 p-2">
                                 <div className="font-semibold uppercase text-gray-400">Source</div>
                                 <div className="mt-0.5 truncate font-semibold text-gray-900" title={resolveSourceName(lead) || undefined}>{resolveSourceName(lead) || '—'}</div>
-                                <div className="truncate text-gray-600" title={lead.campaign || undefined}>{lead.campaign || 'No campaign'}</div>
+                                <div className="truncate text-gray-600" title={lead.meta_campaign_name || lead.campaign || undefined}>{lead.meta_campaign_name || lead.campaign || 'No campaign'}</div>
                               </div>
                               <div className="min-w-0 rounded-md bg-gray-50 p-2">
                                 <div className="font-semibold uppercase text-gray-400">Owner</div>
@@ -2621,8 +2621,8 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
                     <td className="px-4 py-2.5 whitespace-nowrap text-sm text-gray-600">
                       {formatDate(lead.assigned_date) || <span className="text-gray-400">—</span>}
                     </td>
-                    <td className="px-4 py-2.5 whitespace-nowrap max-w-[140px] truncate text-sm text-gray-600" title={lead.campaign || undefined}>
-                      {lead.campaign || <span className="text-gray-400">—</span>}
+                    <td className="px-4 py-2.5 whitespace-nowrap max-w-[140px] truncate text-sm text-gray-600" title={lead.meta_campaign_name || lead.campaign || undefined}>
+                      {lead.meta_campaign_name || lead.campaign || <span className="text-gray-400">—</span>}
                     </td>
                     <td
                       className="px-4 py-2.5 max-w-[220px] truncate text-xs text-gray-600 cursor-pointer hover:text-blue-700 hover:underline"
