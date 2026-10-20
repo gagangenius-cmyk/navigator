@@ -67,7 +67,7 @@ export async function testCrmDelivery(): Promise<DeliveryResult> {
     Education: 'Bachelor',
     DestinationCountry: 'Canada',
     LeadSource: 'Meta (Facebook/Instagram)',
-    roundrobin: 'true',
+    roundrobin: 'rules',
   };
   return deliverToCrm(samplePayload);
 }

@@ -150,6 +150,10 @@ export async function ingestWebToLead(
         branchId: branch.id,
         forceAutoAssign: true,
         roundRobin: true,
+        // roundrobin: 'rules' (Meta Lead Ads) = assign only if an active rule matches,
+        // otherwise leave the lead in the unassigned queue.
+        ruleOnly: roundRobinFlag === 'rules',
+        campaign: metaCampaignName || null,
         sourceId: marketSourceId,
         priority: 'Medium',
         countryInterestId,

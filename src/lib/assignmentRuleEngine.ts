@@ -93,6 +93,8 @@ export interface LeadAssignmentContext {
   preferredEmployeeId?: number | null;
   forceAutoAssign?: boolean;
   roundRobin?: boolean;
+  /** Assign only when an active rule matches; otherwise leave the lead unassigned (no fallback round robin). */
+  ruleOnly?: boolean;
   // Previewing an assignment must not move any rotation cursor.
   consumeRoundRobin?: boolean;
 }
@@ -788,6 +790,11 @@ export async function resolveLeadAssignment(context: LeadAssignmentContext): Pro
   if (matchedRule) {
     const ruleResult = await resolveRuleAssignment(matchedRule, context.branchId, consumeRoundRobin);
     if (ruleResult) return ruleResult;
+  }
+
+  if (context.ruleOnly) {
+    // Same message every caller already treats as "leave unassigned in the pool".
+    throw new Error('No active employees are available (no assignment rule matched this lead)');
   }
 
   return resolveLeadAutoAssignment({
