@@ -9,7 +9,7 @@ const BASE = 'https://graph.facebook.com';
 
 /** Fetches a single lead record from Meta Graph API */
 export async function fetchLeadFromMeta(leadgenId: string): Promise<MetaRawLead> {
-  const base = ['id', 'created_time', 'page_id', 'ad_id', 'adset_id', 'campaign_id', 'form_id', 'field_data'];
+  const base = ['id', 'created_time', 'ad_id', 'adset_id', 'campaign_id', 'form_id', 'field_data'];
   const token = await getMetaPageAccessToken();
 
   const get = (fields: string[]) => fetch(
