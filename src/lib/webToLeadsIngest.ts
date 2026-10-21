@@ -59,13 +59,14 @@ const buildRemark = (parts: Record<string, string>) => (
 
 export async function ingestWebToLead(
   data: Record<string, unknown>,
-  context?: { ip?: string; userAgent?: string; host?: string },
+  context?: { ip?: string; userAgent?: string; host?: string; allowMissingEmail?: boolean },
 ): Promise<WebToLeadsIngestResult> {
   const fullName = readField(data, ['lastName', 'your-name', 'name', 'fullName']);
   const email = readField(data, ['email', 'your-email']);
   const phone = readField(data, ['phone', 'phonetext-718', 'mobile', 'tel-861']);
 
-  if (!fullName || !email || !phone) {
+  // Click-to-WhatsApp leads only ever have a phone number and a profile name.
+  if (!fullName || (!email && !context?.allowMissingEmail) || !phone) {
     return {
       success: false,
       status: 400,

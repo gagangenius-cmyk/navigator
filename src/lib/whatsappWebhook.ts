@@ -12,12 +12,32 @@ export interface WhatsAppStatusChange {
   errorMessage: string | null;
 }
 
+/**
+ * Click-to-WhatsApp ad attribution. Meta attaches this to the FIRST message a
+ * person sends after tapping a "Send WhatsApp message" ad (or a Facebook
+ * Page/Instagram CTA button); `sourceId` is the ad id.
+ */
+export interface WhatsAppReferral {
+  sourceType: string | null; // 'ad' | 'post'
+  sourceId: string | null;
+  sourceUrl: string | null;
+  ctwaClid: string | null;
+  headline: string | null;
+  body: string | null;
+  mediaType: string | null;
+  mediaUrl: string | null;
+}
+
 export interface WhatsAppInboundMessage {
   providerMessageId: string;
   from: string;
   type: string;
   /** Body text for a 'text' message, or the selected button/list-reply title for interactive types. */
   text: string | null;
+  /** WhatsApp profile name from the payload's contacts[] block, if sent. */
+  profileName: string | null;
+  /** Present only when this message originated from a Click-to-WhatsApp ad. */
+  referral: WhatsAppReferral | null;
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -61,6 +81,24 @@ export function extractStatusChanges(payload: unknown): WhatsAppStatusChange[] {
   return results;
 }
 
+function extractReferral(value: unknown): WhatsAppReferral | null {
+  const r = asRecord(value);
+  const sourceId = asString(r.source_id);
+  const ctwaClid = asString(r.ctwa_clid);
+  // No ad id and no click id = nothing to attribute; treat as an organic message.
+  if (!sourceId && !ctwaClid) return null;
+  return {
+    sourceType: asString(r.source_type),
+    sourceId,
+    sourceUrl: asString(r.source_url),
+    ctwaClid,
+    headline: asString(r.headline),
+    body: asString(r.body),
+    mediaType: asString(r.media_type),
+    mediaUrl: asString(r.image_url) ?? asString(r.video_url) ?? asString(r.thumbnail_url),
+  };
+}
+
 export function extractInboundMessages(payload: unknown): WhatsAppInboundMessage[] {
   const root = asRecord(payload);
   if (root.object !== 'whatsapp_business_account') return [];
@@ -69,6 +107,13 @@ export function extractInboundMessages(payload: unknown): WhatsAppInboundMessage
   for (const entry of asArray(root.entry)) {
     for (const change of asArray(asRecord(entry).changes)) {
       const value = asRecord(asRecord(change).value);
+      const profileNames = new Map<string, string>();
+      for (const contact of asArray(value.contacts)) {
+        const c = asRecord(contact);
+        const waId = asString(c.wa_id);
+        const name = asString(asRecord(c.profile).name);
+        if (waId && name) profileNames.set(waId, name);
+      }
       for (const message of asArray(value.messages)) {
         const m = asRecord(message);
         const id = asString(m.id);
@@ -88,7 +133,14 @@ export function extractInboundMessages(payload: unknown): WhatsAppInboundMessage
           else if (interactiveType === 'list_reply') text = asString(asRecord(interactive.list_reply).title);
         }
 
-        results.push({ providerMessageId: id, from, type, text });
+        results.push({
+          providerMessageId: id,
+          from,
+          type,
+          text,
+          profileName: profileNames.get(from) ?? null,
+          referral: extractReferral(m.referral),
+        });
       }
     }
   }

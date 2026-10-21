@@ -215,3 +215,39 @@ export async function inspectPageToken(): Promise<MetaTokenHealth> {
     return { isValid: false, expiresAt: null, scopes: [], error: err instanceof Error ? err.message : String(err) };
   }
 }
+
+// ── Click-to-WhatsApp helpers ────────────────────────────────────────────────
+
+export interface MetaAdDetails {
+  adName: string | null;
+  adsetName: string | null;
+  campaignId: string | null;
+  campaignName: string | null;
+}
+
+/**
+ * Resolves a Click-to-WhatsApp referral's `source_id` (an ad id) to its
+ * ad / ad set / campaign names. Best-effort: needs a token with ads_read, and
+ * returns null (never throws) so a narrow token can't block lead capture.
+ */
+export async function fetchAdDetails(adId: string): Promise<MetaAdDetails | null> {
+  try {
+    const token = process.env.META_ADS_ACCESS_TOKEN || (await getMetaPageAccessToken());
+    const url = `${BASE}/${apiVersion()}/${encodeURIComponent(adId)}?fields=name,adset{name},campaign{id,name}&access_token=${token}`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(10_000) });
+    if (!res.ok) return null;
+    const data = await res.json() as {
+      name?: string;
+      adset?: { name?: string };
+      campaign?: { id?: string; name?: string };
+    };
+    return {
+      adName: data.name ?? null,
+      adsetName: data.adset?.name ?? null,
+      campaignId: data.campaign?.id ?? null,
+      campaignName: data.campaign?.name ?? null,
+    };
+  } catch {
+    return null;
+  }
+}

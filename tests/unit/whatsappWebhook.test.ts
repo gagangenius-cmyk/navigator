@@ -72,7 +72,7 @@ describe('extractStatusChanges', () => {
 describe('extractInboundMessages', () => {
   it('extracts a plain text message', () => {
     const messages = extractInboundMessages(inboundTextPayload);
-    expect(messages).toEqual([{ providerMessageId: 'wamid.xyz', from: '971500000000', type: 'text', text: 'STOP' }]);
+    expect(messages).toEqual([{ providerMessageId: 'wamid.xyz', from: '971500000000', type: 'text', text: 'STOP', profileName: null, referral: null }]);
   });
 
   it('extracts the selected title from an interactive button_reply message', () => {

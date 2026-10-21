@@ -5,6 +5,7 @@ import { validateWebhookSignature } from '@/lib/meta/webhook';
 import { extractInboundMessages, extractStatusChanges, isOptOutMessage, type WhatsAppInboundMessage, type WhatsAppStatusChange } from '@/lib/whatsappWebhook';
 import { CrmBroadcastRecipients, CrmBroadcastEvents, CrmBroadcastCampaigns, CrmContactChannelConsents, CrmContactConsentEvents, CrmBotSessions, CrmBotMessages } from '@/models';
 import { findLeadIdByPhone } from '@/lib/phoneLookup';
+import { handleCtwaMessage } from '@/lib/meta/ctwa-leads';
 import { waitEventCorrelationKey, botMessageDedupKey } from '@/lib/broadcastDedupeKeys';
 import { resumeWaitForEvent } from '@/lib/workflowRuntime';
 import { fireInboundMessageBotTrigger, fireCampaignEventTrigger } from '@/lib/workflowTriggers';
@@ -35,6 +36,9 @@ import { fireInboundMessageBotTrigger, fireCampaignEventTrigger } from '@/lib/wo
 //     src/lib/workflowTriggers.ts's session-creation policy: the first
 //     published 'bot' workflow with a trigger.inbound_message node for this
 //     channel starts exactly one new session + enrollment.
+//  0. (runs first) An inbound message carrying a Click-to-WhatsApp ad
+//     `referral` creates a lead from the ad attribution when the number is
+//     unknown (src/lib/meta/ctwa-leads.ts), then continues through 1-5 above.
 
 let dbReady = false;
 async function ensureDB() {
@@ -137,7 +141,11 @@ async function processStatusChange(change: WhatsAppStatusChange): Promise<void> 
 }
 
 async function processInboundMessage(message: WhatsAppInboundMessage): Promise<void> {
-  const leadId = await findLeadIdByPhone(message.from);
+  // Click-to-WhatsApp ad referral: create (or attribute to) the CRM lead first,
+  // so everything below - opt-out, bot session, broadcast reply - sees the
+  // brand-new lead instead of dropping the message as an unknown number.
+  const ctwa = await handleCtwaMessage(message);
+  const leadId = ctwa.leadId ?? await findLeadIdByPhone(message.from);
 
   if (isOptOutMessage(message.text)) {
     await recordOptOut(leadId, message.from);
