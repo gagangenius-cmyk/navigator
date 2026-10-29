@@ -12,10 +12,10 @@ import { z } from 'zod';
 // ("{{first_name}}"). extractVariableTokens() in broadcastTemplateRender.ts
 // matches both with one regex since \w covers digits and letters alike.
 
-const variableTokenName = /^[a-zA-Z0-9_]+$/;
+const variableTokenName = /^[a-zA-Z0-9_.]+$/;
 
 export const templateVariableDefinitionSchema = z.object({
-  name: z.string().min(1).regex(variableTokenName, 'Variable name must be alphanumeric/underscore only, matching the {{name}} token it stands for'),
+  name: z.string().min(1).regex(variableTokenName, 'Variable name must be alphanumeric/underscore/dot only, matching the {{name}} token it stands for'),
   type: z.enum(['string', 'number', 'date']).default('string'),
   required: z.boolean().default(true),
   sample: z.string().optional(),

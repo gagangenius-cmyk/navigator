@@ -5,7 +5,7 @@
 // "{{2}}", ... in body text) is just a naming convention within that same
 // token shape, not a different syntax, so one regex covers every channel.
 
-const TOKEN_PATTERN = /\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g;
+const TOKEN_PATTERN = /\{\{\s*([a-zA-Z0-9_.]+)\s*\}\}/g;
 
 export function extractVariableTokens(text: string): string[] {
   const names = new Set<string>();

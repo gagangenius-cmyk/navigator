@@ -15,6 +15,9 @@ interface CrmMessageTemplatesAttributes {
   currentDraftVersionId: number | null;
   currentPublishedVersionId: number | null;
   ownerId: number;
+  scopeLevel: 'company' | 'branch' | 'role';
+  roleId: number | null;
+  baseTemplateId: number | null;
   isDeleted: boolean;
   deletedAt: Date | null;
   createdAt: Date;
@@ -22,7 +25,7 @@ interface CrmMessageTemplatesAttributes {
 }
 
 interface CrmMessageTemplatesCreationAttributes extends Optional<CrmMessageTemplatesAttributes,
-  'id' | 'branchId' | 'category' | 'language' | 'folder' | 'tags' | 'providerTemplateId' | 'status' | 'currentDraftVersionId' | 'currentPublishedVersionId' | 'isDeleted' | 'deletedAt' | 'createdAt' | 'updatedAt'> {}
+  'id' | 'branchId' | 'category' | 'language' | 'folder' | 'tags' | 'providerTemplateId' | 'status' | 'currentDraftVersionId' | 'currentPublishedVersionId' | 'scopeLevel' | 'roleId' | 'baseTemplateId' | 'isDeleted' | 'deletedAt' | 'createdAt' | 'updatedAt'> {}
 
 class CrmMessageTemplates extends Model<CrmMessageTemplatesAttributes, CrmMessageTemplatesCreationAttributes> implements CrmMessageTemplatesAttributes {
   declare id: number;
@@ -38,6 +41,9 @@ class CrmMessageTemplates extends Model<CrmMessageTemplatesAttributes, CrmMessag
   declare currentDraftVersionId: number | null;
   declare currentPublishedVersionId: number | null;
   declare ownerId: number;
+  declare scopeLevel: 'company' | 'branch' | 'role';
+  declare roleId: number | null;
+  declare baseTemplateId: number | null;
   declare isDeleted: boolean;
   declare deletedAt: Date | null;
   declare createdAt: Date;
@@ -66,6 +72,9 @@ CrmMessageTemplates.init(
     currentDraftVersionId: { type: DataTypes.INTEGER, allowNull: true, field: 'current_draft_version_id' },
     currentPublishedVersionId: { type: DataTypes.INTEGER, allowNull: true, field: 'current_published_version_id' },
     ownerId: { type: DataTypes.INTEGER, allowNull: false, field: 'owner_id', references: { model: 'crm_employee', key: 'id' } },
+    scopeLevel: { type: DataTypes.ENUM('company', 'branch', 'role'), allowNull: false, defaultValue: 'company', field: 'scope_level' },
+    roleId: { type: DataTypes.INTEGER, allowNull: true, field: 'role_id' },
+    baseTemplateId: { type: DataTypes.INTEGER, allowNull: true, field: 'base_template_id' },
     isDeleted: { type: DataTypes.TINYINT, allowNull: false, defaultValue: 0, field: 'is_deleted' },
     deletedAt: { type: DataTypes.DATE, allowNull: true, field: 'deleted_at' },
     createdAt: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW, field: 'created_at' },

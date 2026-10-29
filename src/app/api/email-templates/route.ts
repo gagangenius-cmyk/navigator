@@ -38,7 +38,7 @@ function normalizeTemplate(row: any) {
 
 export async function GET(request: NextRequest) {
   try {
-    const auth = requireAuth(request);
+    const auth = requireAuth(request, ['templates.use', 'templates.manage']);
     if (isAuthError(auth)) return auth;
 
     const { searchParams } = new URL(request.url);
@@ -142,7 +142,7 @@ export async function POST(request: NextRequest) {
             data.status === 'inactive' ? 0 : 1,
             data.tags?.includes?.('ops') ? 1 : 0,
             data.tags?.includes?.('sales') ? 1 : 0,
-            Number(data.createdBy || 1),
+            auth.id,
           ],
         }
       );

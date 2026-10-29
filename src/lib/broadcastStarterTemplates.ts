@@ -1,4 +1,5 @@
 import { CrmMessageTemplates, CrmMessageTemplateVersions, CrmAutomationAuditLogs } from '@/models';
+import { ensureTemplateScopeColumns } from '@/lib/ensureTemplateScopeColumns';
 import { templateVersionContentHash } from './broadcastTemplateHash';
 import { extractVariableTokens } from './broadcastTemplateRender';
 
@@ -109,17 +110,21 @@ const renderHtml = (s: Starter) => `<!doctype html><html><body style="margin:0;b
 </table></td></tr></table></body></html>`;
 
 export async function installStarterTemplates(actor: { id: number; branch?: number | null }) {
+  await ensureTemplateScopeColumns();
   const created: string[] = [];
   const skipped: string[] = [];
   for (const starter of STARTERS) {
-    const existing = await CrmMessageTemplates.findOne({ where: { name: starter.name, channel: 'email', isDeleted: false } });
+    const existing = await CrmMessageTemplates.findOne({ where: { name: starter.name, channel: 'email', branchId: null, isDeleted: false } });
     if (existing) { skipped.push(starter.name); continue; }
 
     const html = renderHtml(starter);
     const components = { subject: starter.subject };
     const tokens = extractVariableTokens(`${starter.subject} ${html}`);
     const template = await CrmMessageTemplates.create({
-      branchId: actor.branch ?? null,
+      // Company scope: every branch/employee sees starters; branches override
+      // (base_template_id) instead of installing their own copy.
+      branchId: null,
+      scopeLevel: 'company',
       channel: 'email',
       name: starter.name,
       category: starter.category,

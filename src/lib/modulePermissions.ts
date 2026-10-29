@@ -59,6 +59,7 @@ export const modulePermissions = {
   marketingManage: 'marketing.manage',
   campaignsManage: 'campaigns.manage',
   templatesManage: 'templates.manage',
+  templatesUse: 'templates.use',
   b2bManage: 'b2b.manage',
   employersManage: 'employers.manage',
   transfersManage: 'transfers.manage',
@@ -180,6 +181,7 @@ const adminPermissions: ModulePermission[] = [
   modulePermissions.marketingManage,
   modulePermissions.campaignsManage,
   modulePermissions.templatesManage,
+  modulePermissions.templatesUse,
   modulePermissions.b2bManage,
   modulePermissions.employersManage,
   modulePermissions.transfersManage,
@@ -588,11 +590,16 @@ const rolePermissionMatrixBase: Array<{
   },
 ];
 
+// Every employee can pick and render shared message templates (templates.use);
+// editing/publishing stays behind templates.manage. Merged into every role so a
+// new employee needs no per-user setup.
+const templateUsePermissions: ModulePermission[] = [modulePermissions.templatesUse];
+
 // Every role gets it.create/it.self merged in, so any employee can raise and
 // track their own IT support tickets regardless of their primary role.
 export const rolePermissionMatrix: typeof rolePermissionMatrixBase = rolePermissionMatrixBase.map((row) => ({
   ...row,
-  permissions: Array.from(new Set([...row.permissions, ...itSelfServicePermissions])),
+  permissions: Array.from(new Set([...row.permissions, ...itSelfServicePermissions, ...templateUsePermissions])),
 }));
 
 const normalize = (value?: string | number | null) => String(value || '')

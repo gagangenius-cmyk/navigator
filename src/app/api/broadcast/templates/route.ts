@@ -6,6 +6,8 @@ import { CrmMessageTemplates, CrmMessageTemplateVersions } from '@/models';
 import { canViewAllBranches } from '@/lib/roleChecks';
 import { componentsSchemaForChannel, templateVariableSchemaArray } from '@/lib/broadcastTemplateSchemas';
 import { templateVersionContentHash } from '@/lib/broadcastTemplateHash';
+import { ensureTemplateScopeColumns } from '@/lib/ensureTemplateScopeColumns';
+import { allowedScopeForCreator, resolveUsableTemplates } from '@/lib/messageTemplateScope';
 
 const TEMPLATE_PERMISSION = ['templates.manage'];
 
@@ -18,11 +20,22 @@ const ensureDb = async () => {
 };
 
 export async function GET(request: NextRequest) {
-  const auth = requireAuth(request, TEMPLATE_PERMISSION);
+  // ?usable=1 is the picker list for any employee (templates.use): approved,
+  // published templates resolved company > branch > role with overrides applied.
+  const usableOnly = new URL(request.url).searchParams.get('usable') === '1';
+  const auth = requireAuth(request, usableOnly ? ['templates.use', ...TEMPLATE_PERMISSION] : TEMPLATE_PERMISSION);
   if (isAuthError(auth)) return auth;
   try {
     await ensureDb();
+    await ensureTemplateScopeColumns();
     const { searchParams } = new URL(request.url);
+    if (usableOnly) {
+      const usable = await resolveUsableTemplates(
+        { id: auth.id, branch: auth.branch, role: auth.role },
+        { channel: searchParams.get('channel') || undefined, search: searchParams.get('search')?.trim() || undefined }
+      );
+      return NextResponse.json({ success: true, templates: usable });
+    }
     const channel = searchParams.get('channel');
     const status = searchParams.get('status');
     const search = searchParams.get('search')?.trim();
@@ -49,6 +62,7 @@ export async function POST(request: NextRequest) {
   if (isAuthError(auth)) return auth;
   try {
     await ensureDb();
+    await ensureTemplateScopeColumns();
     const body = await request.json();
 
     if (!body.channel || !['email', 'whatsapp', 'sms'].includes(body.channel)) {
@@ -78,8 +92,26 @@ export async function POST(request: NextRequest) {
       variableSchema = variablesResult.data;
     }
 
+    const scope = allowedScopeForCreator(canViewAllBranches(auth), body.scopeLevel, auth);
+    if (!scope.ok) return NextResponse.json({ success: false, error: scope.error }, { status: 403 });
+    const roleId = scope.scopeLevel === 'role' ? Number(body.roleId) || null : null;
+    if (scope.scopeLevel === 'role' && !roleId) {
+      return NextResponse.json({ success: false, error: 'roleId is required for role-scoped templates' }, { status: 400 });
+    }
+    // The DB unique key treats NULL branch_id rows as distinct, so company-scope
+    // duplicates must be rejected here.
+    const duplicate = await CrmMessageTemplates.findOne({
+      where: { branchId: scope.branchId, roleId, channel: body.channel, name: body.name, isDeleted: false },
+    });
+    if (duplicate) {
+      return NextResponse.json({ success: false, error: 'A template with this name already exists in this scope' }, { status: 409 });
+    }
+
     const template = await CrmMessageTemplates.create({
-      branchId: auth.branch ?? null,
+      branchId: scope.branchId,
+      scopeLevel: scope.scopeLevel,
+      roleId,
+      baseTemplateId: body.baseTemplateId ? Number(body.baseTemplateId) : null,
       channel: body.channel,
       name: body.name,
       category: body.category ?? null,
