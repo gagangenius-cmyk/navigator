@@ -577,6 +577,20 @@ export async function PUT(
       );
     }
 
+    // A remark saved on its own (status popup with the status unchanged, Edit
+    // Lead Notes) never reached crm_remarks, so it was missing from Today
+    // Activity. When the status also changed, the status_changed entry below
+    // already carries the remark text.
+    if (notesChanged && !statusChanged) {
+      await logLeadRemark({
+        leadId: Number(id),
+        action: 'remark_added',
+        remark: incomingNotes as string,
+        actorId: auth.id,
+        actorRole: auth.roleName || auth.type,
+      });
+    }
+
     if (followUpChanged && followUpReminder) {
       const existingAssignTo = (existingLead as Record<string, unknown>).assignTo;
       const targetEmployeeId = Number(data.leadOwner ?? data.assignTo ?? existingAssignTo ?? auth.id);

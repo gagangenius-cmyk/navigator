@@ -4,7 +4,7 @@ import { QueryTypes } from 'sequelize';
 import { verifyToken } from '@/lib/auth';
 import { isCeo } from '@/lib/roleChecks';
 import { notifyMetaLeadQuality } from '@/lib/meta/lead-quality-feedback';
-import { recordLeadAssignment } from '@/lib/leadRemarks';
+import { recordLeadAssignment, logLeadRemark } from '@/lib/leadRemarks';
 import { assertLeadAccess } from '@/lib/leadAccess';
 import { logAudit } from '@/lib/auditLog';
 
@@ -72,8 +72,10 @@ export async function PUT(
       discount: number | string | null;
       paidYet: number | string | null;
       assignTo: number | string | null;
+      status: string | null;
+      lead_remark: string | null;
     }>(
-      'SELECT payTotal, discount, paidYet, assignTo FROM crm_forum_leads WHERE id = ? LIMIT 1',
+      'SELECT payTotal, discount, paidYet, assignTo, status, lead_remark FROM crm_forum_leads WHERE id = ? LIMIT 1',
       { replacements: [id], type: QueryTypes.SELECT },
     );
     if (!existing) return NextResponse.json({ error: 'Lead not found' }, { status: 404 });
@@ -117,6 +119,31 @@ export async function PUT(
         actorRole: currentUser.roleName || currentUser.type,
         before: { payTotal: existing.payTotal, discount: existing.discount, paidYet: existing.paidYet },
         after: { payTotal: updates.payTotal, discount: updates.discount, paidYet: updates.paidYet, payBalance: updates.payBalance },
+      });
+    }
+
+    // Kanban drag-drop and quick edits change status/remark here; without a
+    // crm_remarks entry they never showed up in the Today Activity tab.
+    const actorRole = currentUser.roleName || currentUser.type;
+    if (typeof updates.status === 'string' && updates.status !== existing.status) {
+      await logLeadRemark({
+        leadId: id,
+        action: 'status_changed',
+        remark: `Status changed from ${existing.status || 'New'} to ${updates.status} by ${currentUser.name || `Employee #${currentUser.id}`} (${actorRole})`,
+        previousValue: existing.status || 'New',
+        newValue: updates.status,
+        actorId: currentUser.id,
+        actorRole,
+      });
+    }
+    const newRemark = typeof updates.lead_remark === 'string' ? updates.lead_remark.trim() : '';
+    if (newRemark && newRemark !== String(existing.lead_remark || '').trim()) {
+      await logLeadRemark({
+        leadId: id,
+        action: 'remark_added',
+        remark: newRemark,
+        actorId: currentUser.id,
+        actorRole,
       });
     }
 
