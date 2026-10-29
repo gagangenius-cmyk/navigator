@@ -10,6 +10,7 @@ import { renderAgreementForBranch } from '@/lib/renderAgreementForBranch';
 import { formatDocumentNumber, formatReceiptNumber } from '@/lib/documentNumbering';
 import { notifyCeo, notifyRole } from '@/lib/notify';
 import { logAudit } from '@/lib/auditLog';
+import { logLeadRemark } from '@/lib/leadRemarks';
 import { deriveProductTypeFromLabel } from '@/lib/clientPortalProducts';
 import { getAdminFeeAmount } from '@/lib/receiptTemplate';
 import { ensurePayHistoryAdminFeeColumns } from '@/lib/ensurePayHistoryAdminFeeColumns';
@@ -861,6 +862,14 @@ export async function POST(request: NextRequest) {
     let leadRemarkSummary = null;
     if (remarkText) {
       const leadRemark = await createLeadRemark(lead.id, remarkText, createdBy, now, transaction);
+      // Same transaction so the activity entry rolls back with the remark.
+      await logLeadRemark({
+        leadId: lead.id,
+        action: 'remark_added',
+        remark: remarkText,
+        actorId: createdBy,
+        transaction,
+      });
       leadRemarkSummary = {
         id: leadRemark.id,
         leadId: lead.id,

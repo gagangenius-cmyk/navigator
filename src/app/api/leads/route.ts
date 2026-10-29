@@ -256,7 +256,7 @@ export async function GET(request: NextRequest) {
     const toSqlUtc = (ms: number) => new Date(ms).toISOString().slice(0, 19).replace('T', ' ')
     const todayStartUtc = toSqlUtc(dayStartUtcMs)
     const todayEndUtc = toSqlUtc(dayStartUtcMs + 24 * 60 * 60 * 1000)
-    const TODAY_ACTIVITY_SQL = `EXISTS (SELECT 1 FROM crm_remarks cr WHERE cr.lead_id = l.id AND cr.action IN ('remark_added', 'followup_added', 'appointment_booked', 'whatsapp_sent', 'status_changed') AND cr.created_at >= ? AND cr.created_at < ?)`
+    const TODAY_ACTIVITY_SQL = `EXISTS (SELECT 1 FROM crm_remarks cr WHERE cr.lead_id = l.id AND cr.action IN ('remark_added', 'remark_edited', 'followup_added', 'appointment_booked', 'whatsapp_sent', 'status_changed') AND cr.created_at >= ? AND cr.created_at < ?)`
 
     if (isMyLeadsView) {
       if (!isBranchManagerOrCeo(currentUser)) {
