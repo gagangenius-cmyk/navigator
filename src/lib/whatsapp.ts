@@ -89,8 +89,8 @@ export async function sendWhatsAppMessage({ to, message, actorId, leadId }: {
   leadId?: number | null;
 }) {
   const digits = to.replace(/\D/g, '');
-  const accessToken = process.env.WHATSAPP_ACCESS_TOKEN;
-  const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+  const accessToken = process.env.WHATSAPP_ACCESS_TOKEN?.trim();
+  const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID?.trim();
 
   if (!digits) {
     const error = 'No valid phone number to send to';
@@ -169,8 +169,8 @@ export async function sendWhatsAppTemplateMessage({
   leadId?: number | null;
 }) {
   const digits = to.replace(/\D/g, '');
-  const accessToken = process.env.WHATSAPP_ACCESS_TOKEN;
-  const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+  const accessToken = process.env.WHATSAPP_ACCESS_TOKEN?.trim();
+  const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID?.trim();
   const logLabel = `[template:${templateName}]`;
 
   if (!digits) {
