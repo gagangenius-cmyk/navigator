@@ -17,6 +17,11 @@ const handlers = createCrudHandlers({
     status: 'status',
     verification: 'verify',
   },
+  requiredPermissions: ['clients.view'],
+  // The GET below is overridden and gated on clients.view, but POST/PUT use
+  // these generic handlers - with no permissions configured they accepted
+  // any authenticated staff user.
+  writePermissions: ['clients.create', 'clients.update'],
   defaults: (body) => ({
     created: body.created || new Date(),
     token_validity:
