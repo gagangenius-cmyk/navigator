@@ -1,6 +1,12 @@
 const mysql = require('mysql2/promise');
 
-const databaseUrl = 'mysql://dmconsultant_dm_next:Demo2026DMNEXT@187.127.123.60:3306/dmconsultant_dm_next';
+require('dotenv').config();
+
+const databaseUrl = process.env.DATABASE_URL;
+if (!databaseUrl) {
+  console.error('DATABASE_URL is not set (put it in .env). Never hard-code credentials in this script.');
+  process.exit(1);
+}
 const parsedUrl = new URL(databaseUrl);
 const database = parsedUrl.pathname.replace(/^\//, '');
 
