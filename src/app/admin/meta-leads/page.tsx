@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
+import WhatsAppConnectCard from './WhatsAppConnectCard';
 import {
   BarChart3, Users, CheckCircle, XCircle, Clock, RefreshCw,
   Facebook, AlertTriangle, TrendingUp, Settings, ArrowRight,
@@ -140,6 +141,8 @@ export default function MetaLeadsDashboard() {
           {message}
         </div>
       )}
+
+      <WhatsAppConnectCard />
 
       {/* Nav links */}
       <div className="flex flex-wrap gap-2">
