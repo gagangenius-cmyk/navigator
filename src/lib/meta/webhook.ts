@@ -31,6 +31,29 @@ export function validateWebhookSignature(rawBody: string, signatureHeader: strin
   }
 }
 
+/**
+ * Authenticates a WhatsApp webhook forwarded by a Business Solution Provider
+ * (coexistence setups where the provider, not Meta, calls us). A provider does
+ * not sign with our Meta app secret, so it is given a shared secret instead,
+ * sent as "X-Webhook-Secret: <secret>" or "Authorization: Bearer <secret>".
+ * Fails closed: unset or short (<16 chars) WHATSAPP_PROVIDER_WEBHOOK_SECRET
+ * disables this path entirely.
+ */
+export function validateProviderSecret(headers: { get(name: string): string | null }): boolean {
+  const secret = process.env.WHATSAPP_PROVIDER_WEBHOOK_SECRET;
+  if (!secret || secret.length < 16) return false;
+
+  const supplied = headers.get('x-webhook-secret')
+    ?? headers.get('authorization')?.replace(/^Bearer\s+/i, '')
+    ?? '';
+  if (!supplied) return false;
+
+  // Hash both sides so timingSafeEqual always compares equal-length buffers.
+  const a = crypto.createHash('sha256').update(supplied, 'utf8').digest();
+  const b = crypto.createHash('sha256').update(secret, 'utf8').digest();
+  return crypto.timingSafeEqual(a, b);
+}
+
 /** Computes a deduplication hash for a webhook event payload */
 export function webhookEventHash(rawBody: string): string {
   return crypto.createHash('sha256').update(rawBody, 'utf8').digest('hex');

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Op } from 'sequelize';
 import { connectDB } from '@/lib/sequelize';
-import { validateWebhookSignature } from '@/lib/meta/webhook';
+import { validateWebhookSignature, validateProviderSecret } from '@/lib/meta/webhook';
 import { extractInboundMessages, extractStatusChanges, isOptOutMessage, type WhatsAppInboundMessage, type WhatsAppStatusChange } from '@/lib/whatsappWebhook';
 import { CrmBroadcastRecipients, CrmBroadcastEvents, CrmBroadcastCampaigns, CrmContactChannelConsents, CrmContactConsentEvents, CrmBotSessions, CrmBotMessages } from '@/models';
 import { findLeadIdByPhone } from '@/lib/phoneLookup';
@@ -68,8 +68,9 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const rawBody = await request.text();
   const signature = request.headers.get('x-hub-signature-256');
-  if (!validateWebhookSignature(rawBody, signature)) {
-    console.warn('[WhatsApp Webhook] Invalid signature rejected');
+  // Direct from Meta (HMAC signature) or forwarded by a coexistence provider (shared secret).
+  if (!validateWebhookSignature(rawBody, signature) && !validateProviderSecret(request.headers)) {
+    console.warn('[WhatsApp Webhook] Unauthenticated request rejected');
     return new NextResponse('Invalid signature', { status: 403 });
   }
 
