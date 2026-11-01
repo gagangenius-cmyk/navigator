@@ -6,10 +6,11 @@ import { useOperationStages, useSaveOperationStage } from '@/hooks/useOperations
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   User, FileText, Award, Globe as GlobeIcon, MapPin, FolderOpen, Files, Send, ScrollText, FlagOff,
-  ChevronRight, ChevronLeft, Save, CheckCircle, FolderCheck, MessageSquare
+  ChevronRight, ChevronLeft,  CheckCircle, FolderCheck, MessageSquare
 } from 'lucide-react';
 import ClientDocumentsPanel from '@/components/operations/ClientDocumentsPanel';
 import ClientChatPanel from '@/components/operations/ClientChatPanel';
+import { GenericStage, type StageField } from './operations-generic-stage';
 
 const CLIENT_DOCUMENTS_STAGE_ID = 'client-documents';
 
@@ -24,18 +25,6 @@ interface OperationsStage {
   name: string;
   icon: any;
   status: 'pending' | 'current' | 'completed';
-}
-
-type FieldType = 'text' | 'date' | 'select' | 'textarea' | 'file' | 'number';
-
-interface StageField {
-  name: string;
-  label: string;
-  type?: FieldType;
-  options?: string[];
-  required?: boolean;
-  readOnly?: boolean;
-  span?: 'full';
 }
 
 const statusOptions = ['Pending', 'Submitted', 'Under Review', 'Sent for filing', 'Completed', 'Insufficient', 'Registered', 'Rejected', 'Not Applicable'];
@@ -207,194 +196,6 @@ const stageFieldMap: Record<string, StageField[]> = {
     { name: 'closureNotes', label: 'Closure Notes', type: 'textarea', span: 'full', required: true },
   ],
 };
-
-function GenericStage({
-  title,
-  description,
-  fields,
-  data,
-  isFirstStage,
-  isLastStage,
-  onFieldChange,
-  onSaveDraft,
-  onBack,
-  onContinue,
-}: {
-  title: string;
-  description: string;
-  fields: StageField[];
-  data: Record<string, any>;
-  isFirstStage: boolean;
-  isLastStage: boolean;
-  onFieldChange: (field: StageField, value: any) => void;
-  onSaveDraft: () => Promise<void>;
-  onBack: () => void;
-  onContinue: () => Promise<void>;
-}) {
-  const [localSaving, setLocalSaving] = useState(false);
-  const [continuing, setContinuing] = useState(false);
-
-  const handleSave = async () => {
-    setLocalSaving(true);
-    try {
-      await onSaveDraft();
-      window.toast.success(`${title} saved successfully!`);
-    } catch (error) {
-      window.toast.error('Failed to save data');
-    } finally {
-      setLocalSaving(false);
-    }
-  };
-
-  const missingRequired = fields.filter((field) => field.required && !data[field.name]);
-
-  const renderField = (field: StageField) => {
-    const value = data[field.name] || '';
-    const inputClass = 'w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50 disabled:text-gray-500';
-    const label = (
-      <label className="block text-sm font-medium text-gray-700 mb-2">
-        {field.label}
-        {field.required && <span className="ml-1 text-red-600">*</span>}
-      </label>
-    );
-
-    if (field.type === 'textarea') {
-      return (
-        <div key={field.name} className={field.span === 'full' ? 'md:col-span-2' : ''}>
-          {label}
-          <textarea
-            value={value}
-            onChange={(event) => onFieldChange(field, event.target.value)}
-            rows={4}
-            className={inputClass}
-            placeholder={field.label}
-          />
-        </div>
-      );
-    }
-
-    if (field.type === 'select') {
-      return (
-        <div key={field.name}>
-          {label}
-          <select
-            value={value}
-            onChange={(event) => onFieldChange(field, event.target.value)}
-            disabled={field.readOnly}
-            className={inputClass}
-          >
-            <option value="">Select</option>
-            {(field.options || []).map((option) => (
-              <option key={option} value={option}>{option}</option>
-            ))}
-          </select>
-        </div>
-      );
-    }
-
-    if (field.type === 'file') {
-      const uploaded = value && typeof value === 'object' && 'url' in value ? value : null;
-      return (
-        <div key={field.name} className={field.span === 'full' ? 'md:col-span-2' : ''}>
-          {label}
-          {uploaded?.url && (
-            <a href={uploaded.url} target="_blank" className="mb-2 block text-xs font-medium text-blue-700 hover:text-blue-900">
-              View uploaded file
-            </a>
-          )}
-          <input
-            type="file"
-            onChange={(event) => onFieldChange(field, event.target.files?.[0] || null)}
-            className={inputClass}
-          />
-          <p className="mt-1 text-xs text-gray-400">Accepted legacy formats: png, jpeg, jpg, pdf, docx, doc, xls, xlsx.</p>
-        </div>
-      );
-    }
-
-    return (
-      <div key={field.name}>
-        {label}
-        <input
-          type={field.type === 'date' ? 'date' : field.type === 'number' ? 'number' : 'text'}
-          value={value}
-          onChange={(event) => onFieldChange(field, event.target.value)}
-          readOnly={field.readOnly}
-          className={inputClass}
-          placeholder={field.label}
-        />
-      </div>
-    );
-  };
-
-  return (
-    <div className="space-y-6">
-      <h3 className="text-xl font-semibold text-gray-900">{title}</h3>
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
-        <p className="text-blue-800">{description}</p>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {fields.map(renderField)}
-        {missingRequired.length > 0 && (
-          <div className="md:col-span-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-            Pending required fields: {missingRequired.map((field) => field.label).join(', ')}
-          </div>
-        )}
-      </div>
-
-      <div className="flex justify-between pt-6">
-        {!isFirstStage && (
-          <button
-            onClick={onBack}
-            className="px-6 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 flex items-center font-medium"
-          >
-            <ChevronLeft className="mr-2" size={20} />
-            Back
-          </button>
-        )}
-        <div className="flex gap-3 ml-auto">
-          <button
-            onClick={handleSave}
-            disabled={localSaving}
-            className="px-6 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 disabled:bg-gray-400 flex items-center font-medium"
-          >
-            <Save className="mr-2" size={20} />
-            {localSaving ? 'Saving...' : 'Save Draft'}
-          </button>
-          <button
-            onClick={async () => {
-              if (missingRequired.length > 0) {
-                window.toast.warning(`Complete required fields: ${missingRequired.map((field) => field.label).join(', ')}`);
-                return;
-              }
-              setContinuing(true);
-              try {
-                await onContinue();
-              } finally {
-                setContinuing(false);
-              }
-            }}
-            disabled={continuing}
-            className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-blue-400 flex items-center font-medium"
-          >
-            {isLastStage ? (
-              <>
-                <CheckCircle className="mr-2" size={20} />
-                Complete
-              </>
-            ) : (
-              <>
-                Continue
-                <ChevronRight className="ml-2" size={20} />
-              </>
-            )}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 export default function SkillAustraliaOperationsWizard({
   opportunityId,
