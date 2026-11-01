@@ -14,6 +14,9 @@ const handlers = createCrudHandlers({
     status: 'status',
   },
   requiredPermissions: ['sales.view', 'finance.view', 'finance.manage', 'invoices.view'],
+  // View-only grants (sales.view / finance.view / invoices.view) must not create
+  // or edit invoices - POST/PUT previously fell back to the read list above.
+  writePermissions: ['finance.manage', 'invoices.create', 'invoices.update'],
   // CEO/finance.* see every branch's invoices; Branch Manager their own;
   // everyone else (a plain sales.view holder) their own branch too, since
   // crm_b2b_invoices has no per-employee owner column to narrow further.

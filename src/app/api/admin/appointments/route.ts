@@ -12,6 +12,8 @@ const handlers = createCrudHandlers({
   // authenticated user (not just appointments.view/manage holders) could
   // read/write appointments through it.
   requiredPermissions: ['appointments.view', 'appointments.manage'],
+  // appointments.view is read-only; only appointments.manage may write.
+  writePermissions: ['appointments.manage'],
   statusFilter: (status) => {
     if (status === 'booked') return { booked: 1 };
     if (status === 'completed') return { done: 1 };

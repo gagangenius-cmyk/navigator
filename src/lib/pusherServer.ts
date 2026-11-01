@@ -5,8 +5,7 @@ import Pusher from 'pusher';
 // (crm_notifications). This app deploys as serverless Next.js API routes (no
 // persistent process a self-hosted Socket.IO server could attach to), so a
 // managed pub/sub service is the only way to get genuine WebSocket push here
-// — see src/lib/websocket-server.ts for the dead in-process Socket.IO server
-// this replaces.
+// — this replaces the former in-process Socket.IO server (removed: unauthenticated, never wired up)
 //
 // Deliberately optional: every call site here works fine with these env vars
 // unset — the REST endpoints still persist everything to the database and

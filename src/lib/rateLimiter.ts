@@ -6,6 +6,17 @@ const WINDOW_MS = 15 * 60 * 1000; // 15 minutes
 const MAX_ATTEMPTS = 5;
 
 const attemptsByKey = new Map<string, number[]>();
+// Longest window any caller uses is well under a day; fallback entries older than
+// this can never count against anyone, so they are evicted to keep the map bounded.
+const MEMORY_RETENTION_MS = 24 * 60 * 60 * 1000;
+const MEMORY_SWEEP_THRESHOLD = 1000;
+
+function sweepMemory(now: number): void {
+  if (attemptsByKey.size < MEMORY_SWEEP_THRESHOLD) return;
+  for (const [key, timestamps] of attemptsByKey) {
+    if (!timestamps.length || now - timestamps[timestamps.length - 1] > MEMORY_RETENTION_MS) attemptsByKey.delete(key);
+  }
+}
 
 function pruneOld(timestamps: number[], windowMs: number, now: number): number[] {
   return timestamps.filter((t) => now - t < windowMs);
@@ -67,6 +78,7 @@ export async function recordFailedAttempt(key: string, options?: { windowMs?: nu
     const timestamps = pruneOld(attemptsByKey.get(key) || [], windowMs, now);
     timestamps.push(now);
     attemptsByKey.set(key, timestamps);
+    sweepMemory(now);
   }
 }
 

@@ -41,6 +41,8 @@ const handlers = createCrudHandlers({
     date_created: body.date_created || new Date().toISOString().slice(0, 10),
   }),
   requiredPermissions: ['operations.view', 'operations.manage'],
+  // operations.view is read-only; writes need a create/update/manage grant.
+  writePermissions: ['operations.create', 'operations.update', 'operations.manage'],
   before: ensureDB,
 });
 
