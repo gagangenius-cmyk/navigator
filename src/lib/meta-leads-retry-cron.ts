@@ -1,4 +1,5 @@
 import { retryFailedDeliveries } from '@/lib/meta/processor';
+import { retryFailedCtwaLeads } from '@/lib/meta/ctwa-leads';
 import { withCronRunLog } from '@/lib/cronRunLog';
 
 type CronTask = {
@@ -55,6 +56,15 @@ export async function startMetaLeadsRetryCron() {
         }
       } catch (error) {
         console.error('Meta leads retry sweep failed:', error);
+      }
+      // Separate try so a failing lead-ads sweep can't starve the Click-to-WhatsApp one.
+      try {
+        const ctwa = await withCronRunLog('ctwa_leads_retry', () => retryFailedCtwaLeads());
+        if (ctwa.processed > 0 || ctwa.errors > 0) {
+          console.log(`CTWA leads retry sweep: ${ctwa.processed} processed, ${ctwa.errors} errors.`);
+        }
+      } catch (error) {
+        console.error('CTWA leads retry sweep failed:', error);
       }
     },
     { timezone: 'Asia/Dubai', scheduled: true }

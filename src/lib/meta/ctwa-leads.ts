@@ -119,7 +119,6 @@ export async function handleCtwaMessage(message: WhatsAppInboundMessage): Promis
   const referral = message.referral;
   if (!referral) return none;
 
-  let recordId: number | null = null;
   try {
     await ensureCtwaSchema();
     if (!(await integrationEnabled())) return none;
@@ -153,8 +152,27 @@ export async function handleCtwaMessage(message: WhatsAppInboundMessage): Promis
       },
     ) as unknown as [number, number];
     if (!affected) return { handled: true, leadId: null, isNewLead: false }; // duplicate delivery
-    recordId = insertId;
+    return await processClaimedReferral(insertId, message);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error('[CTWA] Failed to claim referral message:', msg);
+    return none;
+  }
+}
 
+/**
+ * Everything after the message has been claimed in crm_meta_ctwa_leads: ad
+ * lookup, lead creation / attribution, bookkeeping. Shared by the live webhook
+ * and the retry sweep. Never throws; on an unexpected error the row is marked
+ * 'failed' so the sweep can pick it up.
+ */
+async function processClaimedReferral(recordId: number, message: WhatsAppInboundMessage): Promise<CtwaResult> {
+  const none: CtwaResult = { handled: false, leadId: null, isNewLead: false };
+  const referral = message.referral;
+  if (!referral) return none;
+  const digits = message.from.replace(/D/g, '');
+
+  try {
     let ad: MetaAdDetails | null = null;
     if (referral.sourceId && referral.sourceType !== 'post') {
       ad = await fetchAdDetails(referral.sourceId);
@@ -210,7 +228,8 @@ export async function handleCtwaMessage(message: WhatsAppInboundMessage): Promis
       result = await ingestWebToLead({ ...base, LeadSource: FALLBACK_SOURCE }, ctx);
     }
     if (!result.success || !result.leadId) {
-      await updateRecord(recordId, { status: 'failed', error_message: (result.error ?? 'Lead creation failed').slice(0, 1000) });
+      // 4xx = the ingest rejected the data itself; retrying can't help. 5xx/throws stay 'failed' for the retry sweep.
+      await updateRecord(recordId, { status: result.status >= 500 ? 'failed' : 'rejected', error_message: (result.error ?? 'Lead creation failed').slice(0, 1000) });
       return { handled: true, leadId: null, isNewLead: false };
     }
 
@@ -233,7 +252,92 @@ export async function handleCtwaMessage(message: WhatsAppInboundMessage): Promis
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error('[CTWA] Failed to process referral message:', msg);
-    if (recordId) await updateRecord(recordId, { status: 'failed', error_message: msg.slice(0, 1000) }).catch(() => {});
+    await updateRecord(recordId, { status: 'failed', error_message: msg.slice(0, 1000) }).catch(() => {});
     return none;
   }
+}
+
+// ── Retry sweep ─────────────────────────────────────────────────────────────
+// Meta never redelivers a webhook we answered 200 to, and the claim row blocks
+// any redelivery that does happen - so a referral that failed on a transient
+// error (DB blip) or whose process died mid-way ('processing' forever) would
+// otherwise never become a lead. The row holds the whole referral, so it can
+// be replayed from there.
+
+const RETRY_WINDOW_HOURS = 24;       // give up on rows older than this
+const RETRY_BACKOFF_MINUTES = 5;     // a 'failed' row waits this long between attempts
+const STUCK_PROCESSING_MINUTES = 10; // a 'processing' row older than this is presumed dead
+const RETRY_BATCH_SIZE = 25;
+
+type CtwaRow = {
+  id: number;
+  provider_message_id: string;
+  phone: string;
+  profile_name: string | null;
+  ctwa_clid: string | null;
+  source_type: string | null;
+  source_id: string | null;
+  source_url: string | null;
+  headline: string | null;
+  ad_body: string | null;
+  media_type: string | null;
+  media_url: string | null;
+  first_message: string | null;
+  status: 'failed' | 'processing';
+};
+
+const RETRYABLE_SQL = `
+  created_at > DATE_SUB(NOW(), INTERVAL ${RETRY_WINDOW_HOURS} HOUR)
+  AND (
+    (status = 'failed' AND updated_at < DATE_SUB(NOW(), INTERVAL ${RETRY_BACKOFF_MINUTES} MINUTE))
+    OR (status = 'processing' AND updated_at < DATE_SUB(NOW(), INTERVAL ${STUCK_PROCESSING_MINUTES} MINUTE))
+  )`;
+
+function messageFromRow(row: CtwaRow): WhatsAppInboundMessage {
+  return {
+    providerMessageId: row.provider_message_id,
+    from: row.phone,
+    type: 'text',
+    text: row.first_message,
+    profileName: row.profile_name,
+    referral: {
+      sourceType: row.source_type,
+      sourceId: row.source_id,
+      sourceUrl: row.source_url,
+      ctwaClid: row.ctwa_clid,
+      headline: row.headline,
+      body: row.ad_body,
+      mediaType: row.media_type,
+      mediaUrl: row.media_url,
+    },
+  };
+}
+
+export async function retryFailedCtwaLeads(): Promise<{ processed: number; errors: number }> {
+  const summary = { processed: 0, errors: 0 };
+  await ensureCtwaSchema();
+  if (!(await integrationEnabled())) return summary;
+
+  const rows = await sequelize.query<CtwaRow>(
+    `SELECT * FROM crm_meta_ctwa_leads WHERE ${RETRYABLE_SQL} ORDER BY id ASC LIMIT ${RETRY_BATCH_SIZE}`,
+    { type: QueryTypes.SELECT },
+  );
+
+  for (const row of rows) {
+    // Atomic claim: only one sweep/instance wins a given row.
+    const [claim] = await sequelize.query(
+      `UPDATE crm_meta_ctwa_leads SET status = 'processing', error_message = NULL WHERE id = :id AND ${RETRYABLE_SQL}`,
+      { replacements: { id: row.id } },
+    );
+    if (!(claim as { affectedRows?: number })?.affectedRows) continue;
+
+    const result = await processClaimedReferral(row.id, messageFromRow(row));
+    if (result.leadId) {
+      summary.processed++;
+      console.log(`[CTWA] Retry created/attributed lead ${result.leadId} for ${row.provider_message_id}`);
+    } else {
+      summary.errors++;
+    }
+  }
+  return summary;
 }

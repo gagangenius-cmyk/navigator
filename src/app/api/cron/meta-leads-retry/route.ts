@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { connectDB } from '@/lib/sequelize';
 import { retryFailedDeliveries } from '@/lib/meta/processor';
+import { retryFailedCtwaLeads } from '@/lib/meta/ctwa-leads';
 
 let dbReady = false;
 async function ensureDB() {
@@ -40,7 +41,14 @@ export async function POST(request: NextRequest) {
   const result = await retryFailedDeliveries();
   console.log(`[Cron] meta-leads-retry: processed=${result.processed} errors=${result.errors}`);
 
-  return NextResponse.json({ success: true, ...result });
+  // Click-to-WhatsApp referrals that failed to become leads (see ctwa-leads.ts).
+  const ctwa = await retryFailedCtwaLeads().catch((error) => {
+    console.error('[Cron] ctwa retry failed:', error);
+    return { processed: 0, errors: 1 };
+  });
+  console.log(`[Cron] ctwa-leads-retry: processed=${ctwa.processed} errors=${ctwa.errors}`);
+
+  return NextResponse.json({ success: true, ...result, ctwa });
 }
 
 // Also allow GET for simple cron triggers that only support GET
