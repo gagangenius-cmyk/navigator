@@ -33,6 +33,13 @@ export function nextRetryAt(retryCount: number): string | null {
  */
 export async function deliverToCrm(payload: CrmPayload): Promise<DeliveryResult> {
   try {
+    // Forms without a name question (email + phone + screening only) would be rejected
+    // with 'Missing required lead fields'. Applied here, not only when the payload is
+    // built, so already-stored payloads that are retried get a name too.
+    if (!String(payload.lastName ?? '').trim()) {
+      const local = String(payload.email ?? '').split('@')[0].replace(/[._-]+/g, ' ').trim();
+      payload = { ...payload, lastName: local || String(payload.phone ?? '').trim() || 'Meta Lead' };
+    }
     const result = await ingestWebToLead(payload as unknown as Record<string, unknown>);
     return {
       success: result.success,

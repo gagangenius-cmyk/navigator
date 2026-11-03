@@ -135,12 +135,6 @@ export function buildCrmPayload(
 
   // Ensure required fields have sensible defaults
   if (!payload.lastName && lead.fullName) payload.lastName = lead.fullName;
-  // Forms without a name question (e.g. email + phone + screening only) would be rejected
-  // by the CRM; fall back to something recognisable so the lead is never lost.
-  if (!String(payload.lastName ?? '').trim()) {
-    const local = String(payload.email || lead.email || '').split('@')[0].replace(/[._-]+/g, ' ').trim();
-    payload.lastName = local || String(payload.phone || lead.phone || '').trim() || 'Meta Lead';
-  }
   if (!payload.email && lead.email) payload.email = lead.email;
   if (!payload.phone && lead.phone) payload.phone = lead.phone;
 
