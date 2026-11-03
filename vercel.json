@@ -1,5 +1,6 @@
 {
   "crons": [
-    { "path": "/api/cron/meta-leads-retry", "schedule": "*/5 * * * *" }
+    { "path": "/api/cron/meta-leads-retry", "schedule": "*/5 * * * *" },
+    { "path": "/api/cron/meta-sync", "schedule": "*/15 * * * *" }
   ]
 }
