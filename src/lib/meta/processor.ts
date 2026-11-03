@@ -125,7 +125,7 @@ export async function processWebhookEvent(eventId: number): Promise<void> {
     // A brand-new form is discovered and auto-mapped here, before the payload
     // is built, so its questions are mapped from the very first lead.
     const formName = rawLead.form_id
-      ? (await ensureFormSynced(rawLead.form_id, rawLead.page_id ?? null)) ?? (await fetchFormName(rawLead.form_id))
+      ? (await ensureFormSynced(rawLead.form_id, rawLead.page_id ?? null, Object.keys(fields))) ?? (await fetchFormName(rawLead.form_id))
       : null;
 
     // Campaign name: from the lead itself, else the synced campaign cache.
