@@ -1,6 +1,7 @@
 import { QueryTypes } from 'sequelize';
 import { sequelize } from './sequelize';
 import { logLeadRemark } from './leadRemarks';
+import { ensureLeadLookupColumns, PHONE_NORM_EXPR, EMAIL_NORM_EXPR } from './ensureLeadLookupColumns';
 
 // Levenshtein edit distance (no external dependency needed for names this
 // short) - used to catch typo'd spellings SOUNDEX's phonetic matching can
@@ -39,6 +40,32 @@ export function normalizePhone(phone: string | null | undefined): string {
   return String(phone || '').replace(/\D/g, '');
 }
 
+// Builds the phone/email match conditions. Uses the indexed generated columns
+// when available, otherwise the original (full-scan) expressions.
+async function buildMatchConditions(
+  alias: string,
+  normalizedPhone: string,
+  normalizedEmail: string
+): Promise<{ conditions: string[]; replacements: Record<string, unknown> }> {
+  const indexed = await ensureLeadLookupColumns();
+  const col = (name: string) => (alias ? `${alias}.${name}` : name);
+  const conditions: string[] = [];
+  const replacements: Record<string, unknown> = {};
+  if (normalizedPhone) {
+    conditions.push(indexed
+      ? `${col('phone_norm')} = :normalizedPhone`
+      : `${PHONE_NORM_EXPR.replace(/phone/g, col('phone'))} = :normalizedPhone`);
+    replacements.normalizedPhone = normalizedPhone;
+  }
+  if (normalizedEmail) {
+    conditions.push(indexed
+      ? `${col('email_norm')} = :normalizedEmail`
+      : `${EMAIL_NORM_EXPR.replace(/email/g, col('email'))} = :normalizedEmail`);
+    replacements.normalizedEmail = normalizedEmail;
+  }
+  return { conditions, replacements };
+}
+
 export interface DuplicateCheckResult {
   isDuplicate: boolean;
   duplicateCount: number;
@@ -75,19 +102,7 @@ export async function checkForDuplicate({
     return { isDuplicate: false, duplicateCount: 0 };
   }
 
-  const conditions: string[] = [];
-  const replacements: Record<string, unknown> = {};
-
-  if (normalizedPhone) {
-    conditions.push(
-      `REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(phone,''), '+', ''), '-', ''), ' ', ''), '(', ''), ')', ''), '.', '') = :normalizedPhone`
-    );
-    replacements.normalizedPhone = normalizedPhone;
-  }
-  if (normalizedEmail) {
-    conditions.push('LOWER(COALESCE(email,\'\')) = :normalizedEmail');
-    replacements.normalizedEmail = normalizedEmail;
-  }
+  const { conditions, replacements } = await buildMatchConditions('', normalizedPhone, normalizedEmail);
 
   const [row] = await sequelize.query<{ total: number }>(
     `SELECT COUNT(*) AS total FROM crm_forum_leads WHERE ${conditions.join(' OR ')}`,
@@ -113,19 +128,7 @@ export async function findExistingLead({
 
   if (!normalizedPhone && !normalizedEmail) return null;
 
-  const conditions: string[] = [];
-  const replacements: Record<string, unknown> = {};
-
-  if (normalizedPhone) {
-    conditions.push(
-      `REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(l.phone,''), '+', ''), '-', ''), ' ', ''), '(', ''), ')', ''), '.', '') = :normalizedPhone`
-    );
-    replacements.normalizedPhone = normalizedPhone;
-  }
-  if (normalizedEmail) {
-    conditions.push('LOWER(COALESCE(l.email,\'\')) = :normalizedEmail');
-    replacements.normalizedEmail = normalizedEmail;
-  }
+  const { conditions, replacements } = await buildMatchConditions('l', normalizedPhone, normalizedEmail);
 
   const [row] = await sequelize.query<ExistingLeadMatch>(
     `SELECT l.id, l.fname, l.lname, l.email, l.phone, l.mobile, l.status, l.branch, e.name AS ownerName, l.assignTo AS ownerId
