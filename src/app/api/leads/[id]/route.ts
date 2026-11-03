@@ -5,6 +5,7 @@ import { requireAuth, isAuthError } from '@/lib/apiAuth';
 import { isFoeOrBranchManagerOrCeo, isBranchManagerOrCeo, isCeo } from '@/lib/roleChecks';
 import { logLeadRemark } from '@/lib/leadRemarks';
 import { notifyLeadAssigned } from '@/lib/notify';
+import { enqueueTransferNotice } from '@/lib/leadTransferNotices';
 import { resolveLeadReferenceId } from '@/lib/leadReferenceResolver';
 import { resolveBranchReference } from '@/lib/branchResolver';
 import { CrmcFollowUpReminders } from '@/models/CrmcFollowUpReminders';
@@ -635,6 +636,9 @@ export async function PUT(
         actorId: auth.id,
         actorLabel,
       }).catch((error) => console.error('Failed to notify new lead owner:', error));
+
+      // Email the new owner too (queued; several leads moved at once are clubbed into one email).
+      await enqueueTransferNotice({ leadId: Number(id), oldAssignTo, newAssignTo, actorId: auth.id, actorRole: auth.roleName || auth.type });
     }
 
     if (statusChanged) {

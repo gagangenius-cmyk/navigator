@@ -1,3 +1,4 @@
+import { enqueueTransferNotice } from './leadTransferNotices';
 import { Transaction, QueryTypes } from 'sequelize';
 import { CrmRemarks } from '@/models/CrmRemarks';
 import { sequelize } from '@/lib/sequelize';
@@ -156,6 +157,10 @@ export async function recordLeadAssignment({
     // calls, so it's the one place a "lead assigned to you" alert can live
     // without wiring notifications into each individual call site.
     await notifyLeadAssigned({ leadId, newAssignTo, actorId, actorLabel, transaction });
+
+    // Email the new counselor. Queued here, sent in batches (leadTransferNotices.ts): one lead gets
+    // the full-detail email, several leads moved in the same action are clubbed into one email.
+    await enqueueTransferNotice({ leadId, oldAssignTo, newAssignTo, actorId, actorRole, transaction });
 
     // Every reassignment path (manual, lead pool claim/release, bulk
     // transfer, round-robin, SLA sweep) funnels through this one function -
