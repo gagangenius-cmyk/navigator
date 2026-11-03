@@ -312,6 +312,7 @@ const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
       title: 'Broadcast Center',
       items: [
         { name: 'Templates', href: '/admin/broadcast/templates', icon: Mail, permission: 'templates.manage' },
+        { name: 'Template Send Report', href: '/admin/template-sends', icon: Send, permission: 'templates.use' },
         { name: 'Segments', href: '/admin/broadcast/segments', icon: MessageSquare, permission: 'campaigns.manage' },
         { name: 'Campaigns', href: '/admin/broadcast/campaigns', icon: Send, permission: 'campaigns.manage' },
         { name: 'Workflows', href: '/admin/broadcast/workflows', icon: Route, permission: 'workflows.manage' },

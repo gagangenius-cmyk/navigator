@@ -14,6 +14,7 @@ export type LeadRemarkAction =
   | 'appointment_booked'
   | 'followup_added'
   | 'whatsapp_sent'
+  | 'email_sent'
   | 'duplicate_detected'
   | 'operations_case_transfer'
   | 'operations_case_status_changed'

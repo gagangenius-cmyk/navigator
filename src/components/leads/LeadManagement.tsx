@@ -4,6 +4,7 @@ import { SearchableSelect } from '@/components/ui/searchable-select';
 import { useSortableData, SortableTh } from '@/components/ui/sortable-th';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import {
   Search, Plus, Edit, Trash2, Download, Upload, Users,
@@ -16,6 +17,8 @@ import {
 import LeadKanbanSimple from './LeadKanbanSimple';
 import ConversationHistoryModal from '@/components/shared/ConversationHistoryModal';
 import { Lead } from '@/types/lead';
+
+const SendTemplateDrawer = dynamic(() => import('@/components/leads/SendTemplateDrawer'), { ssr: false });
 import { useAuth } from '@/contexts/AuthContext';
 import { isBranchManagerOrCeo, isCeo, isFoe, isFoeOrBranchManagerOrCeo, isCounsellor } from '@/lib/roleChecks';
 import { getLeadBranchDetails, printReceipt as printReceiptDocument } from '@/lib/receiptTemplate';
@@ -321,9 +324,12 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
   const [bulkTransferCounselorId, setBulkTransferCounselorId] = useState('');
   const [bulkActionSaving, setBulkActionSaving] = useState(false);
   const [showBulkTransferModal, setShowBulkTransferModal] = useState(false);
+  const [showSendTemplate, setShowSendTemplate] = useState(false);
   const [bulkTransferSearch, setBulkTransferSearch] = useState('');
 
   const { user } = useAuth();
+  // Any employee allowed to use templates may email the leads they can see (same rule as AuthContext.hasPermission).
+  const canSendTemplates = Boolean(user?.permissions?.includes('all') || user?.permissions?.includes('templates.use'));
   const isDSorBM = useMemo(() => {
     const t = String(user?.type || '').toLowerCase().replace(/[\s-]+/g, '_');
     return ['director_of_sales', 'director', 'dos', 'branch_manager', 'bm', 'admin', 'administrator', 'super_admin'].includes(t) || user?.role === 1;
@@ -2151,17 +2157,28 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
       </div>
       </div>
 
-      {activeTab === 'leads' && isBranchManagerOrCeo(user) && selectedLeads.length > 0 && (
+      {(activeTab === 'leads' || activeTab === 'my-leads') && selectedLeads.length > 0 && ((activeTab === 'leads' && isBranchManagerOrCeo(user)) || canSendTemplates) && (
         <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 bg-gray-900 text-white rounded-lg shadow-xl px-4 py-3 flex items-center gap-3 flex-wrap">
           <span className="text-sm font-medium whitespace-nowrap">{selectedLeads.length} selected</span>
-          <button
-            onClick={() => { setBulkTransferSearch(''); setShowBulkTransferModal(true); }}
-            disabled={bulkActionSaving}
-            className="px-3 py-1.5 bg-blue-600 rounded-md text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
-          >
-            Transfer
-          </button>
-          {isCeo(user) && (
+          {canSendTemplates && (
+            <button
+              onClick={() => setShowSendTemplate(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 rounded-md text-sm font-medium hover:bg-emerald-700"
+            >
+              <Mail className="h-4 w-4" />
+              Send template
+            </button>
+          )}
+          {isBranchManagerOrCeo(user) && (
+            <button
+              onClick={() => { setBulkTransferSearch(''); setShowBulkTransferModal(true); }}
+              disabled={bulkActionSaving}
+              className="px-3 py-1.5 bg-blue-600 rounded-md text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
+            >
+              Transfer
+            </button>
+          )}
+          {activeTab === 'leads' && isCeo(user) && (
             <button
               onClick={handleBulkDelete}
               disabled={bulkActionSaving}
@@ -2177,6 +2194,15 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
             Clear
           </button>
         </div>
+      )}
+
+      {showSendTemplate && (
+        <SendTemplateDrawer
+          open={showSendTemplate}
+          leadIds={selectedLeads}
+          onClose={() => setShowSendTemplate(false)}
+          onQueued={() => { setShowSendTemplate(false); setSelectedLeads([]); }}
+        />
       )}
 
       {/* Leads Display - List (table), Card, or Kanban View */}
