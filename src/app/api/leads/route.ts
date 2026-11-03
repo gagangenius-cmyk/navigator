@@ -94,6 +94,7 @@ export async function GET(request: NextRequest) {
     const serviceInterest = searchParams.get('serviceInterest')
     const marketSource = searchParams.get('marketSource')
     const leadQuality = searchParams.get('leadQuality')
+    const campaignFilter = searchParams.get('campaign')
     const dateFrom = searchParams.get('dateFrom')
     const dateTo = searchParams.get('dateTo')
     const exportType = searchParams.get('exportType')
@@ -184,6 +185,12 @@ export async function GET(request: NextRequest) {
     if (marketSource) {
       whereConditions.push('l.market_source = ?')
       replacements.push(marketSource)
+    }
+
+    // Meta ad campaign name when the lead came from Meta, else the legacy campaign column.
+    if (campaignFilter) {
+      whereConditions.push("COALESCE(NULLIF(l.meta_campaign_name, ''), l.campaign) = ?")
+      replacements.push(campaignFilter)
     }
 
     if (leadQuality) {

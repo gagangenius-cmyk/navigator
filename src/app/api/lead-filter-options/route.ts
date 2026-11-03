@@ -106,7 +106,9 @@ export async function GET(request: NextRequest) {
       services,
       serviceValues,
       sources,
-      sourceValues
+      sourceValues,
+      campaigns,
+      qualities
     ] = await Promise.all([
       sequelize.query<{ name: string }>(
         'SELECT name FROM crm_lead_status WHERE is_enabled = 1 ORDER BY sort_order ASC, id ASC',
@@ -151,6 +153,15 @@ export async function GET(request: NextRequest) {
       sequelize.query<RawOption>(
         "SELECT DISTINCT market_source as value FROM crm_forum_leads WHERE market_source IS NOT NULL AND market_source <> ''",
         { type: QueryTypes.SELECT }
+      ),
+      // Same expression the Leads list filters on (Meta ad campaign name, else legacy campaign).
+      sequelize.query<RawOption>(
+        "SELECT DISTINCT COALESCE(NULLIF(meta_campaign_name, ''), campaign) as value FROM crm_forum_leads WHERE COALESCE(NULLIF(meta_campaign_name, ''), campaign) <> ''",
+        { type: QueryTypes.SELECT }
+      ),
+      sequelize.query<RawOption>(
+        "SELECT DISTINCT lead_quality as value FROM crm_forum_leads WHERE lead_quality IS NOT NULL AND lead_quality <> ''",
+        { type: QueryTypes.SELECT }
       )
     ]);
 
@@ -194,7 +205,9 @@ export async function GET(request: NextRequest) {
       regions: toOptions(regions),
       countries: Array.from(countryMap.values()).sort((a, b) => a.label.localeCompare(b.label)),
       services: serviceOptions,
-      sources: Array.from(sourceMap.values()).sort((a, b) => a.label.localeCompare(b.label))
+      sources: Array.from(sourceMap.values()).sort((a, b) => a.label.localeCompare(b.label)),
+      campaigns: toOptions(campaigns),
+      leadQualities: toOptions(qualities, ['Hot', 'Warm', 'Cold'])
     });
   } catch (error) {
     console.error('Error fetching lead filter options:', error);

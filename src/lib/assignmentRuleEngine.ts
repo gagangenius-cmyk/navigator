@@ -5,6 +5,7 @@ import { ensureEmployeeAttendanceTable, CHECKED_IN_TODAY_SQL } from './employeeA
 import { HRService } from '@/services/hr-service';
 import { getAssignmentSettings } from './assignmentSettings';
 import { pickSmoothWeighted } from './roundRobinSelection';
+import { campaignMatches } from './campaignMatch';
 
 // Enterprise-style "Assignment Rules" engine (the concept Zoho calls Assignment
 // Rules / Rule Entries and Salesforce calls Lead Assignment Rules): an ordered
@@ -29,7 +30,7 @@ export interface AssignmentRule {
   leadQualities: string[];
   countryInterestIds: number[];
   serviceInterestIds: number[];
-  // Free-text, case-insensitive (crm_forum_leads.campaign has no fixed
+  // Free-text, case/separator-insensitive, `*` wildcard allowed (campaign has no fixed
   // vocabulary - unlike branch/source these are whatever marketing typed in).
   campaigns: string[];
   // Case-insensitive match against crm_forum_leads.status, values drawn from
@@ -531,8 +532,7 @@ function matchesRule(rule: AssignmentRule, lead: LeadAssignmentContext): boolean
   if (rule.countryInterestIds.length > 0 && (!lead.countryInterestId || !rule.countryInterestIds.includes(lead.countryInterestId))) return false;
   if (rule.serviceInterestIds.length > 0 && (!lead.serviceInterestId || !rule.serviceInterestIds.includes(lead.serviceInterestId))) return false;
   if (rule.campaigns.length > 0) {
-    const c = (lead.campaign || '').toLowerCase();
-    if (!rule.campaigns.some((v) => v.toLowerCase() === c)) return false;
+    if (!campaignMatches(rule.campaigns, lead.campaign)) return false;
   }
   if (rule.statuses.length > 0) {
     const s = (lead.status || '').toLowerCase();

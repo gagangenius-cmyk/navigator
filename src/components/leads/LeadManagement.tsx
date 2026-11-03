@@ -46,6 +46,7 @@ interface LeadFilterOptions {
   services: FilterOption[];
   sources: FilterOption[];
   leadQualities: FilterOption[];
+  campaigns: FilterOption[];
 }
 
 type LeadActionType = 'appointment' | 'followup' | 'remark' | 'status';
@@ -168,6 +169,7 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
     serviceInterest: '',
     marketSource: '',
     leadQuality: '',
+    campaign: '',
     dateFrom: '',
     dateTo: '',
     assignTo: ''
@@ -179,7 +181,8 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
     countries: [],
     services: [],
     sources: [],
-    leadQualities: []
+    leadQualities: [],
+    campaigns: []
   });
   const [pagination, setPagination] = useState<PaginationData>({
     page: 1,
@@ -488,6 +491,7 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
     serviceInterest: '',
     marketSource: '',
     leadQuality: '',
+    campaign: '',
     dateFrom: '',
     dateTo: '',
     assignTo: ''
@@ -685,7 +689,8 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
           countries: data.countries || [],
           services: data.services || [],
           sources: data.sources || [],
-          leadQualities: data.leadQualities || []
+          leadQualities: data.leadQualities || [],
+          campaigns: data.campaigns || []
         });
       } catch (error) {
         console.error('Error fetching lead filter options:', error);
@@ -2124,6 +2129,10 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
             <SearchableSelect value={filters.marketSource} onChange={(e) => setFilters({...filters, marketSource: e.target.value})} className="h-9 rounded-md border border-gray-200 bg-gray-50 px-3 text-sm font-medium focus:bg-white focus:ring-2 focus:ring-blue-500">
               <option value="">Source: All</option>
               {filterOptions.sources.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+            </SearchableSelect>
+            <SearchableSelect value={filters.campaign} onChange={(e) => setFilters({...filters, campaign: e.target.value})} className="h-9 rounded-md border border-gray-200 bg-gray-50 px-3 text-sm font-medium focus:bg-white focus:ring-2 focus:ring-blue-500">
+              <option value="">Campaign: All</option>
+              {filterOptions.campaigns.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
             </SearchableSelect>
             <SearchableSelect value={filters.leadQuality} onChange={(e) => setFilters({...filters, leadQuality: e.target.value})} className="h-9 rounded-md border border-gray-200 bg-gray-50 px-3 text-sm font-medium focus:bg-white focus:ring-2 focus:ring-blue-500">
               <option value="">Quality: All</option>
