@@ -22,17 +22,17 @@ export async function POST(request: NextRequest) {
   // Optional: retry a specific delivery id
   const body = await request.json().catch(() => ({})) as { deliveryId?: number };
 
-  let due: Array<{ id: number; request_payload: string; retry_count: number }>;
+  let due: Array<{ id: number; request_payload: string | Record<string, unknown>; retry_count: number }>;
 
   if (body.deliveryId) {
-    due = await sequelize.query<{ id: number; request_payload: string; retry_count: number }>(
+    due = await sequelize.query<{ id: number; request_payload: string | Record<string, unknown>; retry_count: number }>(
       `SELECT id, request_payload, retry_count
        FROM crm_meta_lead_deliveries
        WHERE id = :id AND status IN ('failed','retry_scheduled')`,
       { replacements: { id: body.deliveryId }, type: QueryTypes.SELECT }
     );
   } else {
-    due = await sequelize.query<{ id: number; request_payload: string; retry_count: number }>(
+    due = await sequelize.query<{ id: number; request_payload: string | Record<string, unknown>; retry_count: number }>(
       `SELECT id, request_payload, retry_count
        FROM crm_meta_lead_deliveries
        WHERE status IN ('failed','retry_scheduled')
@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
 
   for (const delivery of due) {
     retried++;
-    const payload = JSON.parse(delivery.request_payload);
+    const payload = typeof delivery.request_payload === 'string' ? JSON.parse(delivery.request_payload) : delivery.request_payload;
     const result = await deliverToCrm(payload);
     const newRetryCount = delivery.retry_count + 1;
 
