@@ -56,3 +56,9 @@ export function splitFollowUp(value: unknown): { date: string | null; time: stri
   if (!match) return { date: null, time: null };
   return { date: match[1], time: match[2] ? `${match[2]}:${match[3] || '00'}` : '09:00:00' };
 }
+
+/** YYYY-MM-DD of any Date in the viewer's own timezone (unlike toISOString(), which is UTC). */
+export function toLocalDateString(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}

@@ -1,10 +1,12 @@
 'use client';
 
+import ReportLoadError from '@/components/reports/ReportLoadError';
 import { useEffect, useState } from 'react';
 
 export default function LeadConversionFunnelPage() {
   const [stages, setStages] = useState<Array<{ label: string; count: number; rate: number }>>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     const load = async () => {
@@ -15,8 +17,11 @@ export default function LeadConversionFunnelPage() {
         // indication to the viewer) once total leads passed 500 - now a
         // real SQL aggregate, scoped and cached like every other report.
         const response = await fetch('/api/reports?type=funnel');
+        if (!response.ok) throw new Error(`Server returned ${response.status}`);
         const json = await response.json();
         setStages(json.data?.stages || []);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Request failed');
       } finally {
         setLoading(false);
       }
@@ -32,6 +37,7 @@ export default function LeadConversionFunnelPage() {
         <h1 className="text-3xl font-bold text-gray-900">Conversion Funnel</h1>
         <p className="mt-1 text-gray-600">Live progression from leads to converted clients.</p>
       </div>
+      {error && <ReportLoadError message={error} />}
       <div className="space-y-4 rounded-lg bg-white p-6 shadow">
         {stages.map((stage) => (
           <div key={stage.label}>

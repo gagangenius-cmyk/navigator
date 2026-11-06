@@ -1,5 +1,7 @@
 'use client';
 
+import ReportLoadError from '@/components/reports/ReportLoadError';
+import { toLocalDateString } from '@/lib/dubaiDate';
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSortableData } from '@/components/ui/sortable-th';
@@ -30,6 +32,7 @@ export default function LeadPerformanceReportPage() {
   const [rows, setRows] = useState<PerformanceRow[]>([]);
   const [summary, setSummary] = useState(emptySummary);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     const load = async () => {
@@ -45,8 +48,8 @@ export default function LeadPerformanceReportPage() {
             config: {
               name: 'Lead Performance',
               period: 'custom',
-              startDate: start.toISOString().split('T')[0],
-              endDate: end.toISOString().split('T')[0],
+              startDate: toLocalDateString(start),
+              endDate: toLocalDateString(end),
               counselors: [],
               includeCharts: false,
               includeDetails: true,
@@ -56,9 +59,12 @@ export default function LeadPerformanceReportPage() {
             }
           })
         });
+        if (!response.ok) throw new Error(`Server returned ${response.status}`);
         const data = await response.json();
         setRows(data.data?.performance || []);
         setSummary(data.data?.summary || emptySummary);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Request failed');
       } finally {
         setLoading(false);
       }
@@ -86,6 +92,7 @@ export default function LeadPerformanceReportPage() {
         <h1 className="text-3xl font-bold text-gray-900">Lead Performance</h1>
         <p className="mt-1 text-gray-600">Counselor lead volume, conversions, and revenue.</p>
       </div>
+      {error && <ReportLoadError message={error} />}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
         <Stat label="Leads" value={summary.totalActivities} />
         <Stat label="Counselors" value={summary.totalCounselors} />

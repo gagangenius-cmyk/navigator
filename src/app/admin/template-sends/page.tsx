@@ -71,6 +71,9 @@ export default function TemplateSendReportPage() {
       ]);
       if (detail.success) { setJob(detail.job); setEvents(detail.events || []); }
       if (list.success) { setItems(list.items); setItemsTotal(list.total); }
+    } catch (e) {
+      // A dropped request keeps the previous detail on screen instead of throwing an unhandled rejection.
+      console.error('Failed to load send detail:', e);
     } finally {
       setDetailLoading(false);
     }

@@ -1,5 +1,6 @@
 'use client';
 
+import ReportLoadError from '@/components/reports/ReportLoadError';
 import { useEffect, useState } from 'react';
 import { useSortableData } from '@/components/ui/sortable-th';
 import { RecordCard, RecordList, SortButtonRow } from '@/components/shared/ResponsiveRecordList';
@@ -16,15 +17,19 @@ export default function LeadSourceAnalyticsPage() {
   const [sources, setSources] = useState<SourceRow[]>([]);
   const [summary, setSummary] = useState({ totalLeads: 0, totalConverted: 0, overallConversionRate: 0 });
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     const load = async () => {
       try {
         setLoading(true);
         const response = await fetch('/api/reports/lead-source-analytics?timeRange=6months');
+        if (!response.ok) throw new Error(`Server returned ${response.status}`);
         const data = await response.json();
         setSources(data.sources || []);
         setSummary(data.summary || { totalLeads: 0, totalConverted: 0, overallConversionRate: 0 });
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Request failed');
       } finally {
         setLoading(false);
       }
@@ -50,6 +55,7 @@ export default function LeadSourceAnalyticsPage() {
         <h1 className="text-3xl font-bold text-gray-900">Lead Source Analytics</h1>
         <p className="mt-1 text-gray-600">Source quality and conversion performance from live lead data.</p>
       </div>
+      {error && <ReportLoadError message={error} />}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         <Stat label="Total leads" value={summary.totalLeads} />
         <Stat label="Converted" value={summary.totalConverted} />

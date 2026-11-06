@@ -52,11 +52,11 @@ export default function NewCampaignPage() {
   const [launchSummary, setLaunchSummary] = useState<Record<string, unknown> | null>(null);
 
   useEffect(() => {
-    fetch('/api/broadcast/segments').then((r) => r.json()).then((d) => { if (d.success) setSegments(d.segments); });
+    fetch('/api/broadcast/segments').then((r) => r.json()).then((d) => { if (d.success) setSegments(d.segments); }).catch((e) => console.error('Failed to load segments:', e));
   }, []);
 
   useEffect(() => {
-    fetch(`/api/broadcast/templates?channel=${channel}&status=approved`).then((r) => r.json()).then((d) => { if (d.success) setTemplates(d.templates); });
+    fetch(`/api/broadcast/templates?channel=${channel}&status=approved`).then((r) => r.json()).then((d) => { if (d.success) setTemplates(d.templates); }).catch((e) => console.error('Failed to load templates:', e));
   }, [channel]);
 
   const selectedTemplate = templates.find((t) => t.currentPublishedVersionId === templateVersionId);

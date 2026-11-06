@@ -1,5 +1,6 @@
 'use client';
 
+import ReportLoadError from '@/components/reports/ReportLoadError';
 import { useEffect, useState } from 'react';
 import { useSortableData } from '@/components/ui/sortable-th';
 import { RecordCard, RecordList, SortButtonRow } from '@/components/shared/ResponsiveRecordList';
@@ -11,6 +12,7 @@ export default function LeadAgingReportPage() {
   const [buckets, setBuckets] = useState<Record<string, number>>({});
   const [oldLeads, setOldLeads] = useState<Array<LeadRow & { age: number }>>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     const load = async () => {
@@ -21,9 +23,12 @@ export default function LeadAgingReportPage() {
         // silently wrong (missing older leads past the first 500) once the
         // table grew. Real SQL aggregate + ORDER BY instead.
         const response = await fetch('/api/reports?type=aging');
+        if (!response.ok) throw new Error(`Server returned ${response.status}`);
         const json = await response.json();
         setBuckets(json.data?.buckets || {});
         setOldLeads(json.data?.oldLeads || []);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Request failed');
       } finally {
         setLoading(false);
       }
@@ -49,6 +54,7 @@ export default function LeadAgingReportPage() {
         <h1 className="text-3xl font-bold text-gray-900">Lead Aging</h1>
         <p className="mt-1 text-gray-600">Aging buckets and oldest open leads from live CRM data.</p>
       </div>
+      {error && <ReportLoadError message={error} />}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
         {['0-7 days', '8-30 days', '31-60 days', '60+ days'].map((bucket) => (
           <div key={bucket} className="rounded-lg bg-white p-5 shadow">

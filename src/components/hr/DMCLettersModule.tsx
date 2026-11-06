@@ -1,5 +1,6 @@
 'use client';
 
+import { escapeHtml } from '@/lib/escapeHtml';
 import { localToday } from '@/lib/dubaiDate';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { useState, useRef, useCallback, useEffect } from 'react';
@@ -243,6 +244,12 @@ const defaultForm: FormState = {
   terminationReason: '', noticePeriod: '30 days', terminationClause: 'Federal Decree-Law No. 33 of 2021',
   referenceBody: '', memoFrom: '', memoTo: 'All Staff', memoBody: '', subject: '',
 };
+
+function escapeFormStrings(form: FormState): FormState {
+  return Object.fromEntries(
+    Object.entries(form).map(([key, value]) => [key, typeof value === 'string' ? escapeHtml(value) : value]),
+  ) as unknown as FormState;
+}
 
 function buildLetterData(f: FormState, currency = 'AED'): LetterData {
   const year = new Date().getFullYear();
@@ -505,7 +512,10 @@ export default function DMCLettersModule() {
     emp.setQuery(''); // clear dropdown
   };
 
-  const letterData = buildLetterData(form, currencyCode);
+  // Every free-text form value is interpolated into the letter's HTML (which is also
+  // written into a same-origin print window), so escape them once here; the templates
+  // themselves add the intentional <strong>/<sup> markup around them.
+  const letterData = buildLetterData(escapeFormStrings(form), currencyCode);
 
   const printLetter = () => {
     const html = buildLetterHTML(letterData);
