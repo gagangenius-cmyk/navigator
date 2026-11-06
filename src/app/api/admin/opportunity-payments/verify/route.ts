@@ -74,10 +74,11 @@ export async function PUT(request: NextRequest) {
 
     // Find the opportunity linked to this payment (needed both to auto-generate the
     // agreement and to advance the finance gate on crm_opportunity_workflow_reviews below).
-    const [payment] = await sequelize.query<{ opportunityId: number; leadId: number | null; clientName: string; totalAmount: number; currency: string; assignedTo: number | null; leadAssignTo: number | null; branchId: number | null; serviceType: string | null }>(
+    const [payment] = await sequelize.query<{ opportunityId: number; leadId: number | null; clientName: string; totalAmount: number; paidAmount: number; currency: string; assignedTo: number | null; leadAssignTo: number | null; branchId: number | null; serviceType: string | null }>(
       `SELECT p.opportunityId, o.leadId,
               COALESCE(p.clientName, CONCAT(l.fname,' ',COALESCE(l.lname,''))) AS clientName,
               COALESCE(p.totalAmount,0) AS totalAmount,
+              COALESCE(p.paidAmount,0) AS paidAmount,
               COALESCE(p.currency,'AED') AS currency,
               o.assignedTo, l.assignTo AS leadAssignTo,
               COALESCE(l.branch, o.branchId) AS branchId,
@@ -111,6 +112,32 @@ export async function PUT(request: NextRequest) {
         }
       );
       if (Number((updateInfo as { affectedRows?: number })?.affectedRows ?? updateInfo ?? 0) < 1) return false;
+
+      // A rejected payment is money that never arrived, but it was already added to the paid/outstanding
+      // figures when it was recorded, so the balance stayed reduced (seen on crm_next: a rejected AED 3,000
+      // left 7,750 outstanding instead of 10,750, and the counselor could not collect it again). Put it back
+      // on the contract (the ledger the dashboards read) and, when this is the lead's own conversion-flow
+      // opportunity, on the lead's legacy columns too. Direct/contract-route payments never touched the
+      // lead columns, so those are left alone. (MySQL evaluates SET left to right.)
+      if (status === 'rejected' && payment?.opportunityId && Number(payment.paidAmount) > 0) {
+        await sequelize.query(
+          `UPDATE crm_contracts
+           SET paid_yet = GREATEST(paid_yet - :amount, 0),
+               pay_balance = GREATEST(pay_total - discount - paid_yet, 0), updated_at = NOW()
+           WHERE opportunity_id = :opportunityId AND is_deleted = 0`,
+          { replacements: { amount: Number(payment.paidAmount), opportunityId: payment.opportunityId }, type: QueryTypes.UPDATE, transaction: t }
+        );
+        if (payment.leadId) {
+          await sequelize.query(
+            `UPDATE crm_forum_leads
+             SET paidYet = GREATEST(COALESCE(paidYet, 0) - :amount, 0),
+                 payBalance = GREATEST(payTotal - paidYet, 0),
+                 demandAmt = payBalance
+             WHERE id = :leadId AND opportunity_id = :opportunityId`,
+            { replacements: { amount: Number(payment.paidAmount), leadId: payment.leadId, opportunityId: payment.opportunityId }, type: QueryTypes.UPDATE, transaction: t }
+          );
+        }
+      }
 
       if (payment?.opportunityId) {
         // The finance gate belongs to the OPPORTUNITY, not to this one payment. It used to be set

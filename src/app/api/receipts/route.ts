@@ -210,7 +210,7 @@ export async function POST(request: NextRequest) {
     const receiptId = Number((receiptIdRows as any[])[0]?.nextId || 0);
     if (!receiptId) throw new Error('Could not allocate a receipt ID');
     const receiptNumber = await uniqueReceiptNumber({
-branchName: branchCurrency.branchName,
+      branchName: branchCurrency.branchName,
       branchAddress: branchCurrency.branchAddress,
       branchAbbrv: branchCurrency.branchAbbrv,
     }, receiptId, transaction);

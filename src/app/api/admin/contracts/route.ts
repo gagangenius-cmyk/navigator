@@ -272,9 +272,9 @@ export async function POST(request: NextRequest) {
         receiptId = Number(idRows[0]?.id);
       }
       receiptNumber = await uniqueReceiptNumber({
-branchName: branchCurrency.branchName,
-        branchAddress: branchCurrency.branchAddress,
-        branchAbbrv: branchCurrency.branchAbbrv,
+      branchName: branchCurrency.branchName,
+      branchAddress: branchCurrency.branchAddress,
+      branchAbbrv: branchCurrency.branchAbbrv,
     }, receiptId, transaction);
       await sequelize.query('UPDATE crm_contract_receipts SET receipt_number = ? WHERE id = ?', {
         replacements: [receiptNumber, receiptId],

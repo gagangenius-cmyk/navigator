@@ -381,7 +381,16 @@ export default function OpportunityFlowWizard({ leadId, initialStage, initialOpp
         const opportunitiesResponse = await fetch(`/api/opportunities?leadId=${leadId}`);
         if (opportunitiesResponse.ok) {
           const opportunities = await opportunitiesResponse.json();
-          latestOpportunity = Array.isArray(opportunities) ? opportunities[0] : null;
+          // A lead can have several opportunities (the conversion flow's own one, plus ones that
+          // Add Service / contract-flow creates directly as 'won'). The wizard is the conversion
+          // flow, so it must work on the lead's own flow opportunity (lead.opportunity_id) and only
+          // fall back to the newest one. Taking opportunities[0] unconditionally made payments,
+          // agreement and documents follow the newest direct contract while compliance followed
+          // lead.opportunity_id - the signed agreement went to a different opportunity than the one
+          // whose documents and payments had been verified.
+          latestOpportunity = Array.isArray(opportunities)
+            ? (opportunities.find((o: any) => Number(o.id) === Number((leadData as any)?.opportunity_id)) || opportunities[0] || null)
+            : null;
           if (latestOpportunity?.id && !initialOpportunityId) {
             setCompletedOpportunityId(Number(latestOpportunity.id));
             // The opportunity's own saved product/amount/details are authoritative
@@ -432,7 +441,7 @@ export default function OpportunityFlowWizard({ leadId, initialStage, initialOpp
           }
         }
 
-        const complianceOpportunityId = initialOpportunityId || completedOpportunityId || Number((leadData as any)?.opportunity_id) || Number(latestOpportunity?.id);
+        const complianceOpportunityId = initialOpportunityId || Number(latestOpportunity?.id) || Number((leadData as any)?.opportunity_id);
         const complianceResponse = await fetch(getComplianceApprovalsUrl(complianceOpportunityId));
         if (complianceResponse.ok) {
           const complianceData = await complianceResponse.json();
@@ -1087,7 +1096,7 @@ export default function OpportunityFlowWizard({ leadId, initialStage, initialOpp
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         leadId,
-        opportunityId: (lead as any)?.opportunity_id || null,
+        opportunityId: completedOpportunityId || (lead as any)?.opportunity_id || null,
         signedAgreementUrl: signedAgreementData.documentUrl,
         clientSignature: signedAgreementData.clientSignature,
         signatureDate: signedAgreementData.signatureDate,

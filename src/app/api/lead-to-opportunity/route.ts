@@ -574,7 +574,7 @@ export async function POST(request: NextRequest) {
     // Reformat the receipt number now that the row's own auto-increment id is
     // known — RCP-{branch}-{YYYYMM}-{seq}, e.g. RCP-QTR-202607-001.
     receiptNumber = await uniqueReceiptNumber({
-branchName: branchCurrency.branchName,
+      branchName: branchCurrency.branchName,
       branchAddress: branchCurrency.branchAddress,
       branchAbbrv: branchCurrency.branchAbbrv,
     }, paymentId, transaction);
@@ -1205,11 +1205,10 @@ branchName: branchCurrency.branchName,
         );
         multiReceiptId = Number((idRows as any)?.id ?? idRows);
       }
-      const multiReceiptNumber = await uniqueReceiptNumber({
-branchName: branchCurrency.branchName,
-        branchAddress: branchCurrency.branchAddress,
-        branchAbbrv: branchCurrency.branchAbbrv,
-    }, multiReceiptId, transaction);
+      // This contract receipt IS the same payment as the crm_opportunity_payments row above, so it
+      // carries that payment's receipt number. It used to allocate a second number from its own
+      // table id, giving one payment two different receipt numbers (RCP-...-061 and RCP-...-004).
+      const multiReceiptNumber = receiptNumber;
       await sequelize.query('UPDATE crm_contract_receipts SET receipt_number = ? WHERE id = ?', {
         replacements: [multiReceiptNumber, multiReceiptId],
         transaction,

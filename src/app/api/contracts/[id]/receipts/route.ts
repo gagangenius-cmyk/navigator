@@ -156,7 +156,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     }
 
     const receiptNumber = await uniqueReceiptNumber({
-branchName: contract.branch_name,
+      branchName: contract.branch_name,
       branchAddress: contract.branch_address,
       branchAbbrv: contract.branch_abbrv,
     }, receiptId, transaction);
