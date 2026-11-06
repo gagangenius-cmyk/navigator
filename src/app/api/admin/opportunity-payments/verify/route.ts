@@ -113,6 +113,22 @@ export async function PUT(request: NextRequest) {
       if (Number((updateInfo as { affectedRows?: number })?.affectedRows ?? updateInfo ?? 0) < 1) return false;
 
       if (payment?.opportunityId) {
+        // The finance gate belongs to the OPPORTUNITY, not to this one payment. It used to be set
+        // straight from this payment's decision, so rejecting a later instalment flipped an
+        // opportunity whose first payment was already verified back to 'rejected'/'finance_review_failed'
+        // (seen on crm_next), and verifying a late instalment dragged a compliance-approved opportunity
+        // back to 'pending_compliance'. The page itself promises "at least one payment per opportunity
+        // marked Verified", so: approved if any payment is verified, rejected only if one is rejected
+        // and none verified, and the workflow only moves while it is still before compliance review.
+        const [counts] = await sequelize.query<{ verified: number; rejected: number }>(
+          `SELECT COALESCE(SUM(accountantStatus = 'verified'), 0) AS verified,
+                  COALESCE(SUM(accountantStatus = 'rejected'), 0) AS rejected
+           FROM crm_opportunity_payments WHERE opportunityId = :opportunityId`,
+          { replacements: { opportunityId: payment.opportunityId }, type: QueryTypes.SELECT, transaction: t }
+        );
+        const anyVerified = Number(counts?.verified || 0) > 0;
+        const financeStatus = anyVerified ? 'approved' : Number(counts?.rejected || 0) > 0 ? 'rejected' : 'pending';
+        const targetWorkflow = anyVerified ? 'pending_compliance' : financeStatus === 'rejected' ? 'finance_review_failed' : 'opportunity_created';
         // Advance the finance gate so the client can eventually surface in the
         // Client List, which reads crm_opportunity_workflow_reviews.finance_status/
         // compliance_status directly (see src/app/api/admin/clients/route.ts).
@@ -121,14 +137,16 @@ export async function PUT(request: NextRequest) {
            SET finance_status = :financeStatus,
                finance_reviewed_by = :accountId,
                finance_reviewed_at = NOW(),
-               workflow_status = :workflowStatus,
+               workflow_status = CASE
+                 WHEN workflow_status IN ('opportunity_created', 'finance_review_failed', 'pending_compliance') THEN :workflowStatus
+                 ELSE workflow_status END,
                updated_at = NOW()
            WHERE opportunity_id = :opportunityId`,
           {
             replacements: {
-              financeStatus: status === 'verified' ? 'approved' : 'rejected',
+              financeStatus,
               accountId: currentUser?.id || null,
-              workflowStatus: status === 'verified' ? 'pending_compliance' : 'finance_review_failed',
+              workflowStatus: targetWorkflow,
               opportunityId: payment.opportunityId,
             },
             type: QueryTypes.UPDATE,
@@ -136,7 +154,6 @@ export async function PUT(request: NextRequest) {
           }
         );
       }
-
 
       // When payment is verified, auto-generate an agreement number if one doesn't exist yet
       if (status === 'verified') {
