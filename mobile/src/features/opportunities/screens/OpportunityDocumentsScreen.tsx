@@ -1,3 +1,4 @@
+import { toIsoDate } from '@/utils/format';
 import { useNavigation, useRoute, type NavigationProp, type RouteProp } from '@react-navigation/native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import * as DocumentPicker from 'expo-document-picker';
@@ -88,7 +89,7 @@ export function OpportunityDocumentsScreen() {
         opportunityId,
         signedAgreementUrl: signedAgreement.filePath,
         clientSignature: clientSignature.trim() || undefined,
-        signatureDate: signatureDate.toISOString().slice(0, 10),
+        signatureDate: toIsoDate(signatureDate),
         conversationSummary: conversationSummary.trim() || undefined,
       });
     },

@@ -19,3 +19,25 @@ export function localToday(): string {
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
+
+/**
+ * Parses a date-time sent by a client into the CRM's stored convention.
+ * The CRM stores *wall-clock Dubai* time everywhere (reminder_date, shown as-is by
+ * the UI and compared with DATE(...) = today). The web app sends wall-clock text
+ * ("2026-11-09T12:00:00"), which new Date() already keeps as-is on the UTC server.
+ * The mobile app sends a real instant ("...Z" / "+04:00" via toISOString()); stored
+ * unchanged, that is 4 hours early, and after 20:00 UTC lands on the wrong day. So
+ * anything carrying a timezone designator is shifted to Dubai wall-clock first.
+ */
+export function parseCrmDateTime(value: string | Date): Date {
+  if (value instanceof Date) return value;
+  const text = String(value).trim();
+  if (/T\d{2}:\d{2}/.test(text) && /(Z|[+-]\d{2}:?\d{2})$/i.test(text)) {
+    return new Date(new Date(text).getTime() + DUBAI_OFFSET_MS);
+  }
+  // Wall-clock text: keep its components exactly (as UTC, which is how Sequelize
+  // writes Dates) instead of letting new Date() reinterpret them in whatever
+  // timezone the server/dev machine happens to run in.
+  if (/^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(:\d{2}(\.\d+)?)?$/.test(text)) return new Date(`${text.replace(' ', 'T')}Z`);
+  return new Date(text);
+}

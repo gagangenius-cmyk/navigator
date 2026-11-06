@@ -1,3 +1,4 @@
+import { toIsoDate } from '@/utils/format';
 import { useNavigation, useRoute, type NavigationProp, type RouteProp } from '@react-navigation/native';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import * as DocumentPicker from 'expo-document-picker';
@@ -67,7 +68,7 @@ export function PaymentSubmissionScreen() {
         paymentStructure: structure,
         paymentMethod: method,
         transactionId: transactionId.trim() || undefined,
-        paymentDate: paymentDate.toISOString().slice(0, 10),
+        paymentDate: toIsoDate(paymentDate),
         proofOfPaymentUrl: proof?.url,
         remark: remark.trim() || undefined,
       });

@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { assertLeadAccess } from '@/lib/leadAccess';
+import { parseCrmDateTime } from '@/lib/dubaiDate';
 import { syncLeadFollowup } from '@/lib/leadSchedule';
 import { NextRequest, NextResponse } from 'next/server';
 import { CrmcFollowUpReminders, CrmcNotifications } from '@/models';
@@ -204,7 +205,8 @@ export async function POST(request: NextRequest) {
     if (!reminderMessage) {
       return NextResponse.json({ error: 'subject or message is required' }, { status: 400 });
     }
-    if (Number.isNaN(new Date(followUpAt).getTime())) {
+    const followUpDate = parseCrmDateTime(followUpAt);
+    if (Number.isNaN(followUpDate.getTime())) {
       return NextResponse.json({ error: 'scheduledAt/reminderDate is not a valid date' }, { status: 400 });
     }
     // Same lead scope every other lead route applies - a follow-up (and the
@@ -227,7 +229,7 @@ export async function POST(request: NextRequest) {
     const reminder = await CrmcFollowUpReminders.create({
       lead_id: parseInt(leadId),
       user_id: parseInt(assignedUserId),
-      reminder_date: new Date(followUpAt),
+      reminder_date: followUpDate,
       message: reminderMessage,
       priority: priority || 'medium',
       status: body.status || 'pending',
@@ -240,7 +242,7 @@ export async function POST(request: NextRequest) {
       user_id: parseInt(assignedUserId),
       type: 'followup',
       title: `Follow-up Reminder: ${subject || reminderType || 'Lead follow-up'}`,
-      message: `You have a follow-up scheduled for ${new Date(followUpAt).toLocaleDateString()}`,
+      message: `You have a follow-up scheduled for ${followUpDate.toLocaleDateString()}`,
       priority: priority || 'medium',
       link: leadId ? `/admin/leads/${parseInt(leadId)}/edit` : null,
       related_id: leadId ? parseInt(leadId) : null,
@@ -252,8 +254,8 @@ export async function POST(request: NextRequest) {
     await logLeadRemark({
       leadId: parseInt(leadId),
       action: 'followup_added',
-      remark: `Follow-up added for ${new Date(followUpAt).toLocaleDateString()}: ${reminderMessage}`,
-      newValue: new Date(followUpAt).toISOString().split('T')[0],
+      remark: `Follow-up added for ${followUpDate.toLocaleDateString()}: ${reminderMessage}`,
+      newValue: followUpDate.toISOString().split('T')[0],
       actorId: parseInt(assignedUserId),
     });
 
@@ -328,7 +330,7 @@ export async function PUT(request: NextRequest) {
       case 'reschedule':
         updateData = {
           status: 'rescheduled',
-          reminder_date: new Date(rescheduledAt),
+          reminder_date: parseCrmDateTime(rescheduledAt),
           completion_notes: notes || undefined,
           updated_at: new Date()
         };
@@ -347,7 +349,7 @@ export async function PUT(request: NextRequest) {
         );
     }
 
-    if (action === 'reschedule' && Number.isNaN(new Date(rescheduledAt).getTime())) {
+    if (action === 'reschedule' && Number.isNaN(parseCrmDateTime(rescheduledAt).getTime())) {
       return NextResponse.json({ error: 'rescheduledAt must be a valid date' }, { status: 400 });
     }
 
