@@ -127,14 +127,6 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Duplicate-submission guard: the frontend already checks for an
-    // existing agreement before calling this (GET-then-POST), but that's not
-    // atomic - block a second agreement for the same opportunity here too.
-    const existingAgreement = await CrmcOpportunityAgreements.findOne({ where: { opportunityId: body.opportunityId, isDeleted: 0 } });
-    if (existingAgreement) {
-      return NextResponse.json({ error: 'An agreement already exists for this opportunity.', agreementId: existingAgreement.id }, { status: 409 });
-    }
-
     // Signed/uploaded state is only ever set by the PUT upload flow - never
     // accept it (or identity/soft-delete columns) from a create request body.
     const {
@@ -157,6 +149,24 @@ export async function POST(request: NextRequest) {
     const t = await sequelize.transaction();
     let agreement: InstanceType<typeof CrmcOpportunityAgreements>;
     try {
+      // Duplicate guard that actually holds under concurrency. A plain "does one
+      // exist?" read followed by an INSERT lets two simultaneous requests both pass
+      // (double-click, two tabs). Locking the opportunity row first serialises them:
+      // the second waits here until the first commits, and then its read - which
+      // starts its snapshot only after the lock is granted - sees the new agreement.
+      // (A UNIQUE index would need a schema change because soft-deleted rows share
+      // the same opportunityId.)
+      await sequelize.query('SELECT id FROM crm_opportunities WHERE id = :id FOR UPDATE', {
+        replacements: { id: Number(body.opportunityId) }, type: QueryTypes.SELECT, transaction: t,
+      });
+      const existingAgreement = await CrmcOpportunityAgreements.findOne({
+        where: { opportunityId: body.opportunityId, isDeleted: 0 }, transaction: t,
+      });
+      if (existingAgreement) {
+        await t.rollback();
+        return NextResponse.json({ error: 'An agreement already exists for this opportunity.', agreementId: existingAgreement.id }, { status: 409 });
+      }
+
       agreement = await CrmcOpportunityAgreements.create(agreementData, { transaction: t });
 
     // Override whatever placeholder number the client sent (it can't know its

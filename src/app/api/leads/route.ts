@@ -1,3 +1,5 @@
+import { CrmcFollowUpReminders } from '@/models/CrmcFollowUpReminders'
+import { parseCrmDateTime, splitFollowUp } from '@/lib/dubaiDate'
 import { dubaiToday } from '@/lib/dubaiDate';
 import { NextRequest, NextResponse } from 'next/server'
 import { sequelize, connectDB } from '@/lib/sequelize'
@@ -988,6 +990,27 @@ export async function POST(request: NextRequest) {
     const insertId = await insertLeadRecord(leadData);
     if (!insertId) {
       throw new Error('Lead was created but the new lead ID could not be resolved');
+    }
+
+    // Add Lead's "Prospect Follow-Up" used to land only in the lead's own followup
+    // columns, so it never appeared in Follow-ups, the calendar, notifications or the
+    // dashboard (all read crm_follow_up_reminders). Create the real reminder; its model
+    // hook mirrors the earliest open one back onto the lead.
+    const explicitFollowUp = splitFollowUp(data.followup || data.prospectFollowUp)
+    if (explicitFollowUp.date && explicitFollowUp.time) {
+      try {
+        await CrmcFollowUpReminders.create({
+          lead_id: insertId,
+          user_id: Number(leadData.assignTo || currentUser.id),
+          reminder_date: parseCrmDateTime(`${explicitFollowUp.date}T${explicitFollowUp.time}`),
+          message: String(data.notes || data.lead_remark || 'Prospect follow-up scheduled'),
+          priority: 'medium',
+          status: 'pending',
+        })
+      } catch (error) {
+        // The lead itself is already saved; don't fail creation over its reminder.
+        console.error('Failed to create the prospect follow-up reminder for the new lead:', error)
+      }
     }
 
     if (leadData.assignTo) {

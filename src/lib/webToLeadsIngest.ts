@@ -193,7 +193,7 @@ export async function ingestWebToLead(
     appointment: null,
     followup: now,
     folowuptime: time,
-    followupstat: 0,
+    followupstat: 1,
     enquiry: immigrationType || 'Website lead enquiry',
     convet: 'New',
     priority: 'Medium',

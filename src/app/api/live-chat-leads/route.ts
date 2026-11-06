@@ -206,7 +206,7 @@ export async function POST(request: NextRequest) {
       appointment: null,
       followup: now,
       folowuptime: time,
-      followupstat: 0,
+      followupstat: 1,
       enquiry: immigrationType || 'Live chat lead enquiry',
       convet: 'New',
       priority: 'Medium',

@@ -185,7 +185,7 @@ export async function POST(request: NextRequest) {
       appointment: null,
       followup: now,
       folowuptime: time,
-      followupstat: 0,
+      followupstat: 1,
       enquiry: immigrationType || 'Website popup lead enquiry',
       convet: 'New',
       priority: 'Medium',

@@ -41,3 +41,18 @@ export function parseCrmDateTime(value: string | Date): Date {
   if (/^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(:\d{2}(\.\d+)?)?$/.test(text)) return new Date(`${text.replace(' ', 'T')}Z`);
   return new Date(text);
 }
+
+/**
+ * Splits a client-supplied follow-up ("2026-11-09T14:30", "2026-11-09 14:30:00" or a
+ * bare date) into the lead's DATE and TIME column values. Date-only input gets 09:00
+ * rather than midnight, which showed up as a confusing "12:00 AM" follow-up.
+ */
+export function splitFollowUp(value: unknown): { date: string | null; time: string | null } {
+  if (!value) return { date: null, time: null };
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? { date: null, time: null } : { date: value.toISOString().slice(0, 10), time: value.toISOString().slice(11, 19) };
+  }
+  const match = String(value).trim().match(/^(\d{4}-\d{2}-\d{2})(?:[T ](\d{2}:\d{2})(?::(\d{2}))?)?/);
+  if (!match) return { date: null, time: null };
+  return { date: match[1], time: match[2] ? `${match[2]}:${match[3] || '00'}` : '09:00:00' };
+}

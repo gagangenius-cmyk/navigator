@@ -95,7 +95,7 @@ export async function POST(request: NextRequest) {
         body.appointment || null,
         body.followup || null,
         body.folowuptime || null,
-        body.followupstat || 0,
+        body.followupstat ?? 1,
         body.enquiry || '',
         body.convet || 'New',
         body.priority || 'Medium',

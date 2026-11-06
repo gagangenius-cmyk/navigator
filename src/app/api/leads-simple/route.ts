@@ -1,3 +1,4 @@
+import { syncLeadFollowup } from '@/lib/leadSchedule';
 import { dubaiToday } from '@/lib/dubaiDate';
 import { NextRequest, NextResponse } from 'next/server';
 import { sequelize } from '@/lib/sequelize';
@@ -167,6 +168,10 @@ export async function POST(request: NextRequest) {
       actorId: currentUser.id,
       actorRole: currentUser.roleName || currentUser.type,
     });
+
+    // This INSERT omits followupstat, so the column default (0 = pending) would make a
+    // brand-new lead look like it has a pending follow-up; mirror the real state (none).
+    await syncLeadFollowup(leadId);
 
     // This endpoint has its own INSERT (above) rather than going through
     // insertLeadRecord() (src/lib/leadDefaults.ts) - fire trigger.lead_created

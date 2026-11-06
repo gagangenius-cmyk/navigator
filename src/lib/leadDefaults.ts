@@ -1,3 +1,4 @@
+import { splitFollowUp } from '@/lib/dubaiDate';
 import { QueryTypes, Transaction } from 'sequelize';
 import { sequelize } from './sequelize';
 import { CACHE_TAGS, invalidateReportCaches } from './reportCache';
@@ -30,6 +31,8 @@ export function buildDefaultLeadData(input: BuildLeadDataInput) {
     requestedBranchId, requestedBranchRegion, duplicateCheck,
   } = input;
 
+  const explicitFollowUp = splitFollowUp(data.followup || data.prospectFollowUp);
+
   return {
     // User-provided data
     fname: data.fname || data.firstName || '',
@@ -54,9 +57,13 @@ export function buildDefaultLeadData(input: BuildLeadDataInput) {
     market_source: resolvedMarketSource,
     sub_market_source: data.sub_market_source || 0,
     appointment: data.appointment || null,
-    followup: data.followup || data.prospectFollowUp || new Date(),
-    folowuptime: data.folowuptime || data.followupTime || new Date().toTimeString().split(' ')[0],
-    followupstat: data.followupstat || 0,
+    // An explicit follow-up (Add Lead's "Prospect Follow-Up" is one datetime-local value)
+    // is split into the DATE and TIME columns; with none given the NOT NULL columns are
+    // filled with "now" as a placeholder and followupstat = 1 ("nothing pending") so a
+    // brand-new lead doesn't read as having a pending follow-up that was never scheduled.
+    followup: explicitFollowUp.date || new Date(),
+    folowuptime: data.folowuptime || data.followupTime || explicitFollowUp.time || new Date().toTimeString().split(' ')[0],
+    followupstat: data.followupstat ?? (explicitFollowUp.date ? 0 : 1),
     enquiry: data.enquiry || 'New lead enquiry',
     convet: data.convet || 'New',
     priority: data.priority || 'Medium',

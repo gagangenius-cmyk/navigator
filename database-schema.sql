@@ -1051,7 +1051,7 @@ CREATE TABLE `crm_forum_leads` (
   `appointment` date DEFAULT NULL,
   `followup` date NOT NULL,
   `folowuptime` time NOT NULL,
-  `followupstat` int NOT NULL DEFAULT '0',
+  `followupstat` int NOT NULL DEFAULT '1',
   `enquiry` varchar(555) NOT NULL,
   `convet` varchar(555) NOT NULL,
   `priority` varchar(10) NOT NULL,

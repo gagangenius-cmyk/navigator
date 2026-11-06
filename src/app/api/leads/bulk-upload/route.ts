@@ -1,3 +1,4 @@
+import { syncLeadFollowup } from '@/lib/leadSchedule';
 import { dubaiToday } from '@/lib/dubaiDate';
 import { NextRequest, NextResponse } from 'next/server';
 import { jsonToSheetBuffer, readWorkbookFromBase64, sheetToJson, parseExcelDateCode } from '@/lib/excelCompat';
@@ -371,6 +372,9 @@ export async function POST(request: NextRequest) {
 
         const insertId = getInsertId(insertResult);
         if (!insertId) throw new Error('Lead was created but the new lead ID could not be resolved');
+
+        // INSERT omits followupstat (column default 0 = pending); a new lead has no open reminder.
+        await syncLeadFollowup(insertId);
 
         // This endpoint has its own INSERT (above) rather than going through
         // insertLeadRecord() (src/lib/leadDefaults.ts) - fire
