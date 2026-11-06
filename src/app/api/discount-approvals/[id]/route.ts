@@ -88,7 +88,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     console.error('Error fetching discount approval:', error);
     captureError(error, { route: 'GET /api/discount-approvals/[id]' });
     return NextResponse.json(
-      { success: false, error: 'Failed to fetch discount approval: ' + error.message },
+      { success: false, error: 'Failed to fetch discount approval' },
       { status: 500 }
     );
   }
@@ -96,8 +96,23 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    // This handler had no login check of its own - only the approve/reject
+    // branch looked at the caller - so an unauthenticated request could write
+    // any other status or timestamp onto a discount request.
+    const sessionUser = getAuthenticatedUser(request);
+    if (!sessionUser) {
+      return NextResponse.json({ success: false, error: 'Authentication is required' }, { status: 401 });
+    }
     const { id: discountId } = await params;
     const body = await request.json();
+
+    // The only transitions this endpoint supports are the review decisions.
+    if (!['approved', 'rejected'].includes(body.status)) {
+      return NextResponse.json(
+        { success: false, error: "status must be 'approved' or 'rejected'" },
+        { status: 422 }
+      );
+    }
 
     if (!discountId) {
       return NextResponse.json(
@@ -192,18 +207,67 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
     // Update other fields
     if (body.status) updateData.status = body.status;
-    if (body.approvedAt && !updateData.approvedAt) updateData.approvedAt = new Date(body.approvedAt);
-    if (body.rejectedDate && !updateData.rejectedDate) updateData.rejectedDate = new Date(body.rejectedDate);
 
-    await sequelize.query(`
-      UPDATE crm_discount_approvals 
-      SET ${Object.keys(updateData).map(key => `${key} = ?`).join(', ')}
-      WHERE id = ?
-    `, {
-      replacements: [...Object.values(updateData), discountId]
+    // The UPDATE, and the lead/opportunity amounts it drives on approval,
+    // commit together; the UPDATE only matches a still-pending request, so two
+    // reviewers racing past the read-check above can't both apply a decision.
+    const existingApproval = (existingResult as any[])[0];
+    const claimed = await sequelize.transaction(async (t) => {
+      const [, updateInfo] = await sequelize.query(`
+        UPDATE crm_discount_approvals
+        SET ${Object.keys(updateData).map(key => `${key} = ?`).join(', ')}
+        WHERE id = ? AND status = 'pending' AND is_deleted = 0
+      `, {
+        replacements: [...Object.values(updateData), discountId],
+        type: QueryTypes.UPDATE,
+        transaction: t,
+      });
+      if (Number((updateInfo as { affectedRows?: number })?.affectedRows ?? updateInfo ?? 0) < 1) return false;
+
+      if (body.status === 'approved' && existingApproval?.leadId) {
+        // payTotal must itself shrink by the discount - otherwise it's left
+        // stale at the pre-discount amount while payBalance silently accounts
+        // for a discount that payTotal never reflects.
+        await sequelize.query(
+          `UPDATE crm_forum_leads
+           SET discount = ?, payTotal = ?, payBalance = GREATEST(? - COALESCE(paidYet, 0), 0)
+           WHERE id = ?`,
+          {
+            replacements: [
+              existingApproval.discountAmount,
+              existingApproval.discountedAmount,
+              existingApproval.discountedAmount,
+              existingApproval.leadId,
+            ],
+            transaction: t,
+          }
+        );
+      }
+      if (body.status === 'approved' && existingApproval?.opportunityId) {
+        await sequelize.query(
+          `UPDATE crm_opportunities
+           SET estimatedValue = ?, actualValue = COALESCE(actualValue, ?), updatedAt = ?
+           WHERE id = ? AND is_deleted = 0`,
+          {
+            replacements: [
+              existingApproval.discountedAmount,
+              existingApproval.discountedAmount,
+              new Date(),
+              existingApproval.opportunityId,
+            ],
+            transaction: t,
+          }
+        );
+      }
+      return true;
     });
 
-    const existingApproval = (existingResult as any[])[0];
+    if (!claimed) {
+      return NextResponse.json(
+        { success: false, error: 'This discount request was already reviewed by someone else.' },
+        { status: 409 }
+      );
+    }
 
     if (['approved', 'rejected'].includes(body.status)) {
       const reviewer = getAuthenticatedUser(request);
@@ -238,40 +302,6 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       });
     }
 
-    if (body.status === 'approved' && existingApproval?.leadId) {
-      // payTotal must itself shrink by the discount — otherwise it's left
-      // stale at the pre-discount amount while payBalance silently accounts
-      // for a discount that payTotal never reflects.
-      await sequelize.query(
-        `UPDATE crm_forum_leads
-         SET discount = ?, payTotal = ?, payBalance = GREATEST(? - COALESCE(paidYet, 0), 0)
-         WHERE id = ?`,
-        {
-          replacements: [
-            existingApproval.discountAmount,
-            existingApproval.discountedAmount,
-            existingApproval.discountedAmount,
-            existingApproval.leadId,
-          ],
-        }
-      );
-    }
-    if (body.status === 'approved' && existingApproval?.opportunityId) {
-      await sequelize.query(
-        `UPDATE crm_opportunities
-         SET estimatedValue = ?, actualValue = COALESCE(actualValue, ?), updatedAt = ?
-         WHERE id = ? AND is_deleted = 0`,
-        {
-          replacements: [
-            existingApproval.discountedAmount,
-            existingApproval.discountedAmount,
-            new Date(),
-            existingApproval.opportunityId,
-          ],
-        }
-      );
-    }
-
     return NextResponse.json({
       success: true,
       message: 'Discount approval updated successfully'
@@ -281,7 +311,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     console.error('Error updating discount approval:', error);
     captureError(error, { route: 'PUT /api/discount-approvals/[id]' });
     return NextResponse.json(
-      { success: false, error: 'Failed to update discount approval: ' + error.message },
+      { success: false, error: 'Failed to update discount approval' },
       { status: 500 }
     );
   }
@@ -341,7 +371,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     console.error('Error deleting discount approval:', error);
     captureError(error, { route: 'DELETE /api/discount-approvals/[id]' });
     return NextResponse.json(
-      { success: false, error: 'Failed to delete discount approval: ' + error.message },
+      { success: false, error: 'Failed to delete discount approval' },
       { status: 500 }
     );
   }

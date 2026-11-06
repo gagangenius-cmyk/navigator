@@ -6,6 +6,7 @@ import { verifyToken } from '@/lib/auth';
 import { isCeo, isBranchManagerOrCeo } from '@/lib/roleChecks';
 import { requireAuth, isAuthError } from '@/lib/apiAuth';
 import { resolveBranchCurrency } from '@/lib/branchCurrency';
+import { assertOpportunityAccess } from '@/lib/leadAccess';
 import { formatDocumentNumber } from '@/lib/documentNumbering';
 
 export async function GET(request: NextRequest) {
@@ -102,6 +103,12 @@ export async function POST(request: NextRequest) {
     const opportunity = await CrmcOpportunities.findByPk(body.opportunityId);
     if (!opportunity || opportunity.isDeleted) return NextResponse.json({ error: 'Opportunity not found' }, { status: 404 });
 
+    // agreements.create alone let any counselor generate an agreement for an
+    // opportunity they have no access to; apply the same lead/opportunity scope
+    // every other opportunity route uses.
+    const accessError = await assertOpportunityAccess(auth, Number(body.opportunityId));
+    if (accessError) return accessError;
+
     // Resolved once, up front, and reused both for the branch-scope check
     // below and for document-numbering further down - the lead's own branch
     // is authoritative, not opportunity.branchId directly (see the comment
@@ -128,15 +135,29 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'An agreement already exists for this opportunity.', agreementId: existingAgreement.id }, { status: 409 });
     }
 
+    // Signed/uploaded state is only ever set by the PUT upload flow - never
+    // accept it (or identity/soft-delete columns) from a create request body.
+    const {
+      id: _ignoredId, isDeleted: _ignoredDeleted, signedDate: _ignoredSigned,
+      uploadedToCrm: _ignoredUploaded, createdAt: _ignoredCreated, updatedAt: _ignoredUpdated,
+      ...safeBody
+    } = body;
+    void [_ignoredId, _ignoredDeleted, _ignoredSigned, _ignoredUploaded, _ignoredCreated, _ignoredUpdated];
     const agreementData = {
-      ...body,
+      ...safeBody,
       currency: opportunity.currency,
       generatedDate: new Date(),
       createdAt: new Date(),
       updatedAt: new Date()
     };
 
-    const agreement = await CrmcOpportunityAgreements.create(agreementData);
+    // Created and numbered in one transaction: previously a failure between
+    // the INSERT and the number UPDATE left an agreement carrying whatever
+    // placeholder number the client sent.
+    const t = await sequelize.transaction();
+    let agreement: InstanceType<typeof CrmcOpportunityAgreements>;
+    try {
+      agreement = await CrmcOpportunityAgreements.create(agreementData, { transaction: t });
 
     // Override whatever placeholder number the client sent (it can't know its
     // own row id ahead of time) with the real AG/{branch}/{product}/{DDMMYYYY}/{seq}
@@ -157,7 +178,12 @@ export async function POST(request: NextRequest) {
       product: (opportunity as any).serviceType || (opportunity as any).serviceRequired,
       sequenceId: agreement.id,
     });
-    await agreement.update({ agreementNumber });
+    await agreement.update({ agreementNumber }, { transaction: t });
+      await t.commit();
+    } catch (txError) {
+      await t.rollback();
+      throw txError;
+    }
 
     return NextResponse.json(agreement, { status: 201 });
   } catch (error) {
@@ -182,6 +208,17 @@ export async function PUT(request: NextRequest) {
 
     const agreement = await CrmcOpportunityAgreements.findByPk(id);
     if (!agreement || agreement.isDeleted) return NextResponse.json({ error: 'Agreement not found' }, { status: 404 });
+
+    // Same scope rule as POST: a counselor may only change agreements on
+    // opportunities they can access (Branch Manager/CEO are handled below).
+    const [agreementOpp] = await sequelize.query<{ opportunityId: number | null }>(
+      'SELECT opportunityId FROM crm_opportunity_agreements WHERE id = ? LIMIT 1',
+      { replacements: [id], type: QueryTypes.SELECT },
+    );
+    if (agreementOpp?.opportunityId) {
+      const accessError = await assertOpportunityAccess(auth, Number(agreementOpp.opportunityId));
+      if (accessError) return accessError;
+    }
 
     // Branch Manager may only edit an agreement belonging to their own
     // branch's opportunity; CEO is unrestricted. Raw SQL rather than the

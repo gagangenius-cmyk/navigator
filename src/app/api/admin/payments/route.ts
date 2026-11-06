@@ -153,7 +153,9 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const auth = requireAuth(request, ['payments.view', 'payments.create', 'finance.view', 'finance.manage']);
+  // Writes need a write permission - 'payments.view'/'finance.view' alone are
+  // read-only roles and previously could create and edit payments here.
+  const auth = requireAuth(request, ['payments.create', 'payments.update', 'finance.manage']);
   if (isAuthError(auth)) return auth;
   try {
     const body = await request.json();
@@ -204,7 +206,10 @@ export async function POST(request: NextRequest) {
         ? Number((amount * (taxRateForRegion(leadRow?.regionName) / 100)).toFixed(2))
         : 0;
 
-      const newPayment = await Crm3partyPayment.create({
+      // Payment header + its detail row are one record - created together so a
+      // failure on the second can't leave an orphan payment with no particular.
+      const newPayment = await sequelize.transaction(async (transaction) => {
+      const created = await Crm3partyPayment.create({
         leadId,
         payMethod: data.payMethod || null,
         date: new Date(),
@@ -223,12 +228,14 @@ export async function POST(request: NextRequest) {
         remarks: data.remarks || '',
         payoption: data.payoption || '',
         paycardoption: data.paycardoption || '',
-      } as any);
+      } as any, { transaction });
 
       await Crm3partyPaymentDet.create({
-        payId: newPayment.get('id') as number,
+        payId: created.get('id') as number,
         particular,
         amount,
+      }, { transaction });
+      return created;
       });
 
       invalidateReportCaches([CACHE_TAGS.payments]);
@@ -249,14 +256,16 @@ export async function POST(request: NextRequest) {
   } catch (error: any) {
     console.error('Create payment error:', error);
     return NextResponse.json(
-      { error: 'Failed to create payment: ' + error.message },
+      { error: 'Failed to create payment' },
       { status: 500 }
     );
   }
 }
 
 export async function PUT(request: NextRequest) {
-  const auth = requireAuth(request, ['payments.view', 'payments.create', 'finance.view', 'finance.manage']);
+  // Writes need a write permission - 'payments.view'/'finance.view' alone are
+  // read-only roles and previously could create and edit payments here.
+  const auth = requireAuth(request, ['payments.create', 'payments.update', 'finance.manage']);
   if (isAuthError(auth)) return auth;
   try {
     const body = await request.json();
@@ -275,7 +284,13 @@ export async function PUT(request: NextRequest) {
         const scopeError = await assertLeadBranchWritable(auth, payment.get('leadId') as number | null);
         if (scopeError) return NextResponse.json({ error: scopeError }, { status: 403 });
       }
-      await payment.update(updateData);
+      // Ownership/identity fields can't be re-pointed here: the branch scope
+      // check above only looked at the CURRENT lead, so letting leadId change
+      // would move the payment to a lead outside the caller's branch.
+      const safeUpdate: Record<string, unknown> = { ...updateData };
+      delete safeUpdate.leadId;
+      delete safeUpdate.emp_id;
+      await payment.update(safeUpdate);
       return NextResponse.json(payment);
     } else {
       const fee = await CrmcForumLeadsFee.findByPk(id);
@@ -286,13 +301,15 @@ export async function PUT(request: NextRequest) {
         const scopeError = await assertLeadBranchWritable(auth, fee.get('lead') as number | null);
         if (scopeError) return NextResponse.json({ error: scopeError }, { status: 403 });
       }
-      await fee.update(updateData);
+      const safeFeeUpdate: Record<string, unknown> = { ...updateData };
+      delete safeFeeUpdate.lead;
+      await fee.update(safeFeeUpdate);
       return NextResponse.json(fee);
     }
   } catch (error: any) {
     console.error('Update payment error:', error);
     return NextResponse.json(
-      { error: 'Failed to update payment: ' + error.message },
+      { error: 'Failed to update payment' },
       { status: 500 }
     );
   }
