@@ -56,6 +56,9 @@ interface ExistingContract {
 export default function ContractWizard({ leadId, onContractGenerated }: ContractWizardProps) {
   const { user } = useAuth();
   const [currentStep, setCurrentStep] = useState(1);
+  const [paymentTarget, setPaymentTarget] = useState<ExistingContract | null>(null);
+  const [paymentForm, setPaymentForm] = useState({ amount: '', method: 'cash', reference: '', notes: '' });
+  const [paymentSaving, setPaymentSaving] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -287,23 +290,41 @@ export default function ContractWizard({ leadId, onContractGenerated }: Contract
     }
   };
 
-  const recordAdditionalReceipt = async (contractId: number) => {
-    const amountStr = window.prompt('Amount received:');
-    if (!amountStr) return;
-    const amount = Number(amountStr);
-    if (!amount || amount <= 0) {
+  // Opens an in-page form instead of window.prompt(): a native prompt for a money amount gave no
+  // payment method / reference, no outstanding-balance hint, and blocks automated testing.
+  const recordAdditionalReceipt = (contract: ExistingContract) => {
+    setPaymentForm({ amount: '', method: 'cash', reference: '', notes: '' });
+    setPaymentTarget(contract);
+  };
+
+  const submitAdditionalReceipt = async () => {
+    if (!paymentTarget) return;
+    const amount = Number(paymentForm.amount);
+    const outstanding = Number(paymentTarget.payBalance);
+    if (!Number.isFinite(amount) || amount <= 0) {
       window.toast.error('Enter a positive amount.');
       return;
     }
+    if (amount - outstanding > 0.005) {
+      window.toast.error(`Amount cannot exceed the outstanding balance of ${outstanding.toLocaleString()}.`);
+      return;
+    }
+    setPaymentSaving(true);
     try {
-      const response = await fetch(`/api/contracts/${contractId}/receipts`, {
+      const response = await fetch(`/api/contracts/${paymentTarget.id}/receipts`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ amount, paymentMethod: 'cash' }),
+        body: JSON.stringify({
+          amount,
+          paymentMethod: paymentForm.method,
+          transactionId: paymentForm.reference.trim() || undefined,
+          notes: paymentForm.notes.trim() || undefined,
+        }),
       });
       const result = await response.json();
       if (response.ok) {
         window.toast.success(`Receipt ${result.receiptNumber} recorded.`);
+        setPaymentTarget(null);
         await loadContracts();
       } else {
         window.toast.error(result.error || 'Failed to record receipt');
@@ -311,6 +332,8 @@ export default function ContractWizard({ leadId, onContractGenerated }: Contract
     } catch (error) {
       console.error('Error recording receipt:', error);
       window.toast.error('Failed to record receipt');
+    } finally {
+      setPaymentSaving(false);
     }
   };
 
@@ -685,7 +708,7 @@ export default function ContractWizard({ leadId, onContractGenerated }: Contract
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-3">
                             {Number(contract.payBalance) > 0 && (
-                              <button onClick={() => recordAdditionalReceipt(contract.id)} className="text-blue-600 hover:text-blue-800">
+                              <button onClick={() => recordAdditionalReceipt(contract)} className="text-blue-600 hover:text-blue-800">
                                 Record Payment
                               </button>
                             )}
@@ -707,6 +730,73 @@ export default function ContractWizard({ leadId, onContractGenerated }: Contract
           )}
         </div>
       </div>
+      {paymentTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-label="Record payment">
+          <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl space-y-4">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">Record Payment</h3>
+              <p className="text-sm text-gray-600">
+                {paymentTarget.contractNumber} - outstanding {paymentTarget.currency} {Number(paymentTarget.payBalance).toLocaleString()}
+              </p>
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700" htmlFor="rp-amount">Amount received</label>
+              <input
+                id="rp-amount"
+                type="number"
+                min="0"
+                step="0.01"
+                value={paymentForm.amount}
+                onChange={(e) => setPaymentForm((p) => ({ ...p, amount: e.target.value }))}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700" htmlFor="rp-method">Payment method</label>
+              <select
+                id="rp-method"
+                value={paymentForm.method}
+                onChange={(e) => setPaymentForm((p) => ({ ...p, method: e.target.value }))}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2"
+              >
+                <option value="cash">Cash</option>
+                <option value="card">Card</option>
+                <option value="bank_transfer">Bank transfer</option>
+                <option value="cheque">Cheque</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700" htmlFor="rp-ref">Transaction reference (optional)</label>
+              <input
+                id="rp-ref"
+                type="text"
+                value={paymentForm.reference}
+                onChange={(e) => setPaymentForm((p) => ({ ...p, reference: e.target.value }))}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700" htmlFor="rp-notes">Notes (optional)</label>
+              <textarea
+                id="rp-notes"
+                rows={2}
+                value={paymentForm.notes}
+                onChange={(e) => setPaymentForm((p) => ({ ...p, notes: e.target.value }))}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2"
+              />
+            </div>
+            <div className="flex justify-end gap-3">
+              <button type="button" onClick={() => setPaymentTarget(null)} disabled={paymentSaving} className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700">
+                Cancel
+              </button>
+              <button type="button" onClick={submitAdditionalReceipt} disabled={paymentSaving} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-60">
+                {paymentSaving ? 'Saving...' : 'Record Payment'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
