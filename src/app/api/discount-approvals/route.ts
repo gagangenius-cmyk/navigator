@@ -267,11 +267,22 @@ export async function POST(request: NextRequest) {
           { replacements: [discountAmount, discountedAmount, discountedAmount, body.leadId], transaction }
         );
         if (body.opportunityId) {
+          // A won opportunity already has actualValue set, so COALESCE alone left it at the pre-discount
+          // amount; a won deal's value must follow the discount.
           await sequelize.query(
             `UPDATE crm_opportunities
-             SET estimatedValue = ?, actualValue = COALESCE(actualValue, ?), updatedAt = ?
+             SET estimatedValue = ?,
+                 actualValue = CASE WHEN LOWER(status) = 'won' THEN ? ELSE COALESCE(actualValue, ?) END,
+                 updatedAt = ?
              WHERE id = ? AND is_deleted = 0`,
-            { replacements: [discountedAmount, discountedAmount, now, body.opportunityId], transaction }
+            { replacements: [discountedAmount, discountedAmount, discountedAmount, now, body.opportunityId], transaction }
+          );
+          // The contract is the ledger the dashboards and reports read; the lead/opportunity above are not.
+          await sequelize.query(
+            `UPDATE crm_contracts
+             SET discount = ?, pay_balance = GREATEST(pay_total - discount - paid_yet, 0), updated_at = NOW()
+             WHERE opportunity_id = ? AND is_deleted = 0`,
+            { replacements: [discountAmount, body.opportunityId], transaction }
           );
         }
       }

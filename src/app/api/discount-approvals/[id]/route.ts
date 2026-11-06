@@ -246,10 +246,13 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       if (body.status === 'approved' && existingApproval?.opportunityId) {
         await sequelize.query(
           `UPDATE crm_opportunities
-           SET estimatedValue = ?, actualValue = COALESCE(actualValue, ?), updatedAt = ?
+           SET estimatedValue = ?,
+               actualValue = CASE WHEN LOWER(status) = 'won' THEN ? ELSE COALESCE(actualValue, ?) END,
+               updatedAt = ?
            WHERE id = ? AND is_deleted = 0`,
           {
             replacements: [
+              existingApproval.discountedAmount,
               existingApproval.discountedAmount,
               existingApproval.discountedAmount,
               new Date(),
@@ -257,6 +260,13 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
             ],
             transaction: t,
           }
+        );
+        // Keep the contract ledger (what dashboards/reports read) in step with the discount.
+        await sequelize.query(
+          `UPDATE crm_contracts
+           SET discount = ?, pay_balance = GREATEST(pay_total - discount - paid_yet, 0), updated_at = NOW()
+           WHERE opportunity_id = ? AND is_deleted = 0`,
+          { replacements: [existingApproval.discountAmount, existingApproval.opportunityId], transaction: t }
         );
       }
       return true;
