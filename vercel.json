@@ -3,6 +3,13 @@
     { "path": "/api/cron/meta-leads-retry", "schedule": "*/5 * * * *" },
     { "path": "/api/cron/meta-sync", "schedule": "*/15 * * * *" },
     { "path": "/api/cron/template-sends", "schedule": "* * * * *" },
-    { "path": "/api/cron/lead-transfer-emails", "schedule": "* * * * *" }
+    { "path": "/api/cron/lead-transfer-emails", "schedule": "* * * * *" },
+    { "path": "/api/cron/background-jobs?job=job-queue", "schedule": "* * * * *" },
+    { "path": "/api/cron/background-jobs?job=lead-pool-sla", "schedule": "*/5 * * * *" },
+    { "path": "/api/cron/background-jobs?job=stale-lead-recycle", "schedule": "*/15 * * * *" },
+    { "path": "/api/cron/background-jobs?job=lead-score", "schedule": "*/30 * * * *" },
+    { "path": "/api/cron/background-jobs?job=contract-reconciliation", "schedule": "0 22 * * *" },
+    { "path": "/api/cron/background-jobs?job=renewal-reminder", "schedule": "0 4 * * *" },
+    { "path": "/api/cron/monthly-reports", "schedule": "0 4 1 * *" }
   ]
 }

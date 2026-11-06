@@ -33,7 +33,7 @@ const loadNodeCron = async (): Promise<CronModule | null> => {
 // password-reset email) - sendEmail() already does its own delivery
 // logging to crm_email_delivery_log, so the handler just needs to let a
 // thrown error propagate for the queue's own retry/backoff to take over.
-function registerBuiltInJobHandlers() {
+export function registerBuiltInJobHandlers() {
   registerJobHandler('send_email', async (payload) => {
     await sendEmail({
       to: String(payload.to),

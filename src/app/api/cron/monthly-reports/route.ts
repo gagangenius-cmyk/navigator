@@ -38,3 +38,5 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json(result);
 }
+
+export { POST as GET };
