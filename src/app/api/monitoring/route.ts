@@ -59,7 +59,11 @@ async function computeMonitoringData(scopeToBranch: boolean, userBranch: number)
                AND (l.status IN ('Converted','converted','Retained','retained','Client','client') OR l.opportunity_status='won') THEN 1 ELSE 0 END) AS today_converted,
           SUM(CASE WHEN DATE(COALESCE(l.created,l.regdate)) >= :weekAgo
                AND (l.status IN ('Converted','converted','Retained','retained','Client','client') OR l.opportunity_status='won') THEN 1 ELSE 0 END) AS week_converted,
-          SUM(CASE WHEN l.followupstat=0 AND l.followup IS NOT NULL AND DATE(l.followup) < :today THEN 1 ELSE 0 END) AS overdue_followups,
+          SUM(CASE WHEN EXISTS (
+                SELECT 1 FROM crm_follow_up_reminders fr
+                WHERE fr.lead_id = l.id AND COALESCE(fr.status, 'pending') IN ('pending', 'rescheduled')
+                  AND DATE(fr.reminder_date) < :today
+              ) THEN 1 ELSE 0 END) AS overdue_followups,
           0 AS pending_appts,
           SUM(CASE WHEN (l.assignTo IS NULL OR l.assignTo=0) AND l.status NOT IN ('Converted','converted','Retained','retained','Client','client') THEN 1 ELSE 0 END) AS unassigned,
           SUM(CASE WHEN l.status NOT IN ('Converted','converted','Retained','retained','Client','client','Closed','closed') THEN 1 ELSE 0 END) AS total_active

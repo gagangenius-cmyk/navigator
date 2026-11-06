@@ -116,7 +116,15 @@ async function computeDashboardData(
       SUM(CASE WHEN DATE(COALESCE(l.created, l.regdate)) >= :monthAgo THEN 1 ELSE 0 END) AS monthLeads,
       SUM(CASE WHEN LOWER(COALESCE(l.status, '')) IN ('converted', 'retained', 'client', 'enrolled')
              OR LOWER(COALESCE(l.opportunity_status, '')) = 'won' THEN 1 ELSE 0 END) AS convertedLeads,
-      SUM(CASE WHEN l.followupstat = 0 AND l.followup IS NOT NULL AND DATE(l.followup) <= :today THEN 1 ELSE 0 END) AS pendingFollowups
+      -- Leads with a REAL open follow-up due today or earlier. This used to read the
+      -- lead's own followup/followupstat columns, but those are auto-filled with the
+      -- creation time and followupstat = 0 on every new lead, so the tile counted every
+      -- lead ever created (450 on crm_next) while only 47 had an actual reminder.
+      SUM(CASE WHEN EXISTS (
+            SELECT 1 FROM crm_follow_up_reminders fr
+            WHERE fr.lead_id = l.id AND COALESCE(fr.status, 'pending') IN ('pending', 'rescheduled')
+              AND DATE(fr.reminder_date) <= :today
+          ) THEN 1 ELSE 0 END) AS pendingFollowups
     FROM crm_forum_leads l
     ${leadWhere}
   `, { replacements: { today, weekAgo, monthAgo, ...leadReplacements }, type: QueryTypes.SELECT });

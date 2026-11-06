@@ -13,11 +13,12 @@ JOIN (
 ) r ON r.lead_id = l.id
 SET l.followup = DATE(r.next_at), l.folowuptime = TIME(r.next_at), l.followupstat = 0;
 
--- 2) Leads that have reminders but none still open -> nothing pending.
+-- 2) Leads with no open reminder -> nothing pending. Every new lead is created with
+--    followup = creation time and followupstat = 0 (lib/leadDefaults), so without this
+--    ~90% of leads look like they have a pending follow-up that was never scheduled.
 UPDATE crm_forum_leads l
 SET l.followupstat = 1
 WHERE l.followupstat = 0
-  AND EXISTS (SELECT 1 FROM crm_follow_up_reminders r WHERE r.lead_id = l.id)
   AND NOT EXISTS (
     SELECT 1 FROM crm_follow_up_reminders r
     WHERE r.lead_id = l.id AND COALESCE(r.status, 'pending') IN ('pending', 'rescheduled')

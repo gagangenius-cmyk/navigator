@@ -115,10 +115,15 @@ export async function processDueJobs(limit = 20): Promise<{ processed: number; s
     // twice by an overlapping tick - this project runs one Next.js process
     // per deployment (no separate worker fleet), but the cron tick interval
     // could still outlast a single run under load.
-    await sequelize.query(
-      `UPDATE crm_job_queue SET status = 'processing', attempts = attempts + 1 WHERE id = :id`,
-      { replacements: { id: job.id } }
+    // The claim itself must be atomic: matching only `status = 'pending'` means that
+    // when two processors run at once (the in-process cron on a dev/VPS host plus the
+    // Vercel cron route, or two overlapping ticks) exactly one wins the row; the other
+    // sees 0 affected rows and skips it instead of sending the same email twice.
+    const [, claimed] = await sequelize.query(
+      `UPDATE crm_job_queue SET status = 'processing', attempts = attempts + 1 WHERE id = :id AND status = 'pending'`,
+      { replacements: { id: job.id }, type: QueryTypes.UPDATE }
     );
+    if (Number((claimed as { affectedRows?: number })?.affectedRows ?? claimed ?? 0) < 1) continue;
 
     const handler = handlers.get(job.job_type);
     const payload = typeof job.payload === 'string' ? JSON.parse(job.payload) : job.payload;
