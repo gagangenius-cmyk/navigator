@@ -274,6 +274,15 @@ export async function PUT(request: NextRequest) {
       );
     }
 
+    // The only transitions this endpoint supports are the review decisions; any logged-in
+    // user could previously write an arbitrary status (e.g. reset a review to 'pending').
+    if (!['approved', 'rejected'].includes(body.status)) {
+      return NextResponse.json(
+        { success: false, error: "status must be 'approved' or 'rejected'" },
+        { status: 422 }
+      );
+    }
+
     // Without this, two reviewers (or one double-tapping / retrying after a timeout) can
     // both act on the same signed agreement, re-sending the sign-off notification and
     // letting an already-approved/rejected review be silently flipped again with no error.
@@ -327,21 +336,31 @@ export async function PUT(request: NextRequest) {
     }
 
     const now = new Date();
-    await sequelize.query(`
+    // The UPDATE is the claim: it only matches a still-pending review, so two reviewers racing
+    // past the read-check above can't both apply a decision. The reviewer identity and time
+    // come from the session/server, not the request body.
+    const [, reviewInfo] = await sequelize.query(`
       UPDATE crm_opportunity_compliance_approvals
       SET status = ?, reviewedBy = ?, reviewerRole = ?, reviewNotes = ?, reviewedAt = ?, updatedAt = ?
-      WHERE id = ?
+      WHERE id = ? AND status = 'pending'
     `, {
       replacements: [
         body.status,
-        body.reviewedBy || null,
-        body.reviewerRole || null,
+        (auth as { name?: string }).name || body.reviewedBy || null,
+        (auth as { roleName?: string }).roleName || body.reviewerRole || null,
         body.reviewNotes || null,
-        body.reviewedAt ? new Date(body.reviewedAt) : now,
+        now,
         now,
         id
-      ]
+      ],
+      type: QueryTypes.UPDATE,
     });
+    if (Number((reviewInfo as { affectedRows?: number })?.affectedRows ?? reviewInfo ?? 0) < 1) {
+      return NextResponse.json(
+        { success: false, error: 'This compliance review was already reviewed by someone else.' },
+        { status: 409 }
+      );
+    }
 
     if (['approved', 'rejected'].includes(body.status)) {
       await logAudit({
