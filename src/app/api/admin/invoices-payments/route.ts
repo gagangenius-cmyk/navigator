@@ -7,6 +7,14 @@ import { logDataAccess } from '@/lib/dataAccessAudit';
 import { captureError } from '@/lib/errorTracking';
 import { ensurePayHistoryAdminFeeColumns } from '@/lib/ensurePayHistoryAdminFeeColumns';
 
+// crm_opportunity_payments has no branchId column (only branchName). A payment's branch is the one
+// on its opportunity, else on its lead - this expression is what the branch-manager scope and the
+// branch join below used to read from the non-existent p.branchId, which made every query fail.
+const PAYMENT_BRANCH_SQL = `COALESCE(
+  (SELECT o2.branchId FROM crm_opportunities o2 WHERE o2.id = p.opportunityId),
+  (SELECT l2.branch FROM crm_forum_leads l2 WHERE l2.id = p.leadId)
+)`;
+
 let dbInitialized = false;
 const ensureDB = async () => { if (!dbInitialized) { await connectDB(); dbInitialized = true; } };
 
@@ -42,7 +50,9 @@ export async function GET(request: NextRequest) {
     // retained for sensitive HR/financial records" requirement.
     void logDataAccess({ userId: auth.id, entityType: 'invoices_payments', entityId: tab, action: 'view' });
 
-    if (tab === 'stats') {
+    // The page's Overview tab sends tab=overview; only 'stats' was handled, so Overview received an
+    // invoice list where it expects the stats object and rendered nothing.
+    if (tab === 'stats' || tab === 'overview') {
       return await getStats(dateFrom, dateTo, branch, canViewAll, isBranchManager, currentUser);
     }
     if (tab === 'payments') {
@@ -64,7 +74,7 @@ async function getStats(dateFrom: string, dateTo: string, branch: string, canVie
   if (dateTo) { conditions.push('p.createdAt <= :dateTo'); replacements.dateTo = `${dateTo} 23:59:59`; }
   if (branch) { conditions.push('p.branchName = :branch'); replacements.branch = branch; }
   if (isBranchManager && currentUser?.branch) {
-    conditions.push('(p.branchId = :userBranch OR p.branchId IS NULL)');
+    conditions.push(`(${PAYMENT_BRANCH_SQL} = :userBranch OR ${PAYMENT_BRANCH_SQL} IS NULL)`);
     replacements.userBranch = currentUser.branch;
   }
 
@@ -140,7 +150,7 @@ async function getPayments(search: string, status: string, dateFrom: string, dat
   if (dateTo) { conditions.push('p.createdAt <= :dateTo'); replacements.dateTo = `${dateTo} 23:59:59`; }
   if (branch) { conditions.push('p.branchName = :branch'); replacements.branch = branch; }
   if (isBranchManager && currentUser?.branch) {
-    conditions.push('(p.branchId = :userBranch OR p.branchId IS NULL)');
+    conditions.push(`(${PAYMENT_BRANCH_SQL} = :userBranch OR ${PAYMENT_BRANCH_SQL} IS NULL)`);
     replacements.userBranch = currentUser.branch;
   }
 
@@ -174,7 +184,7 @@ async function getPayments(search: string, status: string, dateFrom: string, dat
     LEFT JOIN crm_opportunities o ON p.opportunityId = o.id
     LEFT JOIN crm_employee e ON o.assignedTo = e.id
     LEFT JOIN crm_employee ae ON p.accountantId = ae.id
-    LEFT JOIN crm_branch b ON b.id = COALESCE(p.branchId, o.branchId, l.branch)
+    LEFT JOIN crm_branch b ON b.id = COALESCE(o.branchId, l.branch)
     ${where}
     ORDER BY p.createdAt DESC
     LIMIT :limit OFFSET :offset
@@ -254,7 +264,7 @@ async function getInvoices(search: string, status: string, dateFrom: string, dat
       b.vat_gst_percent AS branchVatGstPercent,
       b.abbrv AS branchAbbrv,
       e.name AS counselorName,
-      p.paymentNumber, p.paidAmount, p.proofOfPaymentUrl, p.paymentMethod, p.paymentDate,
+      p.paymentNumber, p.paidAmount, p.receiptUrl AS proofOfPaymentUrl, p.paymentMethod, p.paymentDate,
       p.clientName AS oppClientName, p.clientEmail AS oppClientEmail, p.clientPhone AS oppClientPhone,
       p.serviceName, p.receiptUrl, p.currency
     FROM crm_b2b_invoices i

@@ -54,11 +54,18 @@ export function getProductCode(productName: string | null | undefined): string {
   return (letters.slice(0, 3) || 'GEN').padEnd(3, 'X');
 }
 
+// Numbers carry the Dubai calendar day (UTC+4, no DST), the same "today" the rest of the CRM
+// uses. The server runs in UTC, so reading getDate()/getMonth() directly stamped the PREVIOUS day
+// on every document created between 00:00 and 04:00 Dubai time (e.g. AG/.../06112026 on 7 Nov).
+const DUBAI_OFFSET_MS = 4 * 60 * 60 * 1000;
+const dubaiParts = (date: Date) => {
+  const shifted = new Date(date.getTime() + DUBAI_OFFSET_MS);
+  return { year: shifted.getUTCFullYear(), month: shifted.getUTCMonth() + 1, day: shifted.getUTCDate() };
+};
+
 function formatDateDdMmYyyy(date: Date): string {
-  const dd = String(date.getDate()).padStart(2, '0');
-  const mm = String(date.getMonth() + 1).padStart(2, '0');
-  const yyyy = date.getFullYear();
-  return `${dd}${mm}${yyyy}`;
+  const { year, month, day } = dubaiParts(date);
+  return `${String(day).padStart(2, '0')}${String(month).padStart(2, '0')}${year}`;
 }
 
 // `sequenceId` should be the row's own auto-increment id (assigned after
@@ -80,9 +87,8 @@ export function formatDocumentNumber(params: {
 }
 
 function formatYyyyMm(date: Date): string {
-  const yyyy = date.getFullYear();
-  const mm = String(date.getMonth() + 1).padStart(2, '0');
-  return `${yyyy}${mm}`;
+  const { year, month } = dubaiParts(date);
+  return `${year}${String(month).padStart(2, '0')}`;
 }
 
 // Payment-receipt/tax-invoice numbering: RCP-{BRANCH}-{YYYYMM}-{SEQ}, e.g.
