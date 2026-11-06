@@ -1,4 +1,5 @@
 // @ts-nocheck
+import { dubaiToday } from '@/lib/dubaiDate';
 import { assertLeadAccess } from '@/lib/leadAccess';
 import { NextRequest, NextResponse } from 'next/server';
 import { Op } from 'sequelize';
@@ -334,7 +335,7 @@ export async function POST(request: NextRequest) {
         newPayBalance,
         paymentData.dueDate ? new Date(paymentData.dueDate) : null,
         paymentData.remark || null,
-        new Date().toLocaleDateString(),
+        dubaiToday(),
         new Date().toTimeString().split(' ')[0],
         newPayBalance <= 0 ? 'fully_paid' : 'partially_paid',
         new Date(),
@@ -342,6 +343,21 @@ export async function POST(request: NextRequest) {
       ],
       transaction,
     });
+
+    // The dashboards, finance/recovery reports and branch performance read money from
+    // crm_contract_ledger, i.e. crm_contracts - not from the lead's own columns updated above.
+    // This route used to touch only the lead, so after every balance payment the contract kept
+    // showing the old paid/outstanding amounts (AED 5,000 paid / 10,750 due after a second payment
+    // that left 7,750). Apply the same payment to the opportunity's contract in this transaction.
+    // (MySQL evaluates SET left to right, so pay_balance below already sees the new paid_yet.)
+    if (opportunityId) {
+      await sequelize.query(
+        `UPDATE crm_contracts
+         SET paid_yet = paid_yet + ?, pay_balance = GREATEST(pay_total - discount - paid_yet, 0), updated_at = NOW()
+         WHERE opportunity_id = ? AND is_deleted = 0`,
+        { replacements: [Number(paymentData.paidAmount || paymentData.amount || 0), opportunityId], transaction },
+      );
+    }
 
     // Step 5: Record in crm_pay_history
     const totalPaidSoFar = newPaidYet;
@@ -352,16 +368,20 @@ export async function POST(request: NextRequest) {
          payNextDate, payBalance, tax, payCategory, payment_remarks, remark, status, proof_url,
          admin_fee_included, admin_fee_amount, vat_included,
          thirdPartyAmt, dmAmt, dmTax, dmRefundAmt, curValue, refNumber,
-         created_by, stage, totaltillnow)
+         created_by, stage, totaltillnow, contract_id)
       VALUES
         (:leadId, :amount, :receiptNumber, 0, :payDate, :payMethod, :payoption, '',
          :payNextDate, :payBalance, 0, :payCategory, :remarks, :remark, 1, :proofUrl,
          :adminFeeIncluded, :adminFeeAmount, :vatIncluded,
          0, :amount, 0, 0, 0, :refNumber,
-         :createdBy, 'payment', :totalPaidSoFar)
+         :createdBy, 'payment', :totalPaidSoFar,
+         (SELECT id FROM crm_contracts WHERE opportunity_id = :opportunityId AND is_deleted = 0 ORDER BY id DESC LIMIT 1))
     `, {
       replacements: {
         leadId,
+        // Link the ledger row to the opportunity's contract (the initial payment is; balance
+        // payments left contract_id NULL, so a contract's own payment history missed them).
+        opportunityId: opportunityId || null,
         amount: paidAmount,
         receiptNumber,
         proofUrl,
