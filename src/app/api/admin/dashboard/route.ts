@@ -310,7 +310,9 @@ async function computeDashboardData(
         -- yesterday's still-pending ones counted but invisible.
         OR (DATE(r.reminder_date) < :today AND COALESCE(r.status, 'pending') IN ('pending', 'rescheduled'))
       ) ${fuEmployeeFilter}
-    ORDER BY r.reminder_date ASC
+    -- Today's first, then overdue oldest-first. Plain "oldest first" with LIMIT 50 pushed
+    -- today's follow-ups out of the list as soon as 50+ overdue ones existed.
+    ORDER BY (DATE(r.reminder_date) = :today) DESC, r.reminder_date ASC
     LIMIT 50
   `, { replacements: { today, uid: userId }, type: QueryTypes.SELECT });
 

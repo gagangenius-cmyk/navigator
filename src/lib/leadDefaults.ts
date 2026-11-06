@@ -1,3 +1,4 @@
+import { dubaiToday } from '@/lib/dubaiDate';
 import { splitFollowUp } from '@/lib/dubaiDate';
 import { QueryTypes, Transaction } from 'sequelize';
 import { sequelize } from './sequelize';
@@ -69,7 +70,7 @@ export function buildDefaultLeadData(input: BuildLeadDataInput) {
     priority: data.priority || 'Medium',
     regdate: new Date(),
     regtime: new Date(),
-    last_updated: new Date().toLocaleDateString(),
+    last_updated: dubaiToday(),
     last_updtd_time: new Date().toTimeString().split(' ')[0],
     stepComplete: data.stepComplete || 1,
     payType: data.payType || null,

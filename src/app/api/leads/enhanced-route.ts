@@ -1,3 +1,4 @@
+import { dubaiToday } from '@/lib/dubaiDate';
 import { NextRequest, NextResponse } from 'next/server';
 import { Op } from 'sequelize';
 import { models } from '@/models';
@@ -21,7 +22,7 @@ export async function POST(request: NextRequest) {
       created: new Date(),
       regdate: new Date(),
       regtime: new Date(),
-      last_updated: new Date().toLocaleDateString(),
+      last_updated: dubaiToday(),
       last_updtd_time: new Date().toTimeString().split(' ')[0],
       stepComplete: autoGenerateOpportunity ? 2 : 1,
       exist: 0,

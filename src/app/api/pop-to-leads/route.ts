@@ -1,3 +1,4 @@
+import { dubaiToday } from '@/lib/dubaiDate';
 import { NextRequest, NextResponse } from 'next/server';
 import { type CreationAttributes } from 'sequelize';
 import { CrmcForumLeads } from '@/models/CrmcForumLeads';
@@ -191,7 +192,7 @@ export async function POST(request: NextRequest) {
       priority: 'Medium',
       regdate: now,
       regtime: time,
-      last_updated: now.toISOString().slice(0, 10),
+      last_updated: dubaiToday(),
       last_updtd_time: time,
       stepComplete: 1,
       payType: null,
