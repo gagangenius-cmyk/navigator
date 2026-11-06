@@ -1,4 +1,5 @@
 // @ts-nocheck
+import { assertLeadAccess } from '@/lib/leadAccess';
 import { NextRequest, NextResponse } from 'next/server';
 import { Op } from 'sequelize';
 import { models, sequelize } from '@/models';
@@ -93,6 +94,15 @@ export async function POST(request: NextRequest) {
         { error: 'Lead not found' },
         { status: 404 }
       );
+    }
+
+    // Payment permission alone isn't enough: without this any counselor with
+    // payments.view/sales.create could record a payment (and mutate paidYet/payBalance)
+    // against a lead they have no access to, including another branch's.
+    const leadAccessError = await assertLeadAccess(loggedInUser, Number(leadId));
+    if (leadAccessError) {
+      await transaction.rollback();
+      return leadAccessError;
     }
 
     // Step 2: Validate opportunity exists if provided

@@ -1,3 +1,4 @@
+import { assertLeadAccess } from '@/lib/leadAccess';
 import { NextRequest, NextResponse } from 'next/server';
 import { QueryTypes } from 'sequelize';
 import { sequelize, connectDB } from '@/lib/sequelize';
@@ -60,7 +61,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     await ensureDB();
     const body = await request.json();
     const amount = Number(body.amount);
-    if (!amount || amount <= 0) {
+    if (!Number.isFinite(amount) || amount <= 0) {
       await transaction.rollback();
       return NextResponse.json({ error: 'A positive amount is required.' }, { status: 400 });
     }
@@ -83,9 +84,26 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       return NextResponse.json({ error: 'Contract not found.' }, { status: 404 });
     }
 
+    // agreements.create alone must not let a counselor post receipts to any contract.
+    const accessError = await assertLeadAccess(user, Number(contract.lead_id));
+    if (accessError) {
+      await transaction.rollback();
+      return accessError;
+    }
+
     const payTotal = Number(contract.pay_total);
     const discount = Number(contract.discount);
     const paidSoFar = Number(contract.paid_yet);
+    // Overpayment was silently absorbed (pay_balance is clamped to 0 while paid_yet keeps
+    // growing past the total), so reject anything beyond what is still owed.
+    const outstanding = Math.max(payTotal - discount - paidSoFar, 0);
+    if (amount - outstanding > 0.005) {
+      await transaction.rollback();
+      return NextResponse.json(
+        { error: `Amount exceeds the outstanding balance of ${outstanding.toFixed(2)}. Reload and try again.` },
+        { status: 409 }
+      );
+    }
     const newPaidYet = paidSoFar + amount;
     const newPayBalance = Math.max(payTotal - discount - newPaidYet, 0);
 

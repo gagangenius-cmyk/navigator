@@ -1,3 +1,4 @@
+import { assertLeadAccess } from '@/lib/leadAccess';
 import { NextRequest, NextResponse } from 'next/server';
 import { Op, QueryTypes, ValidationError, type Transaction } from 'sequelize';
 import { models, sequelize } from '@/models';
@@ -259,6 +260,18 @@ export async function POST(request: NextRequest) {
       );
     }
     Object.assign(lead, lead.get({ plain: true }));
+
+    // Login alone let any user convert any lead by id; apply the standard lead scope.
+    const leadAccessError = await assertLeadAccess(loggedInUser, leadId);
+    if (leadAccessError) {
+      await transaction.rollback();
+      return leadAccessError;
+    }
+
+    // Serialise concurrent conversions of the same lead: the second request waits here until
+    // the first commits, and only then runs the duplicate check below (otherwise both could
+    // read "no recent opportunity" and each create one).
+    await sequelize.query('SELECT id FROM crm_forum_leads WHERE id = ? FOR UPDATE', { replacements: [leadId], transaction });
 
     // Duplicate-submission guard: the only existing protection was a
     // client-side GET-then-POST check (opportunity-flow-wizard.tsx
