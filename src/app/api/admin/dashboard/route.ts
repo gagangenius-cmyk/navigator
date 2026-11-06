@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { dubaiToday } from '@/lib/dubaiDate';
 import { QueryTypes } from 'sequelize';
 import { unstable_cache } from 'next/cache';
 import { sequelize, connectDB } from '@/lib/sequelize';
@@ -44,7 +45,10 @@ async function computeDashboardData(
 ) {
   await ensureDBConnection();
 
-  const today    = new Date().toISOString().split('T')[0];
+  // "Today" is the Dubai calendar day (UTC+4, no DST), matching the rest of
+  // the CRM. toISOString() alone is the UTC day, which lags Dubai by a day
+  // between 00:00 and 04:00 local and hid today's follow-ups/appointments.
+  const today    = dubaiToday();
   const weekAgo  = new Date(Date.now() -  7 * 86400000).toISOString().split('T')[0];
   const monthAgo = new Date(Date.now() - 30 * 86400000).toISOString().split('T')[0];
   const yearAgo  = new Date(Date.now() - 365 * 86400000).toISOString().split('T')[0];

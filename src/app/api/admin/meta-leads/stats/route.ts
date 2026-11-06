@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { dubaiToday } from '@/lib/dubaiDate';
 import { QueryTypes } from 'sequelize';
 import { sequelize, connectDB } from '@/lib/sequelize';
 import { requireAuth, isAuthError } from '@/lib/apiAuth';
@@ -21,7 +22,7 @@ export async function GET(request: NextRequest) {
 
   await ensureDB();
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = dubaiToday();
   const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0];
 
   const [[todayStats], [weekStats], [deliveryStats], recentLeads, recentFailures] =

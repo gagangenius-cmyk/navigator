@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { dubaiToday } from '@/lib/dubaiDate';
 import { Appointments } from '@/models'
 import { sequelize } from '@/lib/sequelize'
 import { QueryTypes } from 'sequelize'
@@ -172,7 +173,7 @@ export async function POST(request: NextRequest) {
     const data = await request.json()
     const leadId = normalizeNumber(data.leadid ?? data.leadId)
     const counselorId = normalizeNumber(data.counsilorid ?? data.counselorId ?? data.employeeId)
-    const appointmentDate = data.date || new Date().toISOString().split('T')[0]
+    const appointmentDate = data.date || dubaiToday()
     const appointmentTime = normalizeTime(data.appointtime || data.time || '09:00')
 
     // Two clients booking the same counselor at the same date/time otherwise

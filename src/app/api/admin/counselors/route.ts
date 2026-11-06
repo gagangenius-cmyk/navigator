@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { dubaiToday } from '@/lib/dubaiDate';
 import { QueryTypes } from 'sequelize';
 import { sequelize, connectDB } from '@/lib/sequelize';
 import { requireAuth, isAuthError } from '@/lib/apiAuth';
@@ -17,7 +18,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const branch = searchParams.get('branch') || '';
     const status = searchParams.get('status') || '';
-    const today = new Date().toISOString().slice(0, 10);
+    const today = dubaiToday();
 
     const conditions: string[] = [];
     const replacements: Record<string, unknown> = { today };

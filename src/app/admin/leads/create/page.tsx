@@ -5,7 +5,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Mail, Phone, Globe, Loader2, AlertTriangle, AlertCircle, User, MapPin, UserCircle2, Tag, GraduationCap, UserCog, CalendarClock, SlidersHorizontal, Flag, ScanLine, Sparkles } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { isFoeOrBranchManagerOrCeo } from '@/lib/roleChecks';
+import { isFoeOrBranchManagerOrCeo, getRecordVisibilityScope } from '@/lib/roleChecks';
 import { ALL_COUNTRIES } from '@/lib/countries';
 import { calculateAgeFromDob } from '@/lib/utils';
 import {
@@ -565,9 +565,14 @@ export default function AdminCreateLeadPage() {
                 </ul>
               )}
               <div className="mt-3 flex flex-wrap gap-2">
-                <SecondaryButton onClick={() => router.push(`/admin/leads/${duplicateInfo.leadId}/edit`)}>
-                  View Lead
-                </SecondaryButton>
+                {/* Counselors can only open leads assigned to them (GET /api/leads/[id]
+                    returns 403 otherwise), so an unassigned/other-owner duplicate
+                    would open an error page. */}
+                {(getRecordVisibilityScope(user as any) !== 'own' || String(duplicateInfo.ownerId ?? '') === String(user?.id ?? '')) && (
+                  <SecondaryButton onClick={() => router.push(`/admin/leads/${duplicateInfo.leadId}/edit`)}>
+                    View Lead
+                  </SecondaryButton>
+                )}
                 <SecondaryButton onClick={() => router.push(`/admin/leads/contract-flow?leadId=${duplicateInfo.leadId}`)}>
                   Add New Contract
                 </SecondaryButton>

@@ -3,6 +3,7 @@ import { sequelize } from '@/lib/sequelize';
 import { resolveLeadAutoAssignment } from '@/lib/leadAutoAssignment';
 import { recordLeadAssignment } from '@/lib/leadRemarks';
 import { verifyToken } from '@/lib/auth';
+import { getRecordVisibilityScope } from '@/lib/roleChecks';
 import { QueryTypes } from 'sequelize';
 import { checkForDuplicate, findExistingLead } from '@/lib/duplicateLeadCheck';
 import { fireLeadCreatedTrigger } from '@/lib/workflowTriggers';
@@ -204,12 +205,25 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Authentication is required' }, { status: 401 });
     }
 
-    const [leads] = await sequelize.query(`
-      SELECT id, fname, lname, email, phone, status, priority, created 
-      FROM crm_forum_leads 
-      ORDER BY created DESC 
+    // Same visibility rules as assertLeadAccess: CEO/all-branch roles see
+    // everything, branch/region roles their own branch/region, everyone else
+    // only leads assigned to them. This used to return the 10 newest leads
+    // company-wide to any logged-in user.
+    const scope = getRecordVisibilityScope(currentUser);
+    const scopeSql = scope === 'all' ? ''
+      : scope === 'branch' ? 'WHERE branch = :branch'
+      : scope === 'region' ? 'WHERE region = :region'
+      : 'WHERE (Counsilor = :uid OR assignTo = :uid)';
+    const leads = await sequelize.query(`
+      SELECT id, fname, lname, email, phone, status, priority, created
+      FROM crm_forum_leads
+      ${scopeSql}
+      ORDER BY created DESC
       LIMIT 10
-    `);
+    `, {
+      replacements: { branch: Number(currentUser.branch || 0), region: Number((currentUser as any).region || 0), uid: Number(currentUser.id) },
+      type: QueryTypes.SELECT,
+    });
 
     return NextResponse.json({
       success: true,

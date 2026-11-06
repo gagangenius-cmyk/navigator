@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { dubaiToday } from '@/lib/dubaiDate';
 import { HRService } from '@/services/hr-service';
 import { requireAuth, isAuthError } from '@/lib/apiAuth';
 import { resolveModuleRoleKey } from '@/lib/modulePermissions';
@@ -14,7 +15,7 @@ export async function GET(request: NextRequest) {
 
   try {
     const { searchParams } = new URL(request.url);
-    const today = new Date().toISOString().slice(0, 10);
+    const today = dubaiToday();
     const dateFrom = searchParams.get('date_from') || today;
     const dateTo = searchParams.get('date_to') || today;
 
