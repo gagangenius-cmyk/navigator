@@ -1,4 +1,5 @@
 // @ts-nocheck
+import { uniqueReceiptNumber } from '@/lib/receiptNumber';
 import { dubaiToday } from '@/lib/dubaiDate';
 import { assertLeadAccess } from '@/lib/leadAccess';
 import { NextRequest, NextResponse } from 'next/server';
@@ -7,7 +8,7 @@ import { models, sequelize } from '@/models';
 import { requireAuth, isAuthError } from '@/lib/apiAuth';
 import { isBranchManagerOrCeo, isCeo } from '@/lib/roleChecks';
 import { branchCurrencyError, resolveBranchCurrency } from '@/lib/branchCurrency';
-import { formatDocumentNumber, formatReceiptNumber } from '@/lib/documentNumbering';
+import { formatDocumentNumber } from '@/lib/documentNumbering';
 import { notifyCeo, notifyRole } from '@/lib/notify';
 import { getAdminFeeAmount } from '@/lib/receiptTemplate';
 import { ensurePayHistoryAdminFeeColumns } from '@/lib/ensurePayHistoryAdminFeeColumns';
@@ -208,12 +209,11 @@ export async function POST(request: NextRequest) {
     `, { transaction });
     const receiptId = Number((receiptIdRows as any[])[0]?.nextId || 0);
     if (!receiptId) throw new Error('Could not allocate a receipt ID');
-    const receiptNumber = formatReceiptNumber({
-      branchName: branchCurrency.branchName,
+    const receiptNumber = await uniqueReceiptNumber({
+branchName: branchCurrency.branchName,
       branchAddress: branchCurrency.branchAddress,
       branchAbbrv: branchCurrency.branchAbbrv,
-      sequenceId: receiptId,
-    });
+    }, receiptId, transaction);
     const paidAmount = Number(paymentData.paidAmount || paymentData.amount || 0);
     const totalAmount = Number(paymentData.totalAmount || paymentData.amount || lead.payTotal || 0);
     // True outstanding balance AFTER this payment: earlier installments

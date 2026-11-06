@@ -1,3 +1,4 @@
+import { uniqueReceiptNumber } from '@/lib/receiptNumber';
 import { assertLeadAccess } from '@/lib/leadAccess';
 import { NextRequest, NextResponse } from 'next/server';
 import { Op, QueryTypes, ValidationError, type Transaction } from 'sequelize';
@@ -8,7 +9,7 @@ import { branchCurrencyError, resolveBranchCurrency } from '@/lib/branchCurrency
 import { resolveBranchExchangeRate } from '@/lib/exchangeRate';
 import { getBranchTaxInfo } from '@/lib/branchTax';
 import { renderAgreementForBranch } from '@/lib/renderAgreementForBranch';
-import { formatDocumentNumber, formatReceiptNumber } from '@/lib/documentNumbering';
+import { formatDocumentNumber } from '@/lib/documentNumbering';
 import { notifyCeo, notifyRole } from '@/lib/notify';
 import { logAudit } from '@/lib/auditLog';
 import { logLeadRemark } from '@/lib/leadRemarks';
@@ -572,12 +573,11 @@ export async function POST(request: NextRequest) {
 
     // Reformat the receipt number now that the row's own auto-increment id is
     // known — RCP-{branch}-{YYYYMM}-{seq}, e.g. RCP-QTR-202607-001.
-    receiptNumber = formatReceiptNumber({
-      branchName: branchCurrency.branchName,
+    receiptNumber = await uniqueReceiptNumber({
+branchName: branchCurrency.branchName,
       branchAddress: branchCurrency.branchAddress,
       branchAbbrv: branchCurrency.branchAbbrv,
-      sequenceId: paymentId,
-    });
+    }, paymentId, transaction);
     await sequelize.query(
       'UPDATE crm_opportunity_payments SET receiptNumber = ? WHERE id = ?',
       { replacements: [receiptNumber, paymentId], transaction }
@@ -1205,12 +1205,11 @@ export async function POST(request: NextRequest) {
         );
         multiReceiptId = Number((idRows as any)?.id ?? idRows);
       }
-      const multiReceiptNumber = formatReceiptNumber({
-        branchName: branchCurrency.branchName,
+      const multiReceiptNumber = await uniqueReceiptNumber({
+branchName: branchCurrency.branchName,
         branchAddress: branchCurrency.branchAddress,
         branchAbbrv: branchCurrency.branchAbbrv,
-        sequenceId: multiReceiptId,
-      });
+    }, multiReceiptId, transaction);
       await sequelize.query('UPDATE crm_contract_receipts SET receipt_number = ? WHERE id = ?', {
         replacements: [multiReceiptNumber, multiReceiptId],
         transaction,

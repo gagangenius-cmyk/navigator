@@ -1,3 +1,4 @@
+import { uniqueReceiptNumber } from '@/lib/receiptNumber';
 import { NextRequest, NextResponse } from 'next/server';
 import { QueryTypes } from 'sequelize';
 import { CrmContract, CrmContractAgreement, CrmContractReceipt, CrmEmployee, CrmcOpportunityPayments } from '@/models';
@@ -5,7 +6,7 @@ import { sequelize, connectDB } from '@/lib/sequelize';
 import { requireAuth, isAuthError } from '@/lib/apiAuth';
 import { resolveBranchCurrency, branchCurrencyError } from '@/lib/branchCurrency';
 import { resolveBranchExchangeRate } from '@/lib/exchangeRate';
-import { formatDocumentNumber, formatReceiptNumber } from '@/lib/documentNumbering';
+import { formatDocumentNumber } from '@/lib/documentNumbering';
 import { renderAgreementForBranch } from '@/lib/renderAgreementForBranch';
 import { createOpportunityForContract } from '@/lib/createOpportunityForContract';
 import { logAudit } from '@/lib/auditLog';
@@ -270,12 +271,11 @@ export async function POST(request: NextRequest) {
         );
         receiptId = Number(idRows[0]?.id);
       }
-      receiptNumber = formatReceiptNumber({
-        branchName: branchCurrency.branchName,
+      receiptNumber = await uniqueReceiptNumber({
+branchName: branchCurrency.branchName,
         branchAddress: branchCurrency.branchAddress,
         branchAbbrv: branchCurrency.branchAbbrv,
-        sequenceId: receiptId,
-      });
+    }, receiptId, transaction);
       await sequelize.query('UPDATE crm_contract_receipts SET receipt_number = ? WHERE id = ?', {
         replacements: [receiptNumber, receiptId],
         transaction,

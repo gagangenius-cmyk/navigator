@@ -1,10 +1,10 @@
+import { uniqueReceiptNumber } from '@/lib/receiptNumber';
 import { assertLeadAccess } from '@/lib/leadAccess';
 import { NextRequest, NextResponse } from 'next/server';
 import { QueryTypes } from 'sequelize';
 import { sequelize, connectDB } from '@/lib/sequelize';
 import { requireAuth, isAuthError } from '@/lib/apiAuth';
 import { resolveBranchExchangeRate } from '@/lib/exchangeRate';
-import { formatReceiptNumber } from '@/lib/documentNumbering';
 import { logAudit } from '@/lib/auditLog';
 import { notifyRole } from '@/lib/notify';
 import { CrmcOpportunityPayments } from '@/models';
@@ -155,12 +155,11 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       if (!receiptId) throw new Error('Failed to determine the new receipt id.');
     }
 
-    const receiptNumber = formatReceiptNumber({
-      branchName: contract.branch_name,
+    const receiptNumber = await uniqueReceiptNumber({
+branchName: contract.branch_name,
       branchAddress: contract.branch_address,
       branchAbbrv: contract.branch_abbrv,
-      sequenceId: receiptId,
-    });
+    }, receiptId, transaction);
     await sequelize.query('UPDATE crm_contract_receipts SET receipt_number = ? WHERE id = ?', {
       replacements: [receiptNumber, receiptId],
       transaction,
