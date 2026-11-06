@@ -1,5 +1,6 @@
 'use client';
 
+import { dubaiToday } from '@/lib/dubaiDate';
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { X, Send, MessageSquare, Phone, MapPin, Loader2 } from 'lucide-react';
@@ -120,6 +121,22 @@ function StatCard({ title, value, icon, change, changeType }: StatCardProps) {
       </div>
     </motion.div>
   );
+}
+
+// reminder_date is the stored Dubai wall-clock 'YYYY-MM-DD HH:MM:SS'. Overdue entries now show
+// their date too (the list mixes today's and overdue follow-ups, and a bare "12:00 AM" gave no
+// hint how old an overdue one was).
+function formatFollowUpWhen(value: unknown): string {
+  const stamp = String(value || '').replace('T', ' ');
+  const day = stamp.slice(0, 10);
+  const hm = stamp.slice(11, 16);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return 'No time';
+  const [hh, mm] = (hm || '00:00').split(':').map(Number);
+  const clock = `${String(hh % 12 || 12).padStart(2, '0')}:${String(mm).padStart(2, '0')} ${hh >= 12 ? 'PM' : 'AM'}`;
+  if (day >= dubaiToday()) return clock;
+  const date = new Date(`${day}T00:00:00`);
+  const label = date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+  return `${label}, ${clock}`;
 }
 
 export default function AdminDashboard() {
@@ -474,7 +491,7 @@ export default function AdminDashboard() {
       leadId: followUp.lead_id,
       client: `${followUp.fname || ''} ${followUp.lname || ''}`.trim() || `Lead #${followUp.lead_id || ''}`,
       phone: followUp.phone || followUp.mobile || 'No phone',
-      time: followUp.reminder_date ? new Date(followUp.reminder_date).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }) : 'No time',
+      time: formatFollowUpWhen(followUp.reminder_date),
       status: followUp.status || 'pending',
       priority: followUp.priority || 'medium',
       message: followUp.message || 'No message'
