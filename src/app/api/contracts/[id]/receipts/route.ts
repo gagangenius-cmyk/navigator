@@ -170,6 +170,21 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       { replacements: [newPaidYet, newPayBalance, now, contractId], transaction }
     );
 
+    // When this contract is the lead's own conversion-flow opportunity, the lead's legacy columns
+    // (Leads list, Balance Payments, receipts) must follow the same payment. Without this a payment
+    // recorded here left the lead at the old paid/outstanding figures (seen on crm_next: contract
+    // 6,000 paid vs lead 5,000). Contracts added directly via Add Service never touched those columns.
+    if (contract.opportunity_id) {
+      await sequelize.query(
+        `UPDATE crm_forum_leads
+         SET paidYet = COALESCE(paidYet, 0) + ?,
+             payBalance = GREATEST(payTotal - paidYet, 0),
+             demandAmt = payBalance
+         WHERE id = ? AND opportunity_id = ?`,
+        { replacements: [amount, contract.lead_id, contract.opportunity_id], transaction }
+      );
+    }
+
     // Flip the earliest unpaid installment on this contract's payment
     // schedule to paid when this receipt matches it, so the schedule stays
     // in sync with actual receipts rather than needing to be updated by hand.
