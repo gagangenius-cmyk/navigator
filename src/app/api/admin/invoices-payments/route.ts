@@ -270,7 +270,16 @@ async function getInvoices(search: string, status: string, dateFrom: string, dat
     FROM crm_b2b_invoices i
     LEFT JOIN crm_branch b ON i.branch = b.id
     LEFT JOIN crm_employee e ON i.Counsilor = e.id
-    LEFT JOIN crm_opportunity_payments p ON i.receipt = p.paymentNumber
+    -- An invoice's number (INV-...) and its payment's number (PAY-...) are generated independently, so
+    -- joining on i.receipt = p.paymentNumber never matched for new invoices and every payment field on
+    -- the invoice printed as N/A. Match the exact number when it exists, otherwise the same client and
+    -- amount nearest in time.
+    LEFT JOIN crm_opportunity_payments p ON p.id = (
+      SELECT p2.id FROM crm_opportunity_payments p2
+      WHERE p2.paymentNumber = i.receipt OR (p2.clientName = i.company AND p2.paidAmount = i.amount)
+      ORDER BY (p2.paymentNumber = i.receipt) DESC, ABS(TIMESTAMPDIFF(SECOND, p2.createdAt, i.created)) ASC
+      LIMIT 1
+    )
     ${where}
     ORDER BY i.created DESC
     LIMIT :limit OFFSET :offset
