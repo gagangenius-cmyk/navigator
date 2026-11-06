@@ -263,8 +263,10 @@ export async function POST(request: NextRequest) {
         await sequelize.query(
           `UPDATE crm_forum_leads
            SET discount = ?, payTotal = ?, payBalance = GREATEST(? - COALESCE(paidYet, 0), 0)
-           WHERE id = ?`,
-          { replacements: [discountAmount, discountedAmount, discountedAmount, body.leadId], transaction }
+           WHERE id = ? AND (opportunity_id IS NULL OR ? IS NULL OR opportunity_id = ?)`,
+          // The lead's own money columns belong to its conversion-flow opportunity; a discount on a
+          // different (direct / Add Service) opportunity must not overwrite them.
+          { replacements: [discountAmount, discountedAmount, discountedAmount, body.leadId, body.opportunityId || null, body.opportunityId || null], transaction }
         );
         if (body.opportunityId) {
           // A won opportunity already has actualValue set, so COALESCE alone left it at the pre-discount

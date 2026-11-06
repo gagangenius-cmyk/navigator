@@ -231,13 +231,16 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         await sequelize.query(
           `UPDATE crm_forum_leads
            SET discount = ?, payTotal = ?, payBalance = GREATEST(? - COALESCE(paidYet, 0), 0)
-           WHERE id = ?`,
+           WHERE id = ? AND (opportunity_id IS NULL OR ? IS NULL OR opportunity_id = ?)`,
           {
+            // Only the lead's own conversion-flow opportunity drives the lead's money columns.
             replacements: [
               existingApproval.discountAmount,
               existingApproval.discountedAmount,
               existingApproval.discountedAmount,
               existingApproval.leadId,
+              existingApproval.opportunityId || null,
+              existingApproval.opportunityId || null,
             ],
             transaction: t,
           }
