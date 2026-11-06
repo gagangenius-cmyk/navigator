@@ -194,6 +194,8 @@ export default function NotificationCenter() {
   const fetchNotifications = async () => {
     try {
       const response = await fetch(`/api/notifications?limit=20`);
+      // A failed poll (401/500) must not wipe the list and badge the user already has.
+      if (!response.ok) return;
       const data = await response.json();
       setNotifications(data.notifications || []);
       setUnreadCount(data.unreadCount || 0);
@@ -205,6 +207,7 @@ export default function NotificationCenter() {
   const fetchUpcomingReminders = async () => {
     try {
       const response = await fetch(`/api/notifications`);
+      if (!response.ok) return;
       const data = await response.json();
       setUpcomingFollowUps((data.upcomingFollowUps || []).map((followUp: any) => ({
         ...followUp,

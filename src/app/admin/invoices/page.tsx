@@ -1,5 +1,6 @@
 'use client';
 
+import { escapeHtml } from '@/lib/escapeHtml';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { useState, useEffect } from 'react';
 import { Eye, Printer, Download, ChevronLeft, ChevronRight, Trash2, FileText } from 'lucide-react';
@@ -210,7 +211,7 @@ export default function InvoicesManagement() {
     const cur = invoice.currencyCode || 'AED';
     const fmt = (n?: number | null) => `${cur} ${(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     w.document.write(`
-      <html><head><title>Invoice ${invoice.receipt}</title>
+      <html><head><title>Invoice ${escapeHtml(invoice.receipt)}</title>
       <style>
         body { font-family: Arial, sans-serif; padding: 40px; color: #333; }
         .header { text-align: center; border-bottom: 3px solid #1e40af; padding-bottom: 20px; margin-bottom: 20px; }
@@ -230,13 +231,13 @@ export default function InvoicesManagement() {
       <div class="row">
         <div class="col">
           <div class="label">Billed To</div>
-          <div class="value">${invoice.company || 'N/A'}</div>
+          <div class="value">${escapeHtml(invoice.company || 'N/A')}</div>
         </div>
         <div class="col" style="text-align:right">
           <div class="label">Invoice Details</div>
-          <div class="value"><strong>Receipt #:</strong> ${invoice.receipt}</div>
+          <div class="value"><strong>Receipt #:</strong> ${escapeHtml(invoice.receipt)}</div>
           <div class="value"><strong>Date:</strong> ${invoice.created ? new Date(invoice.created).toLocaleDateString() : 'N/A'}</div>
-          <div class="value"><strong>Purpose:</strong> ${getPurposeLabel(invoice.purpose)}</div>
+          <div class="value"><strong>Purpose:</strong> ${escapeHtml(getPurposeLabel(invoice.purpose))}</div>
         </div>
       </div>
       <table>
@@ -248,10 +249,10 @@ export default function InvoicesManagement() {
         <tr><td>Balance Due</td><td style="text-align:right">${fmt(invoice.payBalance)}</td></tr>
       </table>
       <div class="row">
-        <div class="col"><div class="label">Payment Mode</div><div class="value">${invoice.payment_mode || 'N/A'}</div></div>
-        <div class="col"><div class="label">Status</div><div class="value">${getStatusText(invoice.status)}</div></div>
+        <div class="col"><div class="label">Payment Mode</div><div class="value">${escapeHtml(invoice.payment_mode || 'N/A')}</div></div>
+        <div class="col"><div class="label">Status</div><div class="value">${escapeHtml(getStatusText(invoice.status))}</div></div>
       </div>
-      ${invoice.narration ? `<div style="margin-top:16px"><div class="label">Narration</div><div class="value">${invoice.narration}</div></div>` : ''}
+      ${invoice.narration ? `<div style="margin-top:16px"><div class="label">Narration</div><div class="value">${escapeHtml(invoice.narration)}</div></div>` : ''}
       <div class="footer"><p>This is a computer-generated invoice.</p></div>
       ${autoPrint ? '<script>window.onload=()=>window.print();</script>' : ''}
       </body></html>

@@ -1,5 +1,6 @@
 'use client';
 
+import { escapeHtml } from '@/lib/escapeHtml';
 import { useState, useEffect, useCallback } from 'react';
 import {
   FileText, DollarSign, TrendingUp, TrendingDown, Search, RefreshCw,
@@ -101,7 +102,7 @@ export default function InvoicesPaymentsPage() {
       ? `${invBranchLabel} | Licence No. ${inv.branchLicenseNumber}`
       : invBranchLabel;
     w.document.write(`
-      <html><head><title>Invoice ${inv.receipt}</title>
+      <html><head><title>Invoice ${escapeHtml(inv.receipt)}</title>
       <style>
         body { font-family: Arial, sans-serif; padding: 40px; color: #333; }
         .header { text-align: center; border-bottom: 3px solid #1e40af; padding-bottom: 20px; margin-bottom: 20px; }
@@ -119,22 +120,22 @@ export default function InvoicesPaymentsPage() {
         @media print { body { padding: 20px; } }
       </style></head><body>
       <div class="header">
-        <h1>${invBranchLabel.toUpperCase()}</h1>
+        <h1>${escapeHtml(invBranchLabel.toUpperCase())}</h1>
         <p>Professional Immigration Services</p>
       </div>
       <div class="row">
         <div class="col">
           <div class="label">Invoice To</div>
-          <div class="value">${inv.oppClientName || inv.company || 'N/A'}</div>
-          <div class="value">${inv.oppClientEmail || ''}</div>
-          <div class="value">${inv.oppClientPhone || ''}</div>
+          <div class="value">${escapeHtml(inv.oppClientName || inv.company || 'N/A')}</div>
+          <div class="value">${escapeHtml(inv.oppClientEmail || '')}</div>
+          <div class="value">${escapeHtml(inv.oppClientPhone || '')}</div>
         </div>
         <div class="col" style="text-align:right">
           <div class="label">Invoice Details</div>
-          <div class="value"><strong>Invoice #:</strong> ${inv.receipt}</div>
+          <div class="value"><strong>Invoice #:</strong> ${escapeHtml(inv.receipt)}</div>
           <div class="value"><strong>Date:</strong> ${inv.created ? new Date(inv.created).toLocaleDateString() : 'N/A'}</div>
-          <div class="value"><strong>Branch:</strong> ${inv.branchName || 'N/A'}</div>
-          <div class="value"><strong>Service:</strong> ${inv.serviceName || inv.purpose || 'N/A'}</div>
+          <div class="value"><strong>Branch:</strong> ${escapeHtml(inv.branchName || 'N/A')}</div>
+          <div class="value"><strong>Service:</strong> ${escapeHtml(inv.serviceName || inv.purpose || 'N/A')}</div>
         </div>
       </div>
       <table>
@@ -145,13 +146,13 @@ export default function InvoicesPaymentsPage() {
         <tr class="total-row"><td>Balance Due</td><td style="text-align:right">${inv.currency || currencyCode} ${(inv.payBalance || 0).toLocaleString()}</td></tr>
       </table>
       <div class="row">
-        <div class="col"><div class="label">Payment Method</div><div class="value">${inv.paymentMethod || 'N/A'}</div></div>
+        <div class="col"><div class="label">Payment Method</div><div class="value">${escapeHtml(inv.paymentMethod || 'N/A')}</div></div>
         <div class="col"><div class="label">Payment Date</div><div class="value">${inv.paymentDate ? new Date(inv.paymentDate).toLocaleDateString() : 'N/A'}</div></div>
-        <div class="col"><div class="label">Counselor</div><div class="value">${inv.counselorName || 'N/A'}</div></div>
+        <div class="col"><div class="label">Counselor</div><div class="value">${escapeHtml(inv.counselorName || 'N/A')}</div></div>
       </div>
-      ${inv.proofOfPaymentUrl ? `<div style="margin-top:20px;padding:10px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px"><strong>Proof of Payment:</strong> ${inv.proofOfPaymentUrl.split('/').pop()}</div>` : ''}
+      ${inv.proofOfPaymentUrl ? `<div style="margin-top:20px;padding:10px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px"><strong>Proof of Payment:</strong> ${escapeHtml(inv.proofOfPaymentUrl.split('/').pop())}</div>` : ''}
       <div class="footer">
-        <p>${invLicenseLine}</p>
+        <p>${escapeHtml(invLicenseLine)}</p>
         <p>This is a computer-generated invoice.</p>
       </div>
       <script>window.onload=()=>window.print();</script>

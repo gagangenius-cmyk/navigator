@@ -14,6 +14,7 @@
 // from the branch's own crm_branch record and address text, never hardcoded
 // to one specific branch's identity.
 
+import { escapeHtml } from '@/lib/escapeHtml';
 import { getBranchAgreementProfile, type BranchBankDetails } from './branchAgreementProfiles';
 
 export interface ReceiptBranchSource {
@@ -491,10 +492,10 @@ export function buildReceiptHtml(r: ReceiptFields): string {
 <table class="letterhead">
   <tr>
     <td>
-      <div class="bold">${companyName.toUpperCase()}</div>
-      ${branchAddress ? branchAddress.split(',').map((line, i, arr) => `<div${i === 0 ? ' class="bold"' : ''}>${line.trim()}${i < arr.length - 1 ? ',' : ''}</div>`).join('') : ''}
-      ${branchPhone ? `<div>Phone: ${branchPhone}</div>` : ''}
-      <div>Email: <a href="mailto:${branchEmail}">${branchEmail}</a></div>
+      <div class="bold">${escapeHtml(companyName.toUpperCase())}</div>
+      ${branchAddress ? branchAddress.split(',').map((line, i, arr) => `<div${i === 0 ? ' class="bold"' : ''}>${escapeHtml(line.trim())}${i < arr.length - 1 ? ',' : ''}</div>`).join('') : ''}
+      ${branchPhone ? `<div>Phone: ${escapeHtml(branchPhone)}</div>` : ''}
+      <div>Email: <a href="mailto:${escapeHtml(branchEmail)}">${escapeHtml(branchEmail)}</a></div>
       ${bank ? `
       <div style="margin-top:8px" class="bold">Bank Details:</div>
       <div>${bank.accountHolderName}</div>
@@ -511,8 +512,8 @@ export function buildReceiptHtml(r: ReceiptFields): string {
 <table class="info">
   <tr><td class="label">Date:</td><td class="amount">${dateStr}</td></tr>
   <tr><td class="label" colspan="2">${docTitle}</td></tr>
-  <tr class="fileno"><td class="label" colspan="2">Client File No: ${fileNo}</td></tr>
-  <tr><td class="label">Received From: ${r.clientName || 'Client'}</td><td class="amount">${fmt(paidAmount)}</td></tr>
+  <tr class="fileno"><td class="label" colspan="2">Client File No: ${escapeHtml(fileNo)}</td></tr>
+  <tr><td class="label">Received From: ${escapeHtml(r.clientName || 'Client')}</td><td class="amount">${fmt(paidAmount)}</td></tr>
   ${hasPreviouslyPaid ? `<tr><td class="label">Total Package Amount</td><td class="amount">${fmt(totalAmount)}</td></tr><tr><td class="label">Previously Paid</td><td class="amount">${fmt(previouslyPaid)}</td></tr>` : ''}
   ${adminFeeAmount > 0 ? `<tr><td class="label">Administration Fee${adminFeeVatAmount > 0 ? ` (incl. ${adminFeeVatRate}% VAT)` : ''}</td><td class="amount">${fmt(adminFeeAmount + adminFeeVatAmount)}</td></tr>` : ''}
   <tr class="total"><td class="label">${totalLabel}</td><td class="amount">${fmt(receiptTotal)}</td></tr>
@@ -521,13 +522,13 @@ export function buildReceiptHtml(r: ReceiptFields): string {
 
 <div class="below">
   <div>
-    <div class="field"><strong>Payment Method:</strong> ${titleCase(r.paymentMethod || 'Cash')}${/transfer/i.test(r.paymentMethod || '') ? ` to ${accountLabel}` : ''}</div>
-    ${r.transactionId ? `<div class="field"><strong>${getReferenceLabel(r.paymentMethod, cfg)}:</strong> ${r.transactionId}</div>` : ''}
-    <div class="field"><strong>Purpose:</strong> ${purpose}</div>
+    <div class="field"><strong>Payment Method:</strong> ${escapeHtml(titleCase(r.paymentMethod || 'Cash'))}${/transfer/i.test(r.paymentMethod || '') ? ` to ${accountLabel}` : ''}</div>
+    ${r.transactionId ? `<div class="field"><strong>${getReferenceLabel(r.paymentMethod, cfg)}:</strong> ${escapeHtml(r.transactionId)}</div>` : ''}
+    <div class="field"><strong>Purpose:</strong> ${escapeHtml(purpose)}</div>
     <div class="note">Advance amount paid is not refundable.</div>
-    ${r.remark ? `<div class="note"><strong>Remark:</strong> ${r.remark}</div>` : ''}
+    ${r.remark ? `<div class="note"><strong>Remark:</strong> ${escapeHtml(r.remark)}</div>` : ''}
   </div>
-  <div class="stamp">${companyName.toUpperCase()}<br/>${cfg.countryLabel}</div>
+  <div class="stamp">${escapeHtml(companyName.toUpperCase())}<br/>${cfg.countryLabel}</div>
 </div>
 </body></html>`;
 }
