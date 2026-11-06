@@ -280,7 +280,7 @@ export default function CounselorDashboard() {
 
         {/* Today's follow-ups */}
         <section className="rounded-lg border border-slate-200 bg-white p-5">
-          <h2 className="text-sm font-semibold text-slate-900">Today&apos;s Follow-ups</h2>
+          <h2 className="text-sm font-semibold text-slate-900">Today&apos;s &amp; Overdue Follow-ups</h2>
           <div className="mt-3 space-y-2">
             {todayFollowUps.length === 0 && (
               <p className="text-sm text-slate-400">No follow-ups scheduled for today.</p>

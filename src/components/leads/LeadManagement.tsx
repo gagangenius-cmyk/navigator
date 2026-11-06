@@ -1160,16 +1160,8 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
 
         if (!response.ok) throw new Error((await response.json().catch(() => ({}))).error || 'Failed to book appointment');
 
-        const leadApptRes = await fetch(`/api/leads/${leadId}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            appointment: `${leadActionForm.date} ${timeWithSeconds}`
-          })
-        });
-        if (!leadApptRes.ok) {
-          console.warn('Appointment created but lead update failed:', await leadApptRes.text());
-        }
+        // The lead's own `appointment` column is synced server-side by POST
+        // /api/appointments (lib/leadSchedule.ts) - no second client request.
       } else if (leadActionType === 'followup') {
         response = await fetch('/api/follow-up-reminders', {
           method: 'POST',
@@ -1186,18 +1178,8 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
 
         if (!response.ok) throw new Error((await response.json().catch(() => ({}))).error || 'Failed to add follow-up');
 
-        const leadUpdateRes = await fetch(`/api/leads/${leadId}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            followup: leadActionForm.date,
-            folowuptime: timeWithSeconds,
-            followupstat: 0
-          })
-        });
-        if (!leadUpdateRes.ok) {
-          console.warn('Follow-up created but lead update failed:', await leadUpdateRes.text());
-        }
+        // The lead's followup/folowuptime/followupstat columns are synced
+        // server-side by POST /api/follow-up-reminders (lib/leadSchedule.ts).
       } else if (leadActionType === 'status') {
         response = await fetch(`/api/leads/${leadId}`, {
           method: 'PUT',

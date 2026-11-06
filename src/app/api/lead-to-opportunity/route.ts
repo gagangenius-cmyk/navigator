@@ -850,6 +850,39 @@ export async function POST(request: NextRequest) {
         lead.id,
         transaction
       ));
+
+      // crm_meeting_schedules only feeds the "meetings" target and meeting
+      // notifications. The Appointments list, calendar, dashboard counts and the
+      // lead's own appointment column all read the appointments table, so an
+      // appointment booked from the opportunity flow was invisible everywhere
+      // except there. Record it in both (UTC components, same as how the follow-up
+      // reminder above is stored); the model hook syncs lead.appointment.
+      const apptDate = appointmentDate.toISOString().slice(0, 10);
+      const apptTime = appointmentDate.toISOString().slice(11, 19);
+      const apptCounselorId = Number(appointmentData.employeeId || appointmentData.userId || lead.assignTo || createdBy);
+      const duplicateAppt = await models.Appointments.findOne({
+        where: { leadid: lead.id, date: apptDate, appointtime: apptTime, counsilorid: apptCounselorId, booked: 1, not_done: 0 },
+        transaction,
+      });
+      if (!duplicateAppt) {
+        await models.Appointments.create({
+          leadid: lead.id,
+          date: apptDate,
+          appointtime: apptTime,
+          counsilorid: apptCounselorId,
+          booked: 1,
+          done: 0,
+          not_done: 0,
+          region: Number((lead as { region?: number | null }).region) || null,
+          branch: Number((lead as { branch?: number | null }).branch) || 0,
+          screenshot: String(appointmentData.notes || remarkText || ''),
+          second_done: 0,
+          second_meet_date: apptDate,
+          cross_branch: 0,
+          assigned_by: createdBy,
+          acknowledged: 0,
+        } as never, { transaction });
+      }
       appointmentSummary = {
         id: appointmentId,
         leadId: lead.id,
@@ -971,10 +1004,10 @@ export async function POST(request: NextRequest) {
       paidYet: paidAmount,
       payBalance: remainingBalance,
       payTotal: totalAmount,
-      followup: followUpDate || lead.followup,
-      folowuptime: followUpDate || lead.folowuptime,
-      followupstat: followUpDate ? 1 : lead.followupstat,
-      appointment: appointmentDate || lead.appointment,
+      // followup/folowuptime/followupstat/appointment are mirrored from the real
+      // reminder/appointment rows by their model hooks (lib/leadSchedule.ts). This
+      // used to write followupstat = 1 ("done") right after creating a pending
+      // reminder, so the lead showed nothing pending while its reminder was open.
       status_date: now,
       // demandAmt tracks the outstanding balance; dueDate/demdRemark only
       // overwrite when the Payment stage actually sent a balance-due-date or

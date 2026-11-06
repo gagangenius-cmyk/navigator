@@ -779,7 +779,7 @@ export default function AdminDashboard() {
           >
             <div className="mb-4 flex items-center justify-between gap-3">
               <div>
-                <h3 className="text-lg font-semibold text-gray-900">Today&apos;s Follow-ups</h3>
+                <h3 className="text-lg font-semibold text-gray-900">Today&apos;s &amp; Overdue Follow-ups</h3>
                 <p className="text-sm text-gray-500">Pending calls and reminders</p>
               </div>
               <span className="rounded-full bg-amber-100 px-3 py-1 text-sm font-semibold text-amber-700">

@@ -62,7 +62,7 @@ export async function GET(request: NextRequest) {
              OR l.opportunity_status='won' THEN 1 ELSE 0 END) AS converted_leads,
         (SELECT COUNT(*) FROM appointments a WHERE a.counsilorid=e.id AND DATE(a.date)=:today) AS today_appts,
         (SELECT COUNT(*) FROM crm_follow_up_reminders fu WHERE fu.user_id=e.id
-           AND DATE(fu.reminder_date) <= :today AND (fu.status IS NULL OR fu.status='pending')) AS pending_followups
+           AND DATE(fu.reminder_date) <= :today AND (fu.status IS NULL OR fu.status IN ('pending', 'rescheduled'))) AS pending_followups
       FROM crm_employee e
       LEFT JOIN crm_role r ON r.id = e.role
       LEFT JOIN crm_branch b ON b.id = e.branch

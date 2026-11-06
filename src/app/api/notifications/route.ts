@@ -75,7 +75,7 @@ export async function GET(request: NextRequest) {
         l.phone
       FROM crm_follow_up_reminders r
       LEFT JOIN crm_forum_leads l ON r.lead_id = l.id
-      WHERE r.user_id = :userId AND r.status = 'pending' AND r.reminder_date >= NOW()
+      WHERE r.user_id = :userId AND r.status IN ('pending', 'rescheduled') AND r.reminder_date >= NOW()
       ORDER BY r.reminder_date ASC
       LIMIT 5
     `, { replacements: { userId: Number(userId) }, type: QueryTypes.SELECT });
@@ -275,7 +275,7 @@ async function createThirtyMinuteReminderNotifications(userId: number) {
     FROM crm_follow_up_reminders r
     LEFT JOIN crm_forum_leads l ON r.lead_id = l.id
     WHERE r.user_id = :userId
-      AND r.status = 'pending'
+      AND r.status IN ('pending', 'rescheduled')
       AND r.reminder_date BETWEEN NOW() AND DATE_ADD(NOW(), INTERVAL 30 MINUTE)
       AND NOT EXISTS (
         SELECT 1

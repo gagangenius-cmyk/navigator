@@ -1,5 +1,6 @@
 import { DataTypes, Model, Optional } from 'sequelize';
 import { sequelize } from '../lib/sequelize';
+import { syncLeadFollowup } from '../lib/leadSchedule';
 
 export interface CrmcFollowUpRemindersAttributes {
   id: number;
@@ -110,3 +111,32 @@ CrmcFollowUpReminders.init(
     freezeTableName: true,
   }
 );
+
+// A lead's own followup/folowuptime/followupstat columns mirror its earliest open
+// reminder (read by the Leads list, dashboard tile, monitoring, reports). Syncing at
+// the model covers every writer that goes through it - the follow-up API, lead edit,
+// lead-to-opportunity (inside its transaction), workflow tasks - instead of each
+// caller remembering a second write. Static bulk updates and raw SQL bypass
+// instance hooks, so those callers call syncLeadFollowup() themselves.
+// See lib/leadSchedule.ts.
+type ReminderSyncState = { __prevLeadId?: number | null };
+const syncSafely = async (leadId: unknown, options: { transaction?: unknown }) => {
+  try {
+    await syncLeadFollowup(leadId as number, { transaction: options.transaction as never });
+  } catch (error) {
+    // Never fail the reminder write because the mirror columns couldn't update.
+    console.error('Failed to sync lead follow-up columns:', error);
+  }
+};
+CrmcFollowUpReminders.addHook('beforeUpdate', (reminder) => {
+  (reminder as unknown as ReminderSyncState).__prevLeadId = reminder.previous('lead_id') as number | null;
+});
+CrmcFollowUpReminders.addHook('afterSave', async (reminder, options) => {
+  const current = reminder.getDataValue('lead_id');
+  await syncSafely(current, options);
+  const previous = (reminder as unknown as ReminderSyncState).__prevLeadId;
+  if (previous && Number(previous) !== Number(current)) await syncSafely(previous, options);
+});
+CrmcFollowUpReminders.addHook('afterDestroy', async (reminder, options) => {
+  await syncSafely(reminder.getDataValue('lead_id'), options);
+});

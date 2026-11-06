@@ -1,4 +1,6 @@
 // @ts-nocheck
+import { assertLeadAccess } from '@/lib/leadAccess';
+import { syncLeadFollowup } from '@/lib/leadSchedule';
 import { NextRequest, NextResponse } from 'next/server';
 import { CrmcFollowUpReminders, CrmcNotifications } from '@/models';
 import { Op, QueryTypes } from 'sequelize';
@@ -202,6 +204,13 @@ export async function POST(request: NextRequest) {
     if (!reminderMessage) {
       return NextResponse.json({ error: 'subject or message is required' }, { status: 400 });
     }
+    if (Number.isNaN(new Date(followUpAt).getTime())) {
+      return NextResponse.json({ error: 'scheduledAt/reminderDate is not a valid date' }, { status: 400 });
+    }
+    // Same lead scope every other lead route applies - a follow-up (and the
+    // notification it fires) can't be created against a lead the caller can't see.
+    const accessError = await assertLeadAccess(currentUser, parseInt(leadId));
+    if (accessError) return accessError;
 
     const recentDuplicate = await CrmcFollowUpReminders.findOne({
       where: {
@@ -284,8 +293,8 @@ export async function PUT(request: NextRequest) {
 
     // A follow-up can only be completed/rescheduled/cancelled by the
     // counselor it belongs to, or Branch Manager/CEO for their scope.
-    const [existing] = await sequelize.query<{ user_id: number; branch: number | null }>(`
-      SELECT r.user_id, e.branch FROM crm_follow_up_reminders r
+    const [existing] = await sequelize.query<{ user_id: number; branch: number | null; lead_id: number | null }>(`
+      SELECT r.user_id, r.lead_id, e.branch FROM crm_follow_up_reminders r
       LEFT JOIN crm_employee e ON e.id = r.user_id
       WHERE r.id = :reminderId LIMIT 1
     `, { replacements: { reminderId: parseInt(reminderId) }, type: QueryTypes.SELECT });
@@ -338,9 +347,14 @@ export async function PUT(request: NextRequest) {
         );
     }
 
+    if (action === 'reschedule' && Number.isNaN(new Date(rescheduledAt).getTime())) {
+      return NextResponse.json({ error: 'rescheduledAt must be a valid date' }, { status: 400 });
+    }
+
     const reminder = await CrmcFollowUpReminders.update(updateData, {
       where: { id: parseInt(reminderId) }
     });
+    await syncLeadFollowup(existing.lead_id);
 
     return NextResponse.json({
       success: true,

@@ -295,7 +295,13 @@ async function computeDashboardData(
     FROM crm_follow_up_reminders r
     LEFT JOIN crm_forum_leads l ON r.lead_id = l.id
     LEFT JOIN crm_employee e ON r.user_id = e.id
-    WHERE DATE(r.reminder_date) = :today ${fuEmployeeFilter}
+    WHERE (
+        DATE(r.reminder_date) = :today
+        -- Overdue open follow-ups too: the "Pending Follow-ups" tile counts
+        -- everything due on or before today, so listing only today's rows left
+        -- yesterday's still-pending ones counted but invisible.
+        OR (DATE(r.reminder_date) < :today AND COALESCE(r.status, 'pending') IN ('pending', 'rescheduled'))
+      ) ${fuEmployeeFilter}
     ORDER BY r.reminder_date ASC
     LIMIT 50
   `, { replacements: { today, uid: userId }, type: QueryTypes.SELECT });

@@ -187,7 +187,7 @@ export async function GET(
         fixedAppointments: appointments.filter((item) => numberValue(item.booked) === 1 && numberValue(item.done) === 0 && numberValue(item.not_done) === 0).length,
         completedAppointments: appointments.filter((item) => numberValue(item.done) === 1).length,
         followUps: followUps.length,
-        pendingFollowUps: followUps.filter((item) => String(item.status || '').toLowerCase() === 'pending').length,
+        pendingFollowUps: followUps.filter((item) => ['pending', 'rescheduled'].includes(String(item.status || '').toLowerCase())).length,
         remarks: remarks.length,
         activityLog: activityLog.length
       }

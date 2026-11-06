@@ -1,3 +1,4 @@
+import { syncLeadAppointment } from '@/lib/leadSchedule';
 import { Model, DataTypes, Optional } from 'sequelize';
 import { sequelize } from '../lib/sequelize';
 interface AppointmentsAttributes {
@@ -191,6 +192,33 @@ Appointments.init(
     timestamps: false,
     freezeTableName: true,
   });
+
+// The lead's own `appointment` column mirrors its earliest upcoming booking
+// (read by the Leads list/reports). Syncing it here, at the model, covers every
+// writer - /api/appointments, the generic /api/admin/appointments CRUD, any
+// future caller - instead of relying on each route (or a client popup) to
+// remember a second request. See lib/leadSchedule.ts.
+type SyncState = { __prevLeadId?: number | null };
+const syncSafely = async (leadId: unknown, options: { transaction?: unknown }) => {
+  try {
+    await syncLeadAppointment(leadId as number, { transaction: options.transaction as never });
+  } catch (error) {
+    // Never fail the appointment write because the mirror column couldn't update.
+    console.error('Failed to sync lead appointment column:', error);
+  }
+};
+Appointments.addHook('beforeUpdate', (appt) => {
+  (appt as unknown as SyncState).__prevLeadId = appt.previous('leadid') as number | null;
+});
+Appointments.addHook('afterSave', async (appt, options) => {
+  const current = appt.getDataValue('leadid');
+  await syncSafely(current, options);
+  const previous = (appt as unknown as SyncState).__prevLeadId;
+  if (previous && Number(previous) !== Number(current)) await syncSafely(previous, options);
+});
+Appointments.addHook('afterDestroy', async (appt, options) => {
+  await syncSafely(appt.getDataValue('leadid'), options);
+});
 
 export { Appointments };
 export type { AppointmentsAttributes, AppointmentsCreationAttributes };

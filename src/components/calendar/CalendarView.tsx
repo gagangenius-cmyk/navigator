@@ -86,7 +86,9 @@ export default function CalendarView() {
     try {
       const [apptRes, fuRes, evtRes] = await Promise.all([
         fetch('/api/appointments?limit=500'),
-        fetch('/api/follow-up-reminders'),
+        // limit: the API pages at 20 by default, which left every follow-up past the
+        // first 20 off the calendar.
+        fetch('/api/follow-up-reminders?limit=500'),
         fetch('/api/calendar-events'),
       ]);
 
@@ -120,9 +122,12 @@ export default function CalendarView() {
 
       const followUpEvents: Event[] = (fuData.reminders || []).map((r: any): Event => {
         const leadName = `${r.fname || ''} ${r.lname || ''}`.trim() || `Lead #${r.lead_id}`;
-        const dt = new Date(r.reminder_date);
-        const date = dt.toISOString().split('T')[0];
-        const time = dt.toTimeString().slice(0, 5);
+        // reminder_date arrives as the stored wall-clock 'YYYY-MM-DD HH:MM:SS'. Read it
+        // as text: new Date() + toISOString() gave the UTC date but toTimeString() the
+        // local time, so evening/early-morning follow-ups landed on the wrong day.
+        const stamp = String(r.reminder_date || '').replace('T', ' ');
+        const date = stamp.slice(0, 10);
+        const time = stamp.slice(11, 16) || '09:00';
         let status: Event['status'] = 'scheduled';
         if (r.status === 'completed') status = 'completed';
         else if (r.status === 'cancelled') status = 'cancelled';

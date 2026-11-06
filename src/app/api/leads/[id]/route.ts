@@ -596,14 +596,29 @@ export async function PUT(
     if (followUpChanged && followUpReminder) {
       const existingAssignTo = (existingLead as Record<string, unknown>).assignTo;
       const targetEmployeeId = Number(data.leadOwner ?? data.assignTo ?? existingAssignTo ?? auth.id);
-      await CrmcFollowUpReminders.create({
-        lead_id: Number(id),
-        user_id: targetEmployeeId,
-        reminder_date: new Date(`${followUpReminder.date}T${followUpReminder.time}`),
-        message: incomingNotes || 'Prospect follow-up scheduled',
-        priority: 'medium',
-        status: 'pending',
-      });
+      // The Add Follow-up popup already creates its own reminder through
+      // /api/follow-up-reminders, so only add one here when this exact
+      // lead/owner/date-time doesn't already have an open reminder - otherwise the
+      // same follow-up appears twice in "Pending Follow-ups".
+      const [alreadyOpen] = await sequelize.query<{ id: number }>(
+        `SELECT id FROM crm_follow_up_reminders
+         WHERE lead_id = :leadId AND user_id = :userId AND reminder_date = :at
+           AND COALESCE(status, 'pending') IN ('pending', 'rescheduled') LIMIT 1`,
+        {
+          replacements: { leadId: Number(id), userId: targetEmployeeId, at: `${followUpReminder.date} ${followUpReminder.time}` },
+          type: QueryTypes.SELECT,
+        },
+      );
+      if (!alreadyOpen) {
+        await CrmcFollowUpReminders.create({
+          lead_id: Number(id),
+          user_id: targetEmployeeId,
+          reminder_date: new Date(`${followUpReminder.date}T${followUpReminder.time}`),
+          message: incomingNotes || 'Prospect follow-up scheduled',
+          priority: 'medium',
+          status: 'pending',
+        });
+      }
     }
 
     if (assignmentChange) {

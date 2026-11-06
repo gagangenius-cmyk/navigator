@@ -1,3 +1,4 @@
+import { syncLeadFollowup } from '@/lib/leadSchedule';
 import { NextRequest, NextResponse } from 'next/server';
 import { sequelize, connectDB } from '@/lib/sequelize';
 import { QueryTypes } from 'sequelize';
@@ -57,9 +58,9 @@ export async function GET(request: NextRequest) {
 
     // Status filter
     if (status === 'overdue') {
-      conditions.push("r.status = 'pending' AND r.reminder_date < NOW()");
+      conditions.push("r.status IN ('pending', 'rescheduled') AND r.reminder_date < NOW()");
     } else if (status === 'upcoming') {
-      conditions.push("r.status = 'pending' AND r.reminder_date >= NOW()");
+      conditions.push("r.status IN ('pending', 'rescheduled') AND r.reminder_date >= NOW()");
     } else if (status) {
       conditions.push('r.status = :status');
       replacements.status = status;
@@ -103,7 +104,7 @@ export async function GET(request: NextRequest) {
       LEFT JOIN crm_service s ON l.service_interest = s.id
       ${whereSql}
       ORDER BY
-        CASE WHEN r.status = 'pending' AND r.reminder_date < NOW() THEN 0 ELSE 1 END,
+        CASE WHEN r.status IN ('pending', 'rescheduled') AND r.reminder_date < NOW() THEN 0 ELSE 1 END,
         r.reminder_date ASC
       LIMIT 200
     `, { replacements, type: QueryTypes.SELECT });
@@ -141,6 +142,27 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'id and action are required' }, { status: 400 });
     }
 
+    // Same visibility GET applies: all-branch roles anywhere, Branch Manager their
+    // branch, Regional Manager their region, everyone else only their own. PUT had
+    // no check at all, so any logged-in user could complete/cancel/reschedule any
+    // follow-up by id.
+    const [target] = await sequelize.query<{ user_id: number; lead_id: number | null; branch: number | null; region: number | null }>(
+      `SELECT r.user_id, r.lead_id, e.branch, e.region FROM crm_follow_up_reminders r
+       LEFT JOIN crm_employee e ON e.id = r.user_id WHERE r.id = :id LIMIT 1`,
+      { replacements: { id }, type: QueryTypes.SELECT },
+    );
+    if (!target) {
+      return NextResponse.json({ error: 'Follow-up not found' }, { status: 404 });
+    }
+    const roleKey = String(currentUser.type || '').toLowerCase().replace(/[\s-]+/g, '_');
+    const viewsAll = canViewAllBranches(currentUser);
+    const managesBranch = isBranchManagerOrCeo(currentUser) && !viewsAll && Number(target.branch) === Number(currentUser.branch || 0);
+    const managesRegion = ['regional_manager', 'rm'].includes(roleKey) && !viewsAll && Number(target.region) === Number((currentUser as { region?: number | null }).region || 0);
+    const ownsIt = Number(target.user_id) === Number(currentUser.id);
+    if (!viewsAll && !managesBranch && !managesRegion && !ownsIt) {
+      return NextResponse.json({ error: 'You do not have permission to update this follow-up' }, { status: 403 });
+    }
+
     const updates: string[] = [];
     const replacements: Record<string, any> = { id };
 
@@ -154,7 +176,9 @@ export async function PUT(request: NextRequest) {
       if (!rescheduledAt) {
         return NextResponse.json({ error: 'rescheduledAt is required for reschedule' }, { status: 400 });
       }
-      updates.push("reminder_date = :rescheduledAt", "status = 'pending'");
+      // 'rescheduled' (not 'pending') so the label matches POST/PUT /api/follow-up-reminders;
+      // every reader treats both as open.
+      updates.push("reminder_date = :rescheduledAt", "status = 'rescheduled'");
       replacements.rescheduledAt = rescheduledAt;
     } else if (action === 'cancel') {
       updates.push("status = 'cancelled'");
@@ -166,6 +190,8 @@ export async function PUT(request: NextRequest) {
       `UPDATE crm_follow_up_reminders SET ${updates.join(', ')} WHERE id = :id`,
       { replacements, type: QueryTypes.UPDATE }
     );
+    // Raw SQL bypasses the model hook, so mirror onto the lead explicitly.
+    await syncLeadFollowup(target.lead_id);
 
     return NextResponse.json({ success: true, message: `Follow-up ${action}d` });
   } catch (error) {
