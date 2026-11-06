@@ -1,3 +1,4 @@
+import { dubaiToday } from '@/lib/dubaiDate';
 import { NextRequest, NextResponse } from 'next/server';
 import { sequelize } from '@/lib/sequelize';
 import { verifyToken } from '@/lib/auth';
@@ -14,8 +15,8 @@ export async function GET(request: NextRequest) {
     const searchTerm = searchParams.get('search');
 
     // Build WHERE conditions
-    let whereConditions = [];
-    let replacements = [];
+    const whereConditions = [];
+    const replacements = [];
 
     if (status && status !== 'all') {
       whereConditions.push('p.status = ?');
@@ -131,7 +132,7 @@ export async function POST(request: NextRequest) {
       `, {
         replacements: [
           agreementNumber,
-          new Date().toISOString().split('T')[0],
+          dubaiToday(),
           oldNew || 'new',
           noc,
           1, // Default counselor ID - would come from auth context
@@ -151,7 +152,7 @@ export async function POST(request: NextRequest) {
         `, {
           replacements: [
             prospectId,
-            new Date().toISOString().split('T')[0],
+            dubaiToday(),
             remark.trim(),
             1 // Default employee ID - would come from auth context
           ],
@@ -173,7 +174,7 @@ export async function POST(request: NextRequest) {
           replacements: [
             prospectId,
             document.name,
-            new Date().toISOString().split('T')[0],
+            dubaiToday(),
             documentUrl,
             document.type.split('/')[0] || 'document'
           ],
@@ -250,7 +251,7 @@ export async function PUT(request: NextRequest) {
       `, {
         replacements: [
           id,
-          new Date().toISOString().split('T')[0],
+          dubaiToday(),
           remark.trim(),
           1 // Default employee ID - would come from auth context
         ]

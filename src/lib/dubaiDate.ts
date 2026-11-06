@@ -8,3 +8,14 @@ const DUBAI_OFFSET_MS = 4 * 60 * 60 * 1000;
 export function dubaiToday(offsetDays = 0): string {
   return new Date(Date.now() + DUBAI_OFFSET_MS + offsetDays * 86400000).toISOString().slice(0, 10);
 }
+
+/**
+ * YYYY-MM-DD for the browser user's own calendar day. Use this in client
+ * components for form defaults: new Date().toISOString() is the UTC day, which
+ * is yesterday for anyone ahead of UTC in the early hours.
+ */
+export function localToday(): string {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}

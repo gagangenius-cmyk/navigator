@@ -1,5 +1,6 @@
 'use client';
 
+import { localToday } from '@/lib/dubaiDate';
 import { useEffect, useMemo, useState } from 'react';
 import { Target, TrendingUp, Wallet, ChevronRight, X, Trash2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
@@ -34,7 +35,7 @@ interface TargetProgress {
   collectionActual: number;
 }
 
-const thisMonth = () => new Date().toISOString().slice(0, 7);
+const thisMonth = () => localToday().slice(0, 7);
 
 function ProgressBar({ actual, target, label }: { actual: number; target: number | null; label: string }) {
   if (target === null || target === 0) return null;
@@ -89,7 +90,7 @@ export default function TargetsPage() {
     } finally { setLoading(false); }
   };
 
-  useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [month]);
+  useEffect(() => { load();   }, [month]);
 
   const topLevel = useMemo(() => employees.filter((e) => e.managerId === null), [employees]);
   const childrenOf = (id: number) => employees.filter((e) => e.managerId === id);

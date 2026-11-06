@@ -1,3 +1,4 @@
+import { dubaiToday } from '@/lib/dubaiDate';
 import { NextRequest, NextResponse } from 'next/server';
 import { QueryTypes } from 'sequelize';
 import { sequelize, connectDB } from '@/lib/sequelize';
@@ -547,7 +548,7 @@ export async function PUT(
       && (followUpReminder.date !== existingFollowupDate || followUpReminder.time !== existingFollowupTime);
 
     updateFields.push('last_updated = ?', 'last_updtd_time = ?');
-    updateValues.push(new Date().toLocaleDateString(), new Date().toTimeString().split(' ')[0], id);
+    updateValues.push(dubaiToday(), new Date().toTimeString().split(' ')[0], id);
 
     await sequelize.query(`
       UPDATE crm_forum_leads

@@ -1,5 +1,6 @@
 'use client';
 
+import { localToday } from '@/lib/dubaiDate';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -185,10 +186,10 @@ export default function AdminCreateLeadPage() {
       setFormData(prev => ({
         ...prev,
         leadOwner: user.id.toString(),
-        assignedDate: new Date().toISOString().split('T')[0]
+        assignedDate: localToday()
       }));
     } else if (user && !formData.assignedDate) {
-      setFormData(prev => ({ ...prev, assignedDate: new Date().toISOString().split('T')[0] }));
+      setFormData(prev => ({ ...prev, assignedDate: localToday() }));
     }
   }, [user, isCeoUser, isBranchLockedRole]);
 

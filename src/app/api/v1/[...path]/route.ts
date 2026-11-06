@@ -1,3 +1,4 @@
+import { dubaiToday } from '@/lib/dubaiDate';
 import { NextRequest, NextResponse } from 'next/server';
 import { QueryTypes } from 'sequelize';
 import { verifyToken, type User } from '@/lib/auth';
@@ -386,7 +387,7 @@ async function handlePost({ request, user, path }: HandlerContext) {
       employee_id: readString(body, 'employee_id'),
       letter_type: ((readString(body, 'letter_type') || 'experience').toLowerCase().includes('relieving') ? 'relieving' : 'experience') as HRLetterType,
       generated_by: readString(body, 'generated_by') || String(user.id),
-      last_working_day: readString(body, 'last_working_day') || new Date().toISOString().slice(0, 10),
+      last_working_day: readString(body, 'last_working_day') || dubaiToday(),
       hr_manager_name: readString(body, 'hr_manager_name') || user.name,
       key_responsibilities: readString(body, 'key_responsibilities') || undefined,
       performance_summary: readString(body, 'performance_summary') || undefined,
@@ -563,7 +564,7 @@ async function handlePut({ request, user, path }: HandlerContext) {
     requirePermission(user, ['pro.wps.view', 'pro.update']);
     return ok(await PROService.updateWpsRecord({
       wps_id: path[2],
-      submission_date: readString(body, 'submission_date') || new Date().toISOString().slice(0, 10),
+      submission_date: readString(body, 'submission_date') || dubaiToday(),
       submission_ref: readString(body, 'submission_ref') || null,
       status: 'Submitted',
     }));

@@ -1,3 +1,4 @@
+import { dubaiToday } from '@/lib/dubaiDate';
 import crypto from 'crypto';
 import { QueryTypes } from 'sequelize';
 import { sequelize } from '@/lib/sequelize';
@@ -107,7 +108,7 @@ export class HRJoiningExitService {
     }
 
     const candidate_id = crypto.randomUUID();
-    await sequelize.query(`INSERT INTO crm_hr_recruitment_candidates (candidate_id,full_name,email,phone,applied_position,applied_date,source,created_by) VALUES (:candidate_id,:full_name,:email,:phone,:applied_position,:applied_date,:source,:created_by)`, { replacements: { ...input, candidate_id, phone: input.phone || null, source: input.source || null, created_by: input.created_by || null, applied_date: input.applied_date || new Date().toISOString().slice(0, 10) } });
+    await sequelize.query(`INSERT INTO crm_hr_recruitment_candidates (candidate_id,full_name,email,phone,applied_position,applied_date,source,created_by) VALUES (:candidate_id,:full_name,:email,:phone,:applied_position,:applied_date,:source,:created_by)`, { replacements: { ...input, candidate_id, phone: input.phone || null, source: input.source || null, created_by: input.created_by || null, applied_date: input.applied_date || dubaiToday() } });
     return this.getCandidate(candidate_id);
   }
   static async listCandidates(filters?: { status?: string; applied_position?: string }) {
@@ -143,7 +144,7 @@ export class HRJoiningExitService {
   static async acceptOffer(id: string, token: string) { await this.ensureTables(); const candidate = await this.getCandidate(id); if (!candidate || !token || !candidate.acceptance_token || candidate.acceptance_token !== token) return null; await sequelize.query(`UPDATE crm_hr_recruitment_candidates SET status='Accepted', offer_accepted_at=NOW() WHERE candidate_id=:id`, { replacements: { id } }); await this.notify('offer_accepted', id, 'HR', `${String(candidate.full_name)} accepted the offer`); return this.getCandidate(id); }
   static async onboardCandidate(id: string, input: Record<string, unknown>) {
     await this.ensureTables(); const candidate = await this.getCandidate(id); if (!candidate) return null; if (candidate.status !== 'Accepted') throw new Error('Only accepted candidates can be onboarded'); const companyEmail = String(input.company_email || '').trim(); if (!companyEmail) throw new Error('company_email is required'); const employeeId = String(input.employee_id || crypto.randomUUID());
-    await sequelize.query(`UPDATE crm_hr_recruitment_candidates SET status='Joined', company_email=:companyEmail, employee_id=:employeeId, joining_date=:joiningDate, crm_id_generated_at=NOW() WHERE candidate_id=:id`, { replacements: { id, companyEmail, employeeId, joiningDate: input.joining_date ? String(input.joining_date) : new Date().toISOString().slice(0, 10) } });
+    await sequelize.query(`UPDATE crm_hr_recruitment_candidates SET status='Joined', company_email=:companyEmail, employee_id=:employeeId, joining_date=:joiningDate, crm_id_generated_at=NOW() WHERE candidate_id=:id`, { replacements: { id, companyEmail, employeeId, joiningDate: input.joining_date ? String(input.joining_date) : dubaiToday() } });
     // The offer letter link captured back in submitOffer() becomes this employee's first
     // onboarding document, once there's finally a real employee_id to attach it to.
     if (candidate.offer_letter_url) {

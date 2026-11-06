@@ -1,5 +1,6 @@
 'use client';
 
+import { localToday } from '@/lib/dubaiDate';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { useState, useEffect } from 'react';
 import { Calendar, Clock, Download, Mail, FileText, Settings, Play, Pause, Trash2, Plus } from 'lucide-react';
@@ -195,7 +196,7 @@ export default function ReportExportScheduler() {
             description: '',
             period: 'monthly',
             startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-            endDate: new Date().toISOString().split('T')[0],
+            endDate: localToday(),
             counselors: [],
             includeCharts: true,
             includeDetails: true,

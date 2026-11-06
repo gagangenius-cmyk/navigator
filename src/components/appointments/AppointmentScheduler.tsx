@@ -1,5 +1,6 @@
 'use client';
 
+import { localToday } from '@/lib/dubaiDate';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { useSortableData, SortableTh } from '@/components/ui/sortable-th';
 import { useState, useEffect } from 'react';
@@ -99,7 +100,7 @@ interface AppointmentForm {
 
 const emptyAppointmentForm = (): AppointmentForm => ({
   leadid: '',
-  date: new Date().toISOString().split('T')[0],
+  date: localToday(),
   appointtime: '09:00',
   counsilorid: '',
   branch: '',
@@ -780,7 +781,7 @@ export default function AppointmentScheduler({ onAppointmentSelect, showActions 
             <div className="ml-4">
               <p className="text-sm font-medium text-gray-600">Today's Appointments</p>
               <p className="text-2xl font-bold text-gray-900">
-                {appointments.filter(a => a.date === new Date().toISOString().split('T')[0]).length}
+                {appointments.filter(a => a.date === localToday()).length}
               </p>
             </div>
           </div>

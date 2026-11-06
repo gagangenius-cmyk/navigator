@@ -1,5 +1,6 @@
 'use client';
 
+import { localToday } from '@/lib/dubaiDate';
 import { useState, useEffect, useCallback } from 'react';
 import { useSortableData } from '@/components/ui/sortable-th';
 import { RecordCard, RecordList, SortButtonRow } from '@/components/shared/ResponsiveRecordList';
@@ -19,7 +20,7 @@ interface BranchOption { id: number; name: string; }
 
 const fmtAed = (v: number) => `AED ${Number(v || 0).toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const emptyFilters = { dateFrom: '', dateTo: '', branchId: '', coaAccountId: '', approved: '' };
-const emptyForm = { branch: '', coa_account_id: '', amount: '', date: new Date().toISOString().slice(0, 10), particular: '', remark: '', includeVat: true };
+const emptyForm = { branch: '', coa_account_id: '', amount: '', date: localToday(), particular: '', remark: '', includeVat: true };
 
 export default function ExpensesPage() {
   const { user } = useAuth();
@@ -227,7 +228,7 @@ export default function ExpensesPage() {
           'Receipt': row.receipt || '',
         })),
         'Expenses',
-        `expenses-${new Date().toISOString().slice(0, 10)}.xlsx`,
+        `expenses-${localToday()}.xlsx`,
       );
     } catch (e: any) {
       setError(e.message || 'Failed to export expenses');

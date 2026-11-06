@@ -1,3 +1,4 @@
+import { dubaiToday } from '@/lib/dubaiDate';
 import { NextRequest, NextResponse } from 'next/server';
 import { sequelize } from '@/lib/sequelize';
 import { verifyToken } from '@/lib/auth';
@@ -262,9 +263,9 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
           leadStatus,
           body.status === 'won' ? 'Client' : 'Opportunity',
           body.status,
-          new Date().toISOString().split('T')[0],
+          dubaiToday(),
           body.status === 'won' ? 'Successfully converted and retained client' : 'Opportunity lost',
-          new Date().toISOString().split('T')[0],
+          dubaiToday(),
           new Date().toTimeString().split(' ')[0],
           opportunityId
         ]
@@ -392,7 +393,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
         WHERE id = ?
       `, {
         replacements: [
-          new Date().toISOString().split('T')[0],
+          dubaiToday(),
           new Date().toTimeString().split(' ')[0],
           opportunity.leadId
         ],

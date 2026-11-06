@@ -1,5 +1,6 @@
 'use client';
 
+import { localToday } from '@/lib/dubaiDate';
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Lead } from '@/types/lead';
@@ -74,7 +75,7 @@ export default function EvaluationReportWizard({ leadId, initialStage }: Evaluat
   const [paymentData, setPaymentData] = useState({
     paymentMethod: 'cash',
     transactionId: '',
-    paymentDate: new Date().toISOString().split('T')[0],
+    paymentDate: localToday(),
     proofOfPayment: null as File | null,
   });
   const [receipt, setReceipt] = useState<any>(null);

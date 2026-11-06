@@ -1,5 +1,6 @@
 'use client';
 
+import { localToday } from '@/lib/dubaiDate';
 import { useState } from 'react';
 import { CheckCircle, ChevronLeft, ChevronRight, Save } from 'lucide-react';
 
@@ -83,7 +84,7 @@ export function GenericStage({
 }: OperationsGenericStageProps) {
   const [localSaving, setLocalSaving] = useState(false);
   const [continuing, setContinuing] = useState(false);
-  const todayIso = new Date().toISOString().slice(0, 10);
+  const todayIso = localToday();
   const theme = ACCENT_CLASSES[accent];
 
   const handleSave = async () => {

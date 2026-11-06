@@ -1,3 +1,4 @@
+import { dubaiToday } from '@/lib/dubaiDate';
 import { NextResponse } from 'next/server';
 import { Appointments } from '@/models';
 import { createCrudHandlers } from '@/lib/apiCrud';
@@ -37,7 +38,7 @@ const handlers = createCrudHandlers({
     branch: Number(body.branch ?? 0),
     screenshot: body.screenshot || '',
     second_done: Number(body.second_done ?? 0),
-    second_meet_date: body.second_meet_date || body.date || new Date().toISOString().split('T')[0],
+    second_meet_date: body.second_meet_date || body.date || dubaiToday(),
   }),
   // Branch Manager may only update an appointment in their own branch,
   // mirroring the already-correct check in appointments/[id]/route.ts PUT;

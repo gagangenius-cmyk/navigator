@@ -1,3 +1,4 @@
+import { dubaiToday } from '@/lib/dubaiDate';
 import { NextRequest, NextResponse } from 'next/server';
 import { sequelize, connectDB } from '@/lib/sequelize';
 import { requireAuth, isAuthError } from '@/lib/apiAuth';
@@ -30,7 +31,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
         replacements: {
           entryId, phase, status,
           dueDate: body.due_date || body.dueDate || null,
-          completedDate: status === 'completed' ? (body.completed_date || body.completedDate || new Date().toISOString().slice(0, 10)) : null,
+          completedDate: status === 'completed' ? (body.completed_date || body.completedDate || dubaiToday()) : null,
           notes: body.notes || null,
         },
       },

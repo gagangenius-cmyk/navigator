@@ -1,3 +1,4 @@
+import { dubaiToday } from '@/lib/dubaiDate';
 import { NextRequest, NextResponse } from 'next/server';
 import { CrmcForumLeads } from '@/models';
 import { requireAuth, isAuthError } from '@/lib/apiAuth';
@@ -30,7 +31,7 @@ export async function POST(request: NextRequest) {
       payTotal: data.expectedRevenue ? parseFloat(data.expectedRevenue) : lead.payTotal,
       dueDate: data.expectedCloseDate ? new Date(data.expectedCloseDate) : lead.dueDate,
       lead_remark: data.notes || lead.lead_remark,
-      last_updated: new Date().toLocaleDateString(),
+      last_updated: dubaiToday(),
       last_updtd_time: new Date().toTimeString().split(' ')[0]
     });
 

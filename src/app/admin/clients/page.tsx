@@ -1,5 +1,6 @@
 'use client';
 
+import { localToday } from '@/lib/dubaiDate';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { useSortableData } from '@/components/ui/sortable-th';
 import { RecordCard, RecordList, SortButtonRow } from '@/components/shared/ResponsiveRecordList';
@@ -219,7 +220,7 @@ export default function ClientsManagement() {
       balance,
       amount: balance ? String(balance.payBalance > 0 ? balance.payBalance : '') : '',
       method: 'cash',
-      date: new Date().toISOString().split('T')[0],
+      date: localToday(),
       txnId: '',
       includeVat: true,
       saving: false,

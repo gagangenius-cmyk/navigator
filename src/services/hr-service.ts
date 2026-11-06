@@ -1,3 +1,4 @@
+import { dubaiToday } from '@/lib/dubaiDate';
 import { QueryTypes } from 'sequelize';
 import { sequelize } from '@/lib/sequelize';
 import crypto from 'crypto';
@@ -2112,7 +2113,7 @@ export class HRService {
       throw new Error('This letter was already generated a moment ago - check the letter log before resubmitting.');
     }
 
-    const issueDate = input.issue_date || new Date().toISOString().slice(0, 10);
+    const issueDate = input.issue_date || dubaiToday();
     const refNumber = referenceNumber(input.letter_type, input.employee_id);
     const yearsOfService = yearsOfServiceBetween(employee.doj, input.last_working_day);
     const companyName = process.env.COMPANY_NAME || 'Global Navigator LLC FZ';
@@ -3199,7 +3200,7 @@ export class HRService {
       visaExp: dateOrNull(input.visaExp),
       department: nullableNumber(input.department),
       EID: input.EID || null,
-      doj: isUpdate ? dateOrNull(input.doj) : (dateOrNull(input.doj) || new Date().toISOString().slice(0, 10)),
+      doj: isUpdate ? dateOrNull(input.doj) : (dateOrNull(input.doj) || dubaiToday()),
       nationality: input.nationality || null,
       dol: dateOrNull(input.dol),
       remark: input.remark || null,

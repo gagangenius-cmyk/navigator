@@ -1,3 +1,4 @@
+import { dubaiToday } from '@/lib/dubaiDate';
 import { CrmTask } from '@/models';
 import { createCrudHandlers } from '@/lib/apiCrud';
 import { connectDB } from '@/lib/sequelize';
@@ -38,7 +39,7 @@ const handlers = createCrudHandlers({
   ],
   defaults: (body) => ({
     created: body.created || new Date(),
-    date_created: body.date_created || new Date().toISOString().slice(0, 10),
+    date_created: body.date_created || dubaiToday(),
   }),
   requiredPermissions: ['operations.view', 'operations.manage'],
   // operations.view is read-only; writes need a create/update/manage grant.

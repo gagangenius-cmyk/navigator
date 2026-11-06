@@ -1,5 +1,6 @@
 'use client';
 
+import { localToday } from '@/lib/dubaiDate';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { useState, useEffect, useRef } from 'react';
 import { CounselorLogger } from '@/lib/counselorLogger';
@@ -299,7 +300,7 @@ export default function RealTimeActivityMonitor() {
     switch (format) {
       case 'json':
         content = JSON.stringify(data, null, 2);
-        filename = `counselor-activity-report-${new Date().toISOString().split('T')[0]}.json`;
+        filename = `counselor-activity-report-${localToday()}.json`;
         break;
       case 'csv':
         const headers = ['Timestamp', 'Counselor', 'Action', 'Category', 'Priority', 'Outcome', 'Duration', 'Details'];
@@ -314,12 +315,12 @@ export default function RealTimeActivityMonitor() {
           JSON.stringify(activity.details)
         ]);
         content = [headers.join(','), ...rows.map(row => row.map(cell => `"${cell}"`).join(','))].join('\n');
-        filename = `counselor-activity-report-${new Date().toISOString().split('T')[0]}.csv`;
+        filename = `counselor-activity-report-${localToday()}.csv`;
         break;
       case 'pdf':
         // In production, this would generate a PDF
         content = JSON.stringify(data, null, 2);
-        filename = `counselor-activity-report-${new Date().toISOString().split('T')[0]}.txt`;
+        filename = `counselor-activity-report-${localToday()}.txt`;
         break;
     }
 

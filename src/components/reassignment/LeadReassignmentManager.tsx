@@ -1,5 +1,6 @@
 'use client';
 
+import { localToday } from '@/lib/dubaiDate';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { useSortableData, SortableTh } from '@/components/ui/sortable-th';
 import { useState, useEffect } from 'react';
@@ -155,7 +156,7 @@ export default function LeadReassignmentManager() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `reassignment-history-${new Date().toISOString().split('T')[0]}.csv`;
+    a.download = `reassignment-history-${localToday()}.csv`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);

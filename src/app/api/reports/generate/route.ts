@@ -1,3 +1,4 @@
+import { dubaiToday } from '@/lib/dubaiDate';
 import { NextRequest, NextResponse } from 'next/server';
 import { QueryTypes } from 'sequelize';
 import { sequelize } from '@/lib/sequelize';
@@ -99,7 +100,7 @@ interface ReportData {
 
 const generateLiveReportData = async (request: ReportRequest, auth: any): Promise<ReportData> => {
   const startDate = request.config.startDate || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-  const endDate = request.config.endDate || new Date().toISOString().split('T')[0];
+  const endDate = request.config.endDate || dubaiToday();
   let counselorIds = request.config.counselors || [];
   const replacements: any[] = [startDate, endDate];
 
@@ -336,7 +337,7 @@ export async function POST(request: NextRequest) {
       case 'csv':
         content = generateCSVReport(reportData);
         contentType = 'text/csv';
-        filename = `${body.config.name.replace(/\s+/g, '-').toLowerCase()}-${new Date().toISOString().split('T')[0]}.csv`;
+        filename = `${body.config.name.replace(/\s+/g, '-').toLowerCase()}-${dubaiToday()}.csv`;
         break;
       case 'json':
       default:
@@ -346,7 +347,7 @@ export async function POST(request: NextRequest) {
           generatedAt: new Date().toISOString()
         }, null, 2);
         contentType = 'application/json';
-        filename = `${body.config.name.replace(/\s+/g, '-').toLowerCase()}-${new Date().toISOString().split('T')[0]}.json`;
+        filename = `${body.config.name.replace(/\s+/g, '-').toLowerCase()}-${dubaiToday()}.json`;
         break;
     }
 
@@ -435,7 +436,7 @@ export async function GET(request: NextRequest) {
             description: 'Preview report',
             period: 'weekly',
             startDate: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-            endDate: new Date().toISOString().split('T')[0],
+            endDate: dubaiToday(),
             counselors: [],
             includeCharts: true,
             includeDetails: true,

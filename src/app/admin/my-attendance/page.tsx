@@ -1,5 +1,6 @@
 'use client';
 
+import { localToday } from '@/lib/dubaiDate';
 import { useEffect, useMemo, useState } from 'react';
 import { useSortableData } from '@/components/ui/sortable-th';
 import { RecordCard, RecordList, SortButtonRow } from '@/components/shared/ResponsiveRecordList';
@@ -198,7 +199,7 @@ export default function MyAttendancePage() {
 
   const breakDurationLabel = (entry: BreakRow) => {
     if (entry.duration_minutes != null) return minutesLabel(entry.duration_minutes);
-    const startMs = timeToMs(today?.date || new Date().toISOString().slice(0, 10), entry.start_time);
+    const startMs = timeToMs(today?.date || localToday(), entry.start_time);
     if (!startMs) return 'in progress';
     const totalMinutes = Math.max(Math.floor((now - startMs) / 60000), 0);
     return `${minutesLabel(totalMinutes)} active`;

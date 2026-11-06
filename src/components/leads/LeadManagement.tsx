@@ -1,5 +1,6 @@
 'use client';
 
+import { localToday } from '@/lib/dubaiDate';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { useSortableData, SortableTh } from '@/components/ui/sortable-th';
 import { useState, useEffect, useMemo, useRef } from 'react';
@@ -235,7 +236,7 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
   const [returnToViewModalOnClose, setReturnToViewModalOnClose] = useState(false);
   const [leadActionType, setLeadActionType] = useState<LeadActionType>('appointment');
   const [leadActionForm, setLeadActionForm] = useState<LeadActionForm>({
-    date: new Date().toISOString().split('T')[0],
+    date: localToday(),
     time: '09:00',
     employeeId: '',
     title: '',
@@ -1127,7 +1128,7 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
     }
 
     if (leadActionType !== 'remark' && leadActionType !== 'status' && leadActionForm.date) {
-      const today = new Date().toISOString().split('T')[0];
+      const today = localToday();
       if (leadActionForm.date < today) {
         window.toast.error('Date cannot be in the past');
         return;
@@ -1346,7 +1347,7 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
       lead,
       amount: String(Number(lead.payBalance) > 0 ? lead.payBalance : ''),
       method: 'cash',
-      date: new Date().toISOString().split('T')[0],
+      date: localToday(),
       txnId: '',
       includeVat: true,
       saving: false,

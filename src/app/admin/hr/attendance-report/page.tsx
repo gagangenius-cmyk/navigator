@@ -1,5 +1,6 @@
 'use client';
 
+import { localToday } from '@/lib/dubaiDate';
 import { useEffect, useState } from 'react';
 import { useSortableData } from '@/components/ui/sortable-th';
 import { RecordCard, RecordList, SortButtonRow } from '@/components/shared/ResponsiveRecordList';
@@ -33,7 +34,7 @@ interface DetailRow {
   total_break_minutes: number;
 }
 
-const todayIso = () => new Date().toISOString().slice(0, 10);
+const todayIso = () => localToday();
 const firstOfMonthIso = () => {
   const date = new Date();
   return new Date(date.getFullYear(), date.getMonth(), 1).toISOString().slice(0, 10);

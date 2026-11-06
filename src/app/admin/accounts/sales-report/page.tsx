@@ -1,5 +1,6 @@
 'use client';
 
+import { localToday } from '@/lib/dubaiDate';
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useSortableData } from '@/components/ui/sortable-th';
 import { RecordCard, RecordList, SortButtonRow } from '@/components/shared/ResponsiveRecordList';
@@ -186,7 +187,7 @@ export default function SalesReportPage() {
         ], 'Summary');
       }
 
-      const stamp = new Date().toISOString().slice(0, 10);
+      const stamp = localToday();
       await downloadWorkbook(workbook, `sales-report-${stamp}.xlsx`);
     } catch (e: any) {
       setError(e.message || 'Failed to export sales report');

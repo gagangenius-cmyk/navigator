@@ -1,3 +1,4 @@
+import { dubaiToday } from '@/lib/dubaiDate';
 import { NextRequest, NextResponse } from 'next/server';
 import { QueryTypes } from 'sequelize';
 import { sequelize } from '@/lib/sequelize';
@@ -137,7 +138,7 @@ export async function POST(request: NextRequest) {
           employeeId: assignment.assignedEmployeeId,
           branchId: assignment.branchId,
           leadId,
-          updatedDate: new Date().toISOString().split('T')[0],
+          updatedDate: dubaiToday(),
           updatedTime: new Date().toTimeString().split(' ')[0],
         },
       }

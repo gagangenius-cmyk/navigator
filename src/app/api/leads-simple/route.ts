@@ -1,3 +1,4 @@
+import { dubaiToday } from '@/lib/dubaiDate';
 import { NextRequest, NextResponse } from 'next/server';
 import { sequelize } from '@/lib/sequelize';
 import { resolveLeadAutoAssignment } from '@/lib/leadAutoAssignment';
@@ -103,9 +104,9 @@ export async function POST(request: NextRequest) {
         'Warm', // lead_quality
         data.enquiry || 'New lead enquiry',
         'New', // convet
-        new Date().toISOString().split('T')[0], // regdate
+        dubaiToday(), // regdate
         timeNow, // regtime
-        now.toLocaleDateString(), // last_updated
+        dubaiToday(), // last_updated
         timeNow, // last_updtd_time
         now, // created
         currentUser.id,

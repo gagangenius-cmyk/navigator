@@ -1,3 +1,4 @@
+import { dubaiToday } from '@/lib/dubaiDate';
 import { NextRequest, NextResponse } from 'next/server'
 import { sequelize, connectDB } from '@/lib/sequelize'
 import { resolveLeadAssignment } from '@/lib/assignmentRuleEngine'
@@ -689,7 +690,7 @@ export async function POST(request: NextRequest) {
               convet: 'New',
               regdate: new Date(),
               regtime: new Date(),
-              last_updated: new Date().toLocaleDateString(),
+              last_updated: dubaiToday(),
               last_updtd_time: new Date().toTimeString().split(' ')[0],
               followup: new Date(),
               folowuptime: new Date().toTimeString().split(' ')[0],
@@ -1123,7 +1124,7 @@ export async function PUT(request: NextRequest) {
     // Add timestamp updates
     updateFields.push('last_updated = ?')
     updateFields.push('last_updtd_time = ?')
-    updateValues.push(new Date().toLocaleDateString())
+    updateValues.push(dubaiToday())
     updateValues.push(new Date().toTimeString().split(' ')[0])
 
     // Add the id for the WHERE clause

@@ -1,3 +1,4 @@
+import { dubaiToday } from '@/lib/dubaiDate';
 import { NextRequest, NextResponse } from 'next/server';
 import { CrmcForumLeads, CrmcLeadReassignments, CrmEmployee } from '@/models';
 import { sequelize } from '@/lib/sequelize';
@@ -72,7 +73,7 @@ export async function POST(request: NextRequest) {
          WHERE assignTo IS NOT NULL
            AND TIMESTAMPDIFF(
              HOUR,
-             COALESCE(STR_TO_DATE(last_updated, '%Y-%m-%d'), created),
+             COALESCE(STR_TO_DATE(last_updated, '%Y-%m-%d'), STR_TO_DATE(last_updated, '%m/%d/%Y'), created),
              NOW()
            ) >= :hours
            AND (:priority = '' OR priority = :priority)
@@ -118,7 +119,7 @@ export async function POST(request: NextRequest) {
           {
             assignTo: targetEmployeeId,
             status: 'reassigned',
-            last_updated: new Date().toISOString().slice(0, 10),
+            last_updated: dubaiToday(),
           },
           { where: { id: lead.id } }
         );

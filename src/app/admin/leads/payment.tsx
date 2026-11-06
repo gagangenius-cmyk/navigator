@@ -1,5 +1,6 @@
 'use client';
 
+import { localToday } from '@/lib/dubaiDate';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -30,7 +31,7 @@ export default function PaymentWizard({ leadId, onPaymentProcessed }: PaymentWiz
       {
         amount: '',
         method: 'cash',
-        date: new Date().toISOString().split('T')[0],
+        date: localToday(),
         reference: '',
         notes: ''
       }
@@ -112,7 +113,7 @@ export default function PaymentWizard({ leadId, onPaymentProcessed }: PaymentWiz
       payments: [...prev.payments, {
         amount: '',
         method: 'cash',
-        date: new Date().toISOString().split('T')[0],
+        date: localToday(),
         reference: '',
         notes: ''
       }]

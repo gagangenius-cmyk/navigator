@@ -1,5 +1,6 @@
 'use client';
 
+import { localToday } from '@/lib/dubaiDate';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -232,7 +233,7 @@ export default function OpportunityFlowWizard({ leadId, initialStage, initialOpp
     remainingBalance: 0,
     paymentMethod: 'cash',
     transactionId: '',
-    paymentDate: new Date().toISOString().split('T')[0],
+    paymentDate: localToday(),
     proofOfPayment: null,
     proofOfPaymentUrl: null,
     dueDate: '',
@@ -652,7 +653,7 @@ export default function OpportunityFlowWizard({ leadId, initialStage, initialOpp
     const paidAmount = Number(leadData.paidYet || 0);
     const remainingBalance = Number(leadData.payBalance || Math.max(totalAmount - paidAmount, 0));
     const opportunityName = `${clientName}${service ? ` - ${service}` : ''}`;
-    const today = new Date().toISOString().split('T')[0];
+    const today = localToday();
     const validUntil = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
     // Program validity comes from the lead's crm_service.validity (joined in
     // GET /api/leads/[id]) and drives both the agreement's duration and its
@@ -1285,9 +1286,9 @@ export default function OpportunityFlowWizard({ leadId, initialStage, initialOpp
       agreementTitle: agreementData.agreementTitle,
       title: agreementData.agreementTitle,
       duration: agreementData.duration,
-      startDate: agreementData.startDate || new Date().toISOString().split('T')[0],
+      startDate: agreementData.startDate || localToday(),
       endDate: agreementData.endDate || computeAgreementEndDate(
-        agreementData.startDate || new Date().toISOString().split('T')[0],
+        agreementData.startDate || localToday(),
         (lead as any)?.program_validity,
       ),
       amount: Number(agreementData.amount || quotationData.total || 0),
@@ -1463,9 +1464,9 @@ export default function OpportunityFlowWizard({ leadId, initialStage, initialOpp
             title: `Service Agreement - ${prospectData.opportunityName || `${lead?.fname} ${lead?.lname}`}`,
             description: `Service agreement for ${prospectData.serviceRequired || lead?.service_interest}`,
             terms: generateDefaultTerms(prospectData),
-            startDate: agreementData.startDate || new Date().toISOString().split('T')[0],
+            startDate: agreementData.startDate || localToday(),
             endDate: agreementData.endDate || computeAgreementEndDate(
-              agreementData.startDate || new Date().toISOString().split('T')[0],
+              agreementData.startDate || localToday(),
               (lead as any)?.program_validity,
             ),
             paymentMethod: 'Bank Transfer',
@@ -1524,7 +1525,7 @@ export default function OpportunityFlowWizard({ leadId, initialStage, initialOpp
           opportunity_status: 'won',
           opportunity_stage: 'closed',
           opportunity_id: opportunityId,
-          conversion_date: new Date().toISOString().split('T')[0],
+          conversion_date: localToday(),
           conversion_reason: 'Successfully converted and retained client'
         })
       });

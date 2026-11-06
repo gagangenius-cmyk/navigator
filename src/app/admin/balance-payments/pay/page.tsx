@@ -1,5 +1,6 @@
 'use client';
 
+import { localToday } from '@/lib/dubaiDate';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -41,7 +42,7 @@ function AddPaymentContent() {
     paidAmount: 0,
     paymentMethod: 'cash',
     transactionId: '',
-    paymentDate: new Date().toISOString().split('T')[0],
+    paymentDate: localToday(),
     dueDate: '',
     remark: '',
     proofOfPayment: null as File | null,

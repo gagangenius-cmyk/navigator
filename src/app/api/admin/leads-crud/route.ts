@@ -1,3 +1,4 @@
+import { dubaiToday } from '@/lib/dubaiDate';
 import { NextRequest, NextResponse } from 'next/server';
 import { sequelize } from '@/lib/sequelize';
 import { verifyToken } from '@/lib/auth';
@@ -98,9 +99,9 @@ export async function POST(request: NextRequest) {
         body.enquiry || '',
         body.convet || 'New',
         body.priority || 'Medium',
-        new Date().toISOString().split('T')[0], // regdate
+        dubaiToday(), // regdate
         new Date().toTimeString().split(' ')[0], // regtime
-        new Date().toISOString().split('T')[0], // last_updated
+        dubaiToday(), // last_updated
         new Date().toTimeString().split(' ')[0], // last_updtd_time
         1, // stepComplete
         employeeId, // assignTo
@@ -192,7 +193,7 @@ export async function PUT(request: NextRequest) {
     
     // Always update last_updated
     updateFields.push('last_updated = ?');
-    updateValues.push(new Date().toISOString().split('T')[0]);
+    updateValues.push(dubaiToday());
     
     if (updateFields.length === 0) {
       return NextResponse.json({

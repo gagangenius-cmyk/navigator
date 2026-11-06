@@ -1,5 +1,7 @@
 'use client';
 
+import { localToday } from '@/lib/dubaiDate';
+
 export type OperationFieldType = 'text' | 'date' | 'select' | 'textarea' | 'file' | 'number';
 
 export interface OperationField {
@@ -110,7 +112,7 @@ export function OperationStageForm({
   }[color];
   const inputClass = `w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 ${focusClass} disabled:bg-gray-50 disabled:text-gray-500`;
   const setField = (name: string, value: any) => onChange({ ...data, [name]: value });
-  const todayIso = new Date().toISOString().slice(0, 10);
+  const todayIso = localToday();
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

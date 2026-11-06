@@ -1,5 +1,6 @@
 'use client';
 
+import { localToday } from '@/lib/dubaiDate';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { useState, useEffect } from 'react';
 import { useSortableData, SortableTh } from '@/components/ui/sortable-th';
@@ -244,11 +245,11 @@ export default function PerformanceReportGenerator() {
     switch (format) {
       case 'json':
         content = JSON.stringify(data, null, 2);
-        filename = `${reportConfig.name.replace(/\s+/g, '-').toLowerCase()}-${new Date().toISOString().split('T')[0]}.json`;
+        filename = `${reportConfig.name.replace(/\s+/g, '-').toLowerCase()}-${localToday()}.json`;
         break;
       case 'csv':
         content = generateCSVReport();
-        filename = `${reportConfig.name.replace(/\s+/g, '-').toLowerCase()}-${new Date().toISOString().split('T')[0]}.csv`;
+        filename = `${reportConfig.name.replace(/\s+/g, '-').toLowerCase()}-${localToday()}.csv`;
         break;
     }
 

@@ -1,5 +1,6 @@
 'use client';
 
+import { localToday } from '@/lib/dubaiDate';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { useState, useRef, useCallback, useEffect } from 'react';
 import DOMPurify from 'dompurify';
@@ -98,7 +99,7 @@ interface LetterData {
 }
 
 function buildLetterHTML(d: LetterData): string {
-  const dateStr = ordinal(d.date || new Date().toISOString().slice(0,10));
+  const dateStr = ordinal(d.date || localToday());
   const subColor = d.subjectColor || G2;
 
   const ackHtml = d.acknowledgement ? `
@@ -232,7 +233,7 @@ interface FormState {
 }
 
 const defaultForm: FormState = {
-  templateId: 'T-01', refSeq: '001', date: new Date().toISOString().slice(0,10),
+  templateId: 'T-01', refSeq: '001', date: localToday(),
   empName: '', empTitle: 'Mr. / Ms.', empDesignation: '', empEmail: '', empDepartment: '', empBranch: 'Dubai Branch',
   passportNo: '', emiratesId: '', nationality: '', doj: '', dol: '', pronoun: 'he/she',
   newDesignation: '', effectiveDate: '', newSalary: '',

@@ -1,5 +1,6 @@
 'use client';
 
+import { localToday } from '@/lib/dubaiDate';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { DataTable } from '@/components/ui/data-table';
 import { useEffect, useMemo, useState } from 'react';
@@ -320,7 +321,7 @@ const exportEmployeeRecords = (records: EmployeeCompliance[]) => {
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
-  link.download = `mohre_employee_labour_list_${new Date().toISOString().slice(0, 10)}.xls`;
+  link.download = `mohre_employee_labour_list_${localToday()}.xls`;
   link.click();
   URL.revokeObjectURL(url);
 };
@@ -344,7 +345,7 @@ const exportRenewalTracker = (records: RenewalTrackerRow[]) => {
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
-  link.download = `renewal_tracker_${new Date().toISOString().slice(0, 10)}.xls`;
+  link.download = `renewal_tracker_${localToday()}.xls`;
   link.click();
   URL.revokeObjectURL(url);
 };
@@ -425,7 +426,7 @@ export default function PROWorksModuleSuite({ activeModule = 'company-documents'
     doc_type: 'Trade License',
     doc_number: '',
     issuing_authority: '',
-    issue_date: new Date().toISOString().slice(0, 10),
+    issue_date: localToday(),
     expiry_date: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().slice(0, 10),
     reminder_days: '90,60,30,7',
     doc_file_url: '',
@@ -438,7 +439,7 @@ export default function PROWorksModuleSuite({ activeModule = 'company-documents'
     employee_id: '',
     visa_uid: '',
     visa_type: 'Employment',
-    visa_issue_date: new Date().toISOString().slice(0, 10),
+    visa_issue_date: localToday(),
     visa_expiry_date: new Date(new Date().setFullYear(new Date().getFullYear() + 2)).toISOString().slice(0, 10),
     labour_card_no: '',
     labour_card_expiry: new Date(new Date().setFullYear(new Date().getFullYear() + 2)).toISOString().slice(0, 10),
@@ -454,7 +455,7 @@ export default function PROWorksModuleSuite({ activeModule = 'company-documents'
     payroll_month: `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}-01`,
     employer_code: 'MOHRE-DM-001',
     agent_id: 'AGENT001',
-    payment_date: new Date().toISOString().slice(0, 10),
+    payment_date: localToday(),
     processed_by: '1',
     uid_labour_no: '',
     employee_name: '',
@@ -468,7 +469,7 @@ export default function PROWorksModuleSuite({ activeModule = 'company-documents'
     insured_name: '',
     insurance_company: '',
     policy_number: '',
-    policy_start: new Date().toISOString().slice(0, 10),
+    policy_start: localToday(),
     policy_expiry: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().slice(0, 10),
     coverage_amount: '',
     premium_amount: '',

@@ -1,5 +1,6 @@
 'use client';
 
+import { localToday } from '@/lib/dubaiDate';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Drawer } from '@/components/ui/drawer';
 import { PhotoDropzone } from '@/components/ui/photo-dropzone';
@@ -477,7 +478,7 @@ export default function HRModuleSuite({ activeModule = 'employee-data-sheet' }: 
     region: '',
     status: '1',
     EID: '',
-    doj: new Date().toISOString().slice(0, 10),
+    doj: localToday(),
     nationality: '',
     gender: '',
     ppNo: '',
@@ -497,7 +498,7 @@ export default function HRModuleSuite({ activeModule = 'employee-data-sheet' }: 
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<number | null>(null);
   const [attendanceForm, setAttendanceForm] = useState({
     employee_id: '',
-    date: new Date().toISOString().slice(0, 10),
+    date: localToday(),
     check_in: '',
     check_out: '',
     status: 'Present' as AttendanceRecord['status'],
@@ -510,8 +511,8 @@ export default function HRModuleSuite({ activeModule = 'employee-data-sheet' }: 
     employee_id: '',
     manager_id: '',
     leave_type: 'Annual Leave' as LeaveType,
-    start_date: new Date().toISOString().slice(0, 10),
-    end_date: new Date().toISOString().slice(0, 10),
+    start_date: localToday(),
+    end_date: localToday(),
     reason: '',
     document_url: '',
   });
@@ -519,7 +520,7 @@ export default function HRModuleSuite({ activeModule = 'employee-data-sheet' }: 
   const [creditingCompOff, setCreditingCompOff] = useState(false);
   const [eosbForm, setEosbForm] = useState({
     employee_id: '',
-    last_working_day: new Date().toISOString().slice(0, 10),
+    last_working_day: localToday(),
     separation_reason: 'Termination' as SeparationReason,
     last_basic_salary: '12000',
     unpaid_salary: '0',
@@ -573,7 +574,7 @@ export default function HRModuleSuite({ activeModule = 'employee-data-sheet' }: 
   const [exitChecklistForm, setExitChecklistForm] = useState({
     employee_id: '',
     separation_reason: 'Resignation',
-    last_working_day: new Date().toISOString().slice(0, 10),
+    last_working_day: localToday(),
     assigned_by: '',
   });
   const [letterForm, setLetterForm] = useState({
@@ -581,10 +582,10 @@ export default function HRModuleSuite({ activeModule = 'employee-data-sheet' }: 
     letter_type: 'experience' as 'relieving' | 'experience',
     designation: 'Employee',
     department: '',
-    last_working_day: new Date().toISOString().slice(0, 10),
+    last_working_day: localToday(),
     hr_manager_name: 'HR Manager',
     hr_manager_designation: 'HR Manager',
-    issue_date: new Date().toISOString().slice(0, 10),
+    issue_date: localToday(),
     key_responsibilities: 'Handled assigned responsibilities as per role requirements.',
     performance_summary: 'Maintained professional conduct and satisfactory performance.',
     recommendation_statement: 'We wish the employee success in future endeavours.',
@@ -592,7 +593,7 @@ export default function HRModuleSuite({ activeModule = 'employee-data-sheet' }: 
   });
   const [exitInterviewForm, setExitInterviewForm] = useState({
     employee_id: '',
-    interview_date: new Date().toISOString().slice(0, 10),
+    interview_date: localToday(),
     conducted_by: '',
     reason_leaving: 'Better Opportunity' as ExitReasonLeaving,
     reason_details: '',
@@ -837,7 +838,7 @@ export default function HRModuleSuite({ activeModule = 'employee-data-sheet' }: 
       region: employee.region ? String(employee.region) : '',
       status: String(employee.status ?? 1),
       EID: employee.EID || '',
-      doj: employee.doj ? employee.doj.slice(0, 10) : new Date().toISOString().slice(0, 10),
+      doj: employee.doj ? employee.doj.slice(0, 10) : localToday(),
       nationality: employee.nationality || '',
       gender: employee.gender || '',
       ppNo: employee.ppNo || '',

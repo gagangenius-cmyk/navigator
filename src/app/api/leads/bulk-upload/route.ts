@@ -1,3 +1,4 @@
+import { dubaiToday } from '@/lib/dubaiDate';
 import { NextRequest, NextResponse } from 'next/server';
 import { jsonToSheetBuffer, readWorkbookFromBase64, sheetToJson, parseExcelDateCode } from '@/lib/excelCompat';
 import { QueryTypes } from 'sequelize';
@@ -263,7 +264,7 @@ export async function POST(request: NextRequest) {
           convet: 'New',
           regdate: regDate,
           regtime: now,
-          last_updated: now.toLocaleDateString(),
+          last_updated: dubaiToday(),
           last_updtd_time: now.toTimeString().split(' ')[0],
           followup: now,
           folowuptime: now.toTimeString().split(' ')[0],

@@ -1,3 +1,4 @@
+import { dubaiToday } from '@/lib/dubaiDate';
 import { QueryTypes } from 'sequelize';
 import { sequelize } from '@/lib/sequelize';
 import crypto from 'crypto';
@@ -540,7 +541,7 @@ export class PROService {
   static async updateCompanyDocument(input: Partial<CompanyDocumentInput> & { document_id: string }) {
     await this.ensureDashboardTables();
     const status = input.expiry_date || input.status
-      ? calculateDocumentStatus(input.expiry_date || new Date().toISOString().slice(0, 10), input.status)
+      ? calculateDocumentStatus(input.expiry_date || dubaiToday(), input.status)
       : undefined;
 
     await sequelize.query(
@@ -698,7 +699,7 @@ export class PROService {
   static async updateEmployeeImmigrationRecord(input: Partial<EmployeeImmigrationInput> & { pro_emp_id: string }) {
     await this.ensureEmployeeImmigrationTable();
     const visaStatus = input.visa_expiry_date || input.visa_status
-      ? calculateVisaStatus(input.visa_expiry_date || new Date().toISOString().slice(0, 10), input.visa_status)
+      ? calculateVisaStatus(input.visa_expiry_date || dubaiToday(), input.visa_status)
       : undefined;
 
     await sequelize.query(
@@ -885,7 +886,7 @@ export class PROService {
     const totalEmployees = salaryRecords.length;
     const totalAmount = salaryRecords.reduce((sum, record) => sum + Number(record.salary || 0), 0);
     const status = input.status || 'Generated';
-    const paymentDate = input.payment_date || new Date().toISOString().slice(0, 10);
+    const paymentDate = input.payment_date || dubaiToday();
     const sifFileUrl = salaryRecords.length
       ? await this.buildSifFile({
           wpsId,
@@ -1107,7 +1108,7 @@ export class PROService {
     await this.ensureInsuranceRecordsTable();
     if (input.insurance_category && !insuranceCategories.includes(input.insurance_category as typeof insuranceCategories[number])) throw new Error('Invalid insurance category');
     const status = input.policy_expiry || input.status
-      ? calculateInsuranceStatus(input.policy_expiry || new Date().toISOString().slice(0, 10), input.status)
+      ? calculateInsuranceStatus(input.policy_expiry || dubaiToday(), input.status)
       : undefined;
 
     await sequelize.query(
@@ -1294,7 +1295,7 @@ export class PROService {
     await this.ensureGccBranchDocumentsTable();
     if (input.country && !gccCountries.includes(input.country as typeof gccCountries[number])) throw new Error('Invalid GCC country');
     const status = input.registration_expiry || input.licence_expiry || input.status
-      ? calculateGccBranchStatus(input.registration_expiry || new Date().toISOString().slice(0, 10), input.licence_expiry || new Date().toISOString().slice(0, 10), input.status)
+      ? calculateGccBranchStatus(input.registration_expiry || dubaiToday(), input.licence_expiry || dubaiToday(), input.status)
       : undefined;
 
     await sequelize.query(
