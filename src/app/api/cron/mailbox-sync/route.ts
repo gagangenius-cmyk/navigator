@@ -1,3 +1,4 @@
+import { cronSecretMatches } from '@/lib/cronAuth';
 import { NextRequest, NextResponse } from 'next/server';
 import { connectDB } from '@/lib/sequelize';
 import { syncAllMailboxes, purgeOldTrash } from '@/lib/mailboxes';
@@ -17,7 +18,7 @@ export async function POST(request: NextRequest) {
     console.error('[cron/mailbox-sync] CRON_SECRET is not configured');
     return new NextResponse('Server misconfiguration', { status: 500 });
   }
-  if ((request.headers.get('authorization') || '').replace(/^Bearer\s+/i, '') !== secret) {
+  if (!cronSecretMatches(request.headers.get('authorization'), secret)) {
     return new NextResponse('Unauthorized', { status: 401 });
   }
   await connectDB();
@@ -26,3 +27,5 @@ export async function POST(request: NextRequest) {
   const trash = await purgeOldTrash().catch(() => ({ purged: 0, retentionDays: 0 }));
   return NextResponse.json({ success: true, ...sync, trash });
 }
+
+export { POST as GET };

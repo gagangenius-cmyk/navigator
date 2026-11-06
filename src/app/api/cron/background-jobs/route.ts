@@ -1,5 +1,5 @@
+import { cronSecretMatches } from '@/lib/cronAuth';
 import { NextRequest, NextResponse } from 'next/server';
-import crypto from 'crypto';
 import { connectDB } from '@/lib/sequelize';
 import { withCronRunLog } from '@/lib/cronRunLog';
 import { processDueJobs } from '@/lib/jobQueue';
@@ -67,20 +67,13 @@ const JOBS: Record<string, { envFlag: string; run: () => Promise<unknown> }> = {
   },
 };
 
-function secretMatches(provided: string, secret: string): boolean {
-  const a = Buffer.from(provided);
-  const b = Buffer.from(secret);
-  return a.length === b.length && crypto.timingSafeEqual(a, b);
-}
-
 export async function POST(request: NextRequest) {
   const secret = process.env.CRON_SECRET;
   if (!secret) {
     console.error('[cron/background-jobs] CRON_SECRET is not configured');
     return new NextResponse('Server misconfiguration', { status: 500 });
   }
-  const provided = (request.headers.get('authorization') || '').replace(/^Bearer\s+/i, '');
-  if (!secretMatches(provided, secret)) return new NextResponse('Unauthorized', { status: 401 });
+  if (!cronSecretMatches(request.headers.get('authorization'), secret)) return new NextResponse('Unauthorized', { status: 401 });
 
   const jobName = request.nextUrl.searchParams.get('job') || '';
   const job = JOBS[jobName];

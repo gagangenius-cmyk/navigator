@@ -1,3 +1,4 @@
+import { cronSecretMatches } from '@/lib/cronAuth';
 import { NextRequest, NextResponse } from 'next/server';
 import { connectDB } from '@/lib/sequelize';
 import { MonthlyReportService } from '@/services/monthly-report-service';
@@ -27,7 +28,7 @@ export async function POST(request: NextRequest) {
     return new NextResponse('Server misconfiguration', { status: 500 });
   }
   const auth = request.headers.get('authorization') || '';
-  if (auth.replace(/^Bearer\s+/i, '') !== secret) {
+  if (!cronSecretMatches(auth, secret)) {
     return new NextResponse('Unauthorized', { status: 401 });
   }
 
