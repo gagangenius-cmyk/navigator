@@ -5,7 +5,7 @@ import { sequelize } from '@/lib/sequelize';
 import { resolveLeadAutoAssignment } from '@/lib/leadAutoAssignment';
 import { recordLeadAssignment } from '@/lib/leadRemarks';
 import { verifyToken } from '@/lib/auth';
-import { getRecordVisibilityScope } from '@/lib/roleChecks';
+import { getRecordVisibilityScope, isFoeOrBranchManagerOrCeo } from '@/lib/roleChecks';
 import { QueryTypes } from 'sequelize';
 import { checkForDuplicate, findExistingLead } from '@/lib/duplicateLeadCheck';
 import { fireLeadCreatedTrigger } from '@/lib/workflowTriggers';
@@ -26,12 +26,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Your login does not have a branch assigned' }, { status: 422 });
     }
     
-    const assignment = await resolveLeadAutoAssignment({
-      branchId: counselorBranchId,
-      preferredEmployeeId: currentUser.id,
-      forceAutoAssign: false,
-      roundRobin: false,
-    });
+    // A plain counselor's quick-add lead is theirs. A Branch Manager / FOE / CEO adding a lead does NOT become its owner:
+    // a new lead stays unassigned until an Assignment Rule applies or someone assigns it.
+    const selfAssigns = !isFoeOrBranchManagerOrCeo(currentUser);
+    const assignment = selfAssigns
+      ? await resolveLeadAutoAssignment({
+          branchId: counselorBranchId,
+          preferredEmployeeId: currentUser.id,
+          forceAutoAssign: false,
+          roundRobin: false,
+        })
+      : { assignedEmployeeId: null as number | null, counselorId: null as number | null, branchId: counselorBranchId };
 
     // This legacy table does not auto-increment IDs in every deployment, so
     // allocate one explicitly before inserting a counselor-created lead.
@@ -100,7 +105,7 @@ export async function POST(request: NextRequest) {
         now, // followup
         timeNow, // folowuptime
         0, // sf
-        'New',
+        assignment.assignedEmployeeId ? 'New' : 'untouched', // unassigned leads wait in the pool as 'untouched', like every other creation path
         data.priority || 'P1',
         'Warm', // lead_quality
         data.enquiry || 'New lead enquiry',
@@ -161,13 +166,15 @@ export async function POST(request: NextRequest) {
     // assignment path relies on (recordLeadAssignment - see
     // src/lib/leadRemarks.ts) - without this, a quick-add lead looked
     // untouched/unassigned everywhere else in the app reads those fields.
-    await recordLeadAssignment({
-      leadId,
-      oldAssignTo: null,
-      newAssignTo: assignment.assignedEmployeeId,
-      actorId: currentUser.id,
-      actorRole: currentUser.roleName || currentUser.type,
-    });
+    if (assignment.assignedEmployeeId) {
+      await recordLeadAssignment({
+        leadId,
+        oldAssignTo: null,
+        newAssignTo: assignment.assignedEmployeeId,
+        actorId: currentUser.id,
+        actorRole: currentUser.roleName || currentUser.type,
+      });
+    }
 
     // This INSERT omits followupstat, so the column default (0 = pending) would make a
     // brand-new lead look like it has a pending follow-up; mirror the real state (none).

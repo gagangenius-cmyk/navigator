@@ -858,7 +858,7 @@ export async function POST(request: NextRequest) {
     if (validationErrors.length > 0) {
       return NextResponse.json({ error: 'Lead validation failed', errors: validationErrors }, { status: 422 })
     }
-    let requestedOwnerId = Number.parseInt(String(data.assignTo || data.leadOwner || 0), 10) || null
+    const requestedOwnerId = Number.parseInt(String(data.assignTo || data.leadOwner || 0), 10) || null
     // A Branch Manager or CEO who creates a lead without picking a counselor
     // gets it assigned to themselves by default, rather than leaving it
     // unassigned — mirrors the self-assignment default a plain counselor
@@ -866,9 +866,9 @@ export async function POST(request: NextRequest) {
     // to these roles too since the Add Lead form doesn't default the
     // Counselor picker for them (they're expected to explicitly hand leads
     // off to counselors, but an unassigned lead is still the wrong default).
-    if (!requestedOwnerId && isBranchManagerOrCeo(currentUser)) {
-      requestedOwnerId = currentUser.id
-    }
+    // (Removed: a Branch Manager / CEO who did not pick a counselor used to be made the owner. A new lead now stays
+    // UNASSIGNED until an Assignment Rule applies or someone assigns it; only a plain counselor's own lead is
+    // self-assigned, below.)
     // A plain counselor (not FOE/Branch Manager/CEO) can only ever create a
     // lead assigned to themselves — the Add Lead form already hides the
     // Counselor picker for them, but that's client-side only, so enforce it

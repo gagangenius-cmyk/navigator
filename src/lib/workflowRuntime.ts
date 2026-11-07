@@ -495,6 +495,7 @@ async function runNodeHandler(node: WorkflowGraphNode, enrollment: CrmWorkflowEn
         const assignment = await resolveLeadAssignment({
           branchId: lead.branch,
           forceAutoAssign: true,
+          allowFallback: true, // the workflow step is explicitly 'round_robin'
           roundRobin: true,
           sourceId: Number(lead.market_source) || null,
           priority: lead.priority,

@@ -1,5 +1,6 @@
 'use client';
 
+import { appointmentStatus, formatAppointmentTime, toneClasses } from '@/lib/appointmentDisplay';
 import { useEffect, useState } from 'react';
 import { useSortableData, SortableTh } from '@/components/ui/sortable-th';
 import {
@@ -144,7 +145,7 @@ export default function CounselorDashboard() {
       time: (a) => a.appointtime,
       client: (a) => `${a.fname || ''} ${a.lname || ''}`,
       contact: (a) => a.mobile || a.phone,
-      status: (a) => (a.done ? 'Done' : a.not_done ? 'Not Done' : 'Pending'),
+      status: (a) => appointmentStatus(a).label,
     },
   );
   const [todayFollowUps, setTodayFollowUps] = useState<FollowUpRow[]>([]);
@@ -328,17 +329,11 @@ export default function CounselorDashboard() {
                 )}
                 {sortedTodayAppointments.map((a) => (
                   <tr key={a.id} className="border-t border-slate-100">
-                    <td className="py-2 text-slate-700">{a.appointtime || '—'}</td>
+                    <td className="py-2 whitespace-nowrap text-slate-700">{a.appointtime ? formatAppointmentTime(a.appointtime) : '—'}</td>
                     <td className="py-2 text-slate-800">{`${a.fname || ''} ${a.lname || ''}`.trim() || 'Unknown'}</td>
                     <td className="py-2 text-slate-500">{a.mobile || a.phone || '—'}</td>
                     <td className="py-2">
-                      {a.done ? (
-                        <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs text-emerald-700">Done</span>
-                      ) : a.not_done ? (
-                        <span className="rounded-full bg-red-50 px-2 py-0.5 text-xs text-red-700">Not Done</span>
-                      ) : (
-                        <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs text-amber-700">Pending</span>
-                      )}
+                      <span className={`rounded-full px-2 py-0.5 text-xs ${toneClasses[appointmentStatus(a).tone]}`}>{appointmentStatus(a).label}</span>
                     </td>
                   </tr>
                 ))}

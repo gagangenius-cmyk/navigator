@@ -96,6 +96,12 @@ export interface LeadAssignmentContext {
   roundRobin?: boolean;
   /** Assign only when an active rule matches; otherwise leave the lead unassigned (no fallback round robin). */
   ruleOnly?: boolean;
+  /**
+   * Allow the per-branch round-robin fallback when no rule matches. OFF by default: a lead stays unassigned
+   * until an Assignment Rule applies to it (or someone assigns it). Only an explicit admin action (the
+   * Auto-Assign button, a workflow's round_robin step, the preview) opts in.
+   */
+  allowFallback?: boolean;
   // Previewing an assignment must not move any rotation cursor.
   consumeRoundRobin?: boolean;
 }
@@ -754,9 +760,9 @@ export async function findStaleRecycleTarget(
 //   1. An explicit preferred owner (manual pick) always wins outright.
 //   2. The first active Assignment Rule whose conditions match the lead,
 //      provided its queue currently has an eligible candidate.
-//   3. The existing per-branch round robin (leadAutoAssignment.ts) as the
-//      universal fallback - guarantees a lead is never stuck unassignable
-//      just because no rule was configured or a rule's queue is empty.
+//   3. The per-branch round robin (leadAutoAssignment.ts) - ONLY when the caller passes allowFallback
+//      (an explicit admin action). Otherwise a lead no rule matches stays unassigned in the pool: leads must
+//      not be handed to a counselor automatically by default.
 export async function resolveLeadAssignment(context: LeadAssignmentContext): Promise<RuleAssignmentResult> {
   const { preferredEmployeeId, forceAutoAssign = false, roundRobin = true, consumeRoundRobin = true } = context;
 
@@ -792,7 +798,7 @@ export async function resolveLeadAssignment(context: LeadAssignmentContext): Pro
     if (ruleResult) return ruleResult;
   }
 
-  if (context.ruleOnly) {
+  if (context.ruleOnly || !context.allowFallback) {
     // Same message every caller already treats as "leave unassigned in the pool".
     throw new Error('No active employees are available (no assignment rule matched this lead)');
   }
@@ -810,5 +816,5 @@ export async function resolveLeadAssignment(context: LeadAssignmentContext): Pro
 // hypothetical lead, and who round robin would pick next, without moving
 // any rotation cursor.
 export async function previewLeadAssignment(context: Omit<LeadAssignmentContext, 'consumeRoundRobin'>): Promise<RuleAssignmentResult> {
-  return resolveLeadAssignment({ ...context, forceAutoAssign: true, consumeRoundRobin: false });
+  return resolveLeadAssignment({ ...context, forceAutoAssign: true, consumeRoundRobin: false, allowFallback: true });
 }

@@ -1,5 +1,6 @@
 'use client';
 
+import { appointmentStatus, formatAppointmentTime, toneClasses } from '@/lib/appointmentDisplay';
 import { dubaiToday } from '@/lib/dubaiDate';
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import { motion } from 'framer-motion';
@@ -459,27 +460,16 @@ export default function AdminDashboard() {
     [recentAppointmentsData]
   );
 
-  const appointmentStatusColor = (status: string) => {
-    switch (status) {
-      case 'Meeting Done': return 'bg-green-50 text-green-700';
-      case 'Verification Rejected': return 'bg-red-50 text-red-700';
-      case 'Awaiting Verification': return 'bg-amber-50 text-amber-700';
-      case 'Not Done': return 'bg-gray-100 text-gray-600';
-      case 'Fixed': return 'bg-blue-50 text-blue-700';
-      default: return 'bg-indigo-50 text-indigo-700';
-    }
-  };
-
   const todayAppointments = useMemo(
     () => todayAppointmentsData.map((appointment: any) => ({
       id: appointment.id,
       leadId: appointment.leadid,
       client: `${appointment.fname || ''} ${appointment.lname || ''}`.trim() || `Lead #${appointment.leadid || ''}`,
       phone: appointment.phone || appointment.mobile || 'No phone',
-      time: appointment.appointtime ? String(appointment.appointtime).slice(0, 5) : 'No time',
-      status: Number(appointment.done || 0) === 1
-        ? (appointment.meeting_verified === 1 ? 'Meeting Done' : appointment.meeting_verified === 0 ? 'Verification Rejected' : 'Awaiting Verification')
-        : Number(appointment.not_done || 0) === 1 ? 'Not Done' : Number(appointment.booked || 0) === 1 ? 'Fixed' : 'Pending',
+      time: formatAppointmentTime(appointment.appointtime),
+      status: appointmentStatus(appointment).label,
+      statusTone: appointmentStatus(appointment).tone,
+      counselor: appointment.counselorName || '',
       branch: appointment.branchName || 'No branch'
     })),
     [todayAppointmentsData]
@@ -775,11 +765,11 @@ export default function AdminDashboard() {
                 >
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium text-gray-900">{appointment.client}</p>
-                    <p className="truncate text-xs text-gray-500">{appointment.phone} &middot; {appointment.branch}</p>
+                    <p className="truncate text-xs text-gray-500">{appointment.phone} &middot; {appointment.branch}{appointment.counselor ? ` · ${appointment.counselor}` : ''}</p>
                   </div>
                   <div className="shrink-0 text-right">
                     <p className="text-sm font-semibold text-gray-900">{appointment.time}</p>
-                    <span className={`mt-1 inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${appointmentStatusColor(appointment.status)}`}>
+                    <span className={`mt-1 inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${toneClasses[appointment.statusTone]}`}>
                       {appointment.status}
                     </span>
                   </div>

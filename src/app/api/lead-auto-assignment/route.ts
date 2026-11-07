@@ -116,6 +116,8 @@ export async function POST(request: NextRequest) {
     const assignment = await resolveLeadAssignment({
       branchId,
       forceAutoAssign: true,
+      // The admin pressed Auto-Assign: an explicit action, so round robin may pick someone when no rule matches.
+      allowFallback: true,
       roundRobin: true,
       sourceId: leadAttrs?.market_source ?? null,
       priority: leadAttrs?.priority ?? null,
