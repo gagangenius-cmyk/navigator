@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, isAuthError } from '@/lib/apiAuth';
-import { isCeo } from '@/lib/roleChecks';
+import { isCeoOrDirectorOfSales } from '@/lib/roleChecks';
 import { getAssignmentRuleById, updateAssignmentRule, deleteAssignmentRule } from '@/lib/assignmentRuleEngine';
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = requireAuth(request, ['transfers.manage']);
   if (isAuthError(auth)) return auth;
-  if (!isCeo(auth)) {
-    return NextResponse.json({ success: false, error: 'Only the CEO can manage lead assignment rules' }, { status: 403 });
+  if (!isCeoOrDirectorOfSales(auth)) {
+    return NextResponse.json({ success: false, error: 'Only the CEO or Director of Sales can manage lead assignment rules' }, { status: 403 });
   }
   try {
     const { id } = await params;
@@ -23,8 +23,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = requireAuth(request, ['transfers.manage']);
   if (isAuthError(auth)) return auth;
-  if (!isCeo(auth)) {
-    return NextResponse.json({ success: false, error: 'Only the CEO can manage lead assignment rules' }, { status: 403 });
+  if (!isCeoOrDirectorOfSales(auth)) {
+    return NextResponse.json({ success: false, error: 'Only the CEO or Director of Sales can manage lead assignment rules' }, { status: 403 });
   }
   try {
     const { id } = await params;
@@ -65,8 +65,8 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
   // Mirrors the sibling auto-reassignment-rules DELETE (CEO-only) - deleting
   // a routing rule is a bigger blast-radius action than editing one, so it
   // gets the stricter check on top of the base permission gate.
-  if (!isCeo(auth)) {
-    return NextResponse.json({ success: false, error: 'Only the CEO can delete assignment rules' }, { status: 403 });
+  if (!isCeoOrDirectorOfSales(auth)) {
+    return NextResponse.json({ success: false, error: 'Only the CEO or Director of Sales can delete assignment rules' }, { status: 403 });
   }
   try {
     const { id } = await params;

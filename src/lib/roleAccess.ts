@@ -1,3 +1,4 @@
+import { isCeoOrDirectorOfSales } from './roleChecks';
 import { resolveModuleRoleKey } from './modulePermissions';
 
 type AccessUser = {
@@ -58,8 +59,15 @@ export const canAccessAdminPath = (user: AccessUser | null | undefined, pathname
     || path === '/admin/my-resignation'
   ) return true;
 
+  // Lead Assignment (availability) is for whoever hands leads out. It used to include 'sales' (counselors), who must
+  // not see it, and left out the Director of Sales.
   if (path === '/admin/lead-assignment-availability') {
-    return ['branch_manager', 'sales', 'director', 'founder', 'super_admin'].includes(roleKey);
+    return ['branch_manager', 'director_of_sales', 'director', 'founder', 'super_admin'].includes(roleKey);
+  }
+
+  // Assignment Rules: CEO or Director of Sales only (add / edit / delete), nobody else.
+  if (path === '/admin/leads/assignment-rules') {
+    return isCeoOrDirectorOfSales(user) || ['director', 'founder', 'super_admin'].includes(roleKey);
   }
 
   if (path === '/admin/lead-pool') {
@@ -86,7 +94,6 @@ export const canAccessAdminPath = (user: AccessUser | null | undefined, pathname
     { test: (value) => value === '/admin/compliance-approvals' || value.startsWith('/admin/compliance-approvals/'), permissions: ['leads.view', 'admin.access'] },
     { test: (value) => value === '/admin/discount-approvals' || value.startsWith('/admin/discount-approvals/'), permissions: ['sales.update', 'admin.access'] },
     { test: (value) => value === '/admin/lead-transfers', permissions: ['transfers.manage'] },
-    { test: (value) => value === '/admin/lead-assignment-availability', permissions: ['sales.view', 'admin.access'] },
 
     // Broadcast Center (docs/broadcast-architecture.md) - distinct from the
     // legacy /admin/campaigns and /admin/email-templates pages, which stay

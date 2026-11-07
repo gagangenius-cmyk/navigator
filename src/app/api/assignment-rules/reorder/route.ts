@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, isAuthError } from '@/lib/apiAuth';
-import { isCeo } from '@/lib/roleChecks';
+import { isCeoOrDirectorOfSales } from '@/lib/roleChecks';
 import { reorderAssignmentRules } from '@/lib/assignmentRuleEngine';
 
 // Drag-and-drop reordering in the admin UI - rule evaluation order matters
@@ -9,8 +9,8 @@ import { reorderAssignmentRules } from '@/lib/assignmentRuleEngine';
 export async function POST(request: NextRequest) {
   const auth = requireAuth(request, ['transfers.manage']);
   if (isAuthError(auth)) return auth;
-  if (!isCeo(auth)) {
-    return NextResponse.json({ success: false, error: 'Only the CEO can manage lead assignment rules' }, { status: 403 });
+  if (!isCeoOrDirectorOfSales(auth)) {
+    return NextResponse.json({ success: false, error: 'Only the CEO or Director of Sales can manage lead assignment rules' }, { status: 403 });
   }
   try {
     const body = await request.json();

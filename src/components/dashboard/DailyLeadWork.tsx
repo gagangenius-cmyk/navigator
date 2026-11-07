@@ -13,6 +13,7 @@ interface DailyWorkData {
   snapshot: Array<{ status: string; count: number }>;
   snapshotTotal: number;
   truncated: boolean;
+  statusChanges?: Array<{ date: string; time: string; leadId: number; leadName: string; phone: string; from: string; to: string; currentStatus: string }>;
 }
 
 type Period = 'today' | 'yesterday' | '7' | '14' | '30';
@@ -37,8 +38,11 @@ function Tile({ label, value }: { label: string; value: number }) {
 const dayLabel = (iso: string) => new Date(`${iso}T00:00:00`).toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short' });
 
 /** "What I did on my leads": per day / period, how many leads were worked and into which status they moved. */
-export default function DailyLeadWork({ employeeId }: { employeeId?: number }) {
+export default function DailyLeadWork({ employeeId, detailed = false }: { employeeId?: number; detailed?: boolean }) {
   const [period, setPeriod] = useState<Period>('today');
+  // detailed (the Lead Status report page): also pick any single day, and list every lead that moved.
+  const [customDate, setCustomDate] = useState('');
+  const [view, setView] = useState<'list' | 'card'>('list');
   const [data, setData] = useState<DailyWorkData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -47,11 +51,11 @@ export default function DailyLeadWork({ employeeId }: { employeeId?: number }) {
     setLoading(true);
     setError('');
     try {
-      const today = dubaiToday();
-      const date = period === 'yesterday' ? dubaiToday(-1) : today;
-      const days = period === 'today' || period === 'yesterday' ? 1 : Number(period);
+      const date = customDate || (period === 'yesterday' ? dubaiToday(-1) : dubaiToday());
+      const days = customDate || period === 'today' || period === 'yesterday' ? 1 : Number(period);
       const params = new URLSearchParams({ date, days: String(days) });
       if (employeeId) params.set('employeeId', String(employeeId));
+      if (detailed) params.set('detail', '1');
       const res = await fetch(`/api/admin/dashboard/daily-work?${params}`, { cache: 'no-store' });
       const json = await res.json().catch(() => null);
       if (!res.ok || !json?.success) throw new Error(json?.error || `Server returned ${res.status}`);
@@ -61,14 +65,14 @@ export default function DailyLeadWork({ employeeId }: { employeeId?: number }) {
     } finally {
       setLoading(false);
     }
-  }, [period, employeeId]);
+  }, [period, employeeId, customDate, detailed]);
 
   useEffect(() => { void load(); }, [load]);
 
   // The report covers the selected period (Today / Yesterday / week / month); a plain link keeps the auth cookie.
   const exportHref = (format: 'xlsx' | 'csv') => {
-    const date = period === 'yesterday' ? dubaiToday(-1) : dubaiToday();
-    const days = period === 'today' || period === 'yesterday' ? 1 : Number(period);
+    const date = customDate || (period === 'yesterday' ? dubaiToday(-1) : dubaiToday());
+    const days = customDate || period === 'today' || period === 'yesterday' ? 1 : Number(period);
     const params = new URLSearchParams({ date, days: String(days), format });
     if (employeeId) params.set('employeeId', String(employeeId));
     return `/api/admin/dashboard/daily-work/export?${params}`;
@@ -89,12 +93,22 @@ export default function DailyLeadWork({ employeeId }: { employeeId?: number }) {
           {PERIODS.map((p) => (
             <button
               key={p.id}
-              onClick={() => setPeriod(p.id)}
-              className={`rounded-md border px-3 py-1.5 text-xs font-medium ${period === p.id ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}`}
+              onClick={() => { setCustomDate(''); setPeriod(p.id); }}
+              className={`rounded-md border px-3 py-1.5 text-xs font-medium ${!customDate && period === p.id ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}`}
             >
               {p.label}
             </button>
           ))}
+          {detailed && (
+            <input
+              type="date"
+              value={customDate}
+              max={dubaiToday()}
+              onChange={(e) => setCustomDate(e.target.value)}
+              aria-label="Pick a day"
+              className="rounded-md border border-slate-200 px-2 py-1.5 text-xs text-slate-700"
+            />
+          )}
           <a
             href={exportHref('xlsx')}
             className="inline-flex items-center gap-1.5 rounded-md border border-emerald-600 bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700"
@@ -190,6 +204,61 @@ export default function DailyLeadWork({ employeeId }: { employeeId?: number }) {
               </table>
             </div>
           </div>
+
+          {detailed && (
+            <div className="mt-6 overflow-x-auto">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Leads whose status I changed</h3>
+              {(data.statusChanges || []).length === 0 ? (
+                <p className="mt-3 text-sm text-slate-400">No status changes in this period.</p>
+              ) : (
+                <>
+                <div className="mt-2 flex gap-1">
+                  {(['list', 'card'] as const).map((v) => (
+                    <button key={v} type="button" onClick={() => setView(v)} className={`rounded-md border px-3 py-1 text-xs font-medium ${view === v ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-200 text-slate-600'}`}>{v === 'list' ? 'List' : 'Cards'}</button>
+                  ))}
+                </div>
+                {view === 'card' ? (
+                  <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    {[...(data.statusChanges || [])].reverse().map((c, i) => (
+                      <a key={`${c.leadId}-${c.date}-${c.time}-${i}`} href={`/admin/leads/${c.leadId}/edit`} className="rounded-lg border border-slate-200 p-3 hover:border-blue-300">
+                        <div className="flex justify-between text-xs text-slate-400"><span>#{c.leadId}</span><span>{c.date} {c.time}</span></div>
+                        <div className="mt-1 font-medium text-slate-900">{c.leadName}</div>
+                        <div className="text-xs text-slate-500">{c.phone || '—'}</div>
+                        <div className="mt-2 text-sm text-slate-600">{c.from} → <span className="font-semibold text-slate-900">{c.to}</span></div>
+                        <div className="text-xs text-slate-400">Now: {c.currentStatus || '—'}</div>
+                      </a>
+                    ))}
+                  </div>
+                ) : (
+                <table className="mt-3 w-full min-w-[640px] text-sm">
+                  <thead>
+                    <tr className="text-left text-xs text-slate-500">
+                      <th className="pb-2 font-medium">When (Dubai)</th>
+                      <th className="pb-2 font-medium">Lead</th>
+                      <th className="pb-2 font-medium">Phone</th>
+                      <th className="pb-2 font-medium">From</th>
+                      <th className="pb-2 font-medium">To</th>
+                      <th className="pb-2 font-medium">Now</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[...(data.statusChanges || [])].reverse().map((c, i) => (
+                      <tr key={`${c.leadId}-${c.date}-${c.time}-${i}`} className="border-t border-slate-100">
+                        <td className="whitespace-nowrap py-2 text-slate-600">{c.date} {c.time}</td>
+                        <td className="py-2"><a href={`/admin/leads/${c.leadId}/edit`} className="font-medium text-blue-700 hover:underline">{c.leadName}</a> <span className="text-xs text-slate-400">#{c.leadId}</span></td>
+                        <td className="whitespace-nowrap py-2 text-slate-600">{c.phone || '—'}</td>
+                        <td className="py-2 text-slate-600">{c.from}</td>
+                        <td className="py-2 font-semibold text-slate-900">{c.to}</td>
+                        <td className="py-2 text-slate-600">{c.currentStatus || '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                )}
+                </>
+              )}
+            </div>
+          )}
 
           {data.daily.length > 1 && (
             <div className="mt-6 overflow-x-auto">

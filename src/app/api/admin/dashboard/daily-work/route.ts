@@ -14,10 +14,11 @@ export async function GET(request: NextRequest) {
     const target = await resolveWorkTarget(request);
     if (target instanceof NextResponse) return target;
     const data = await buildDailyWork(target.employeeId, target.endDate, target.days);
-    // The per-lead detail rows are only for the export; the widget doesn't need them.
-    const { statusChanges: _detail, ...widget } = data;
-    void _detail;
-    return NextResponse.json({ success: true, data: widget });
+    // The per-lead rows (which lead moved from which status to which) are only sent when asked for (?detail=1, the
+    // Lead Status report page); the dashboard widget doesn't need them.
+    const wantsDetail = new URL(request.url).searchParams.get('detail') === '1';
+    const { statusChanges, ...widget } = data;
+    return NextResponse.json({ success: true, data: wantsDetail ? { ...widget, statusChanges: statusChanges.slice(0, 3000) } : widget });
   } catch (error) {
     console.error('Error building daily work report:', error);
     return NextResponse.json({ success: false, error: 'Failed to load the daily work report' }, { status: 500 });

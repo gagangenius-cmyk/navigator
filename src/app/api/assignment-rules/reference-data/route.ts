@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { QueryTypes } from 'sequelize';
 import { sequelize } from '@/lib/sequelize';
 import { requireAuth, isAuthError } from '@/lib/apiAuth';
-import { isCeo } from '@/lib/roleChecks';
+import { isCeoOrDirectorOfSales } from '@/lib/roleChecks';
 
 // One-shot bundle of everything the Assignment Rules admin UI needs to
 // populate its condition builder (branches, sources) and queue picker
@@ -12,8 +12,8 @@ import { isCeo } from '@/lib/roleChecks';
 export async function GET(request: NextRequest) {
   const auth = requireAuth(request, ['transfers.manage']);
   if (isAuthError(auth)) return auth;
-  if (!isCeo(auth)) {
-    return NextResponse.json({ success: false, error: 'Only the CEO can manage lead assignment rules' }, { status: 403 });
+  if (!isCeoOrDirectorOfSales(auth)) {
+    return NextResponse.json({ success: false, error: 'Only the CEO or Director of Sales can manage lead assignment rules' }, { status: 403 });
   }
   try {
     const [branches, sources, employees, statuses, campaignRows] = await Promise.all([

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, isAuthError } from '@/lib/apiAuth';
-import { isCeo } from '@/lib/roleChecks';
+import { isCeoOrDirectorOfSales } from '@/lib/roleChecks';
 import { getAssignmentSettings, updateAssignmentSettings } from '@/lib/assignmentSettings';
 
 // CEO-facing on/off switches and SLA threshold for the automatic lead
@@ -12,7 +12,7 @@ import { getAssignmentSettings, updateAssignmentSettings } from '@/lib/assignmen
 export async function GET(request: NextRequest) {
   const auth = requireAuth(request, ['transfers.manage']);
   if (isAuthError(auth)) return auth;
-  if (!isCeo(auth)) {
+  if (!isCeoOrDirectorOfSales(auth)) {
     return NextResponse.json({ success: false, error: 'Only the CEO can manage lead assignment settings' }, { status: 403 });
   }
   try {
@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   const auth = requireAuth(request, ['transfers.manage']);
   if (isAuthError(auth)) return auth;
-  if (!isCeo(auth)) {
+  if (!isCeoOrDirectorOfSales(auth)) {
     return NextResponse.json({ success: false, error: 'Only the CEO can manage lead assignment settings' }, { status: 403 });
   }
   try {

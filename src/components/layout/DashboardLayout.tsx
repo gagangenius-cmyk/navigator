@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { canAccessAdminPath, getDefaultAdminPathForUser } from '@/lib/roleAccess';
-import { isCeo, isFoeOrCeo } from '@/lib/roleChecks';
+import { isCeo, isCeoOrDirectorOfSales, isFoeOrCeo } from '@/lib/roleChecks';
 import NotificationCenter from '@/components/notifications/NotificationCenter';
 import ForcePasswordChangeModal from '@/components/auth/ForcePasswordChangeModal';
 import FoeWorkloadSidebar, { type CounselorWorkload, type WorkloadPeriod } from '@/components/leads/FoeWorkloadSidebar';
@@ -68,6 +68,7 @@ interface NavItem {
   // grants — for pages meant to stay CEO-exclusive even if someone else is
   // later given the permissions this group otherwise checks (e.g. leads.view).
   ceoOnly?: boolean;
+  ceoOrDirectorOfSalesOnly?: boolean;
 }
 
 interface GlobalSearchResult {
@@ -183,7 +184,7 @@ const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
         { name: 'Compliance Approvals', href: '/admin/compliance-approvals', icon: Shield, permissions: ['leads.view', 'admin.access'] },
         { name: 'Lead Pool', href: '/admin/lead-pool', icon: Users, permissions: ['leads.view', 'transfers.manage'] },
         { name: 'Lead Assignment', href: '/admin/lead-assignment-availability', icon: UserPlus, permissions: ['sales.view', 'sales.update', 'admin.access'] },
-        { name: 'Assignment Rules', href: '/admin/leads/assignment-rules', icon: Route, permission: 'transfers.manage', ceoOnly: true },
+        { name: 'Assignment Rules', href: '/admin/leads/assignment-rules', icon: Route, ceoOrDirectorOfSalesOnly: true },
         { name: 'Targets', href: '/admin/targets', icon: Target, permissions: ['transfers.manage', 'sales.view'] },
         { name: 'Lead Transfers', href: '/admin/lead-transfers', icon: RefreshCw, permission: 'transfers.manage' },
         { name: 'B2B', href: '/admin/b2b', icon: Briefcase, permission: 'b2b.manage' },
@@ -356,6 +357,7 @@ const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
 
   const filteredNavigation = allNavigationItems.filter(item => {
     if (item.ceoOnly && !isCeo(user as any)) return false;
+    if (item.ceoOrDirectorOfSalesOnly && !isCeoOrDirectorOfSales(user as any)) return false;
     if (!canAccessAdminPath(user, item.href)) return false;
 
     const itemPermissions = item.permissions || (item.permission ? [item.permission] : []);

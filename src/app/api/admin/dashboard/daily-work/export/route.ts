@@ -18,9 +18,13 @@ import { logDataAccess } from '@/lib/dataAccessAudit';
 
 const MY_LEADS_LIMIT = 10000;
 
+const PHONE_LIKE = /^\+?\d[\d\s().-]{5,}$/;
+
 const csvCell = (value: unknown) => {
   const text = String(value ?? '');
-  // Neutralise spreadsheet formulas in user-entered text (names, statuses): =, +, -, @ at the start.
+  // A phone number is written as ="+971..." so Excel keeps it as text (a bare +971... is read as a number / formula).
+  if (PHONE_LIKE.test(text)) return `"=""${text}"""`;
+  // Neutralise spreadsheet formulas in other user-entered text (names, statuses): =, +, -, @ at the start.
   const safe = /^[=+\-@]/.test(text) ? `'${text}` : text;
   return /[",\n\r]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
 };
@@ -79,8 +83,8 @@ export async function GET(request: NextRequest) {
       ws.getRow(1).font = { bold: true };
       ws.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2E8F0' } };
       ws.views = [{ state: 'frozen', ySplit: 1 }];
-      // Text cells are written as plain strings, so a name starting with = cannot run as a formula.
-      rows.forEach((r) => ws.addRow(Object.fromEntries(Object.entries(r).map(([k, v]) => [k, typeof v === 'string' && /^[=+\-@]/.test(v) ? `'${v}` : v]))));
+      // exceljs writes strings as text cells (never formulas), so no escaping is needed here.
+      rows.forEach((r) => ws.addRow(r));
       return ws;
     };
 

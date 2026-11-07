@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ArrowDown, ArrowUp, Plus, Route, Shuffle, Target, Trash2, Users, X } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { isCeo } from '@/lib/roleChecks';
+import { isCeoOrDirectorOfSales } from '@/lib/roleChecks';
 
 type AssignmentMode = 'round_robin' | 'specific_employee';
 
@@ -66,7 +66,7 @@ function csvToList(value: string): string[] {
 
 export default function AssignmentRulesPage() {
   const { user } = useAuth();
-  const canManage = isCeo(user as any);
+  const canManage = isCeoOrDirectorOfSales(user as any);
 
   const [rules, setRules] = useState<AssignmentRule[]>([]);
   const [branches, setBranches] = useState<RefBranch[]>([]);

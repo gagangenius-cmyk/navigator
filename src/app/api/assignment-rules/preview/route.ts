@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, isAuthError } from '@/lib/apiAuth';
-import { isCeo } from '@/lib/roleChecks';
+import { isCeoOrDirectorOfSales } from '@/lib/roleChecks';
 import { previewLeadAssignment, findMatchingRule } from '@/lib/assignmentRuleEngine';
 
 // "Test this rule" panel in the admin UI: given a hypothetical lead's
@@ -10,8 +10,8 @@ import { previewLeadAssignment, findMatchingRule } from '@/lib/assignmentRuleEng
 export async function POST(request: NextRequest) {
   const auth = requireAuth(request, ['transfers.manage']);
   if (isAuthError(auth)) return auth;
-  if (!isCeo(auth)) {
-    return NextResponse.json({ success: false, error: 'Only the CEO can manage lead assignment rules' }, { status: 403 });
+  if (!isCeoOrDirectorOfSales(auth)) {
+    return NextResponse.json({ success: false, error: 'Only the CEO or Director of Sales can manage lead assignment rules' }, { status: 403 });
   }
   try {
     const body = await request.json();

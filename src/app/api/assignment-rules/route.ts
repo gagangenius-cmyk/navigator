@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, isAuthError } from '@/lib/apiAuth';
-import { isCeo } from '@/lib/roleChecks';
+import { isCeoOrDirectorOfSales } from '@/lib/roleChecks';
 import { listAssignmentRules, createAssignmentRule, AssignmentRuleInput } from '@/lib/assignmentRuleEngine';
 
 // CRUD for enterprise-style Lead Assignment Rules (Zoho/Salesforce concept):
@@ -13,8 +13,8 @@ import { listAssignmentRules, createAssignmentRule, AssignmentRuleInput } from '
 export async function GET(request: NextRequest) {
   const auth = requireAuth(request, ['transfers.manage']);
   if (isAuthError(auth)) return auth;
-  if (!isCeo(auth)) {
-    return NextResponse.json({ success: false, error: 'Only the CEO can manage lead assignment rules' }, { status: 403 });
+  if (!isCeoOrDirectorOfSales(auth)) {
+    return NextResponse.json({ success: false, error: 'Only the CEO or Director of Sales can manage lead assignment rules' }, { status: 403 });
   }
   try {
     const rules = await listAssignmentRules();
@@ -28,8 +28,8 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const auth = requireAuth(request, ['transfers.manage']);
   if (isAuthError(auth)) return auth;
-  if (!isCeo(auth)) {
-    return NextResponse.json({ success: false, error: 'Only the CEO can manage lead assignment rules' }, { status: 403 });
+  if (!isCeoOrDirectorOfSales(auth)) {
+    return NextResponse.json({ success: false, error: 'Only the CEO or Director of Sales can manage lead assignment rules' }, { status: 403 });
   }
   try {
     const body = await request.json();

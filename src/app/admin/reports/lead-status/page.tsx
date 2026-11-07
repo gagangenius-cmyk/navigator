@@ -11,6 +11,8 @@ import {
   MapPin, Phone, Mail, Building, Clock, ChevronLeft, ChevronRight
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import DailyLeadWork from '@/components/dashboard/DailyLeadWork';
+import { isCounsellor } from '@/lib/roleChecks';
 import { useDebounce } from '@/hooks/useDebounce';
 
 interface LeadData {
@@ -52,7 +54,7 @@ interface Statistics {
   monthlyTrends: Array<{ month: string; leads: number; revenue: number }>;
 }
 
-export default function LeadStatusReport() {
+function AllLeadsReport() {
   const router = useRouter();
   const { currencyCode } = useAuth();
   const formatCurrency = (value: number) => {
@@ -444,6 +446,31 @@ export default function LeadStatusReport() {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+export default function LeadStatusReport() {
+  const { user } = useAuth();
+  const counselor = isCounsellor(user as never);
+  const [picked, setPicked] = useState<'mine' | 'all' | null>(null);
+  const tab = picked ?? (counselor ? 'mine' : 'all');
+  const setTab = setPicked;
+  return (
+    <div className="space-y-4 p-4 sm:p-6">
+      <div className="flex gap-2">
+        {([['mine', 'My daily work'], ['all', 'All leads report']] as const).map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setTab(id)}
+            className={`rounded-md border px-4 py-2 text-sm font-medium ${tab === id ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      {tab === 'mine' ? <DailyLeadWork detailed /> : <AllLeadsReport />}
     </div>
   );
 }

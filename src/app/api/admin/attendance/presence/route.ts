@@ -1,3 +1,4 @@
+import { isCeoOrDirectorOfSales } from '@/lib/roleChecks';
 import { NextRequest, NextResponse } from 'next/server';
 import { sequelize } from '@/lib/sequelize';
 import { apiError, invalidRequest } from '@/lib/apiError';
@@ -21,8 +22,17 @@ const ensureAttendanceTable = async () => {
   await Promise.all([ensureEmployeeAttendanceTable(), HRService.ensureAttendanceRecordTable()]);
 };
 
+// Lead Assignment (who is available for new leads) is run by whoever hands leads out - HR's attendance.manage
+// holders, and the CEO / Director of Sales, who have no HR module at all.
+function requirePresenceAccess(request: NextRequest) {
+  const auth = requireAuth(request);
+  if (isAuthError(auth)) return auth;
+  const allowed = auth.permissions?.includes('all') || auth.permissions?.includes('attendance.manage') || isCeoOrDirectorOfSales(auth);
+  return allowed ? auth : NextResponse.json({ error: 'You do not have permission to perform this action' }, { status: 403 });
+}
+
 export async function GET(request: NextRequest) {
-  const auth = requireAuth(request, ['attendance.manage']);
+  const auth = requirePresenceAccess(request);
   if (isAuthError(auth)) return auth;
   try {
     await ensureAttendanceTable();
@@ -46,7 +56,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const auth = requireAuth(request, ['attendance.manage']);
+  const auth = requirePresenceAccess(request);
   if (isAuthError(auth)) return auth;
   try {
     await ensureAttendanceTable();
