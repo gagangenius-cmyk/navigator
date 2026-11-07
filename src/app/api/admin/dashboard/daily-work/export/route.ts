@@ -106,8 +106,8 @@ export async function GET(request: NextRequest) {
       });
     });
     header.font = { bold: false };
-    daily.getCell('A16').value = 'FTD = for the day, MTD = month to date (Dubai days). Calls = leads worked that day; Connected = leads moved that day into a talked-to status; Hot / Warm / Cold / DNP (DNP + Not answered) / Junk = leads in that status at the end of the day; Counselling = appointments; Rev = payments received on the leads of the counselor.';
-    daily.getCell('A16').font = { italic: true, size: 9, color: { argb: 'FF6B7280' } };
+    daily.getCell('A'+(sheet.rows.length+3)).value = 'FTD = for the day, MTD = month to date (Dubai days). Calls = leads worked that day; Connected = leads moved that day into a talked-to status; Hot / Warm / Cold / DNP (DNP + Not answered) / Junk = leads in that status at the end of the day; their FTD / MTD rows = leads moved into that status that day / this month; Counselling = appointments; Rev = payments received on the leads of the counselor.';
+    daily.getCell('A'+(sheet.rows.length+3)).font = { italic: true, size: 9, color: { argb: 'FF6B7280' } };
 
     addSheet('Summary', [{ header: 'Item', key: 'item', width: 34 }, { header: 'Value', key: 'value', width: 30 }], [
       { item: 'Counselor', value: who },

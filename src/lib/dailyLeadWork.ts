@@ -168,13 +168,26 @@ export async function buildDailySheet(employeeId: number, date: string): Promise
     { replacements: { employeeId, dayStart: day.startUtc, dayEnd: day.endUtc, monthStart: month.startUtc }, type: QueryTypes.SELECT },
   );
 
-  const log = await sequelize.query<{ lead_id: number; action: string; new_value: string | null }>(
-    `SELECT r.lead_id, r.action, r.new_value FROM crm_remarks r
-     WHERE r.actor_id = :employeeId AND r.action IN (:actions) AND r.created_at >= :dayStart AND r.created_at < :dayEnd`,
-    { replacements: { employeeId, actions: WORK_ACTIONS, dayStart: day.startUtc, dayEnd: day.endUtc }, type: QueryTypes.SELECT },
+  // The whole month so far; each entry is tagged with its Dubai day so FTD (that day) and MTD (month to date) come from
+  // the same data.
+  const log = await sequelize.query<{ lead_id: number; action: string; new_value: string | null; created_at: string }>(
+    `SELECT r.lead_id, r.action, r.new_value, r.created_at FROM crm_remarks r
+     WHERE r.actor_id = :employeeId AND r.action IN (:actions) AND r.created_at >= :monthStart AND r.created_at < :dayEnd`,
+    { replacements: { employeeId, actions: WORK_ACTIONS, monthStart: month.startUtc, dayEnd: day.endUtc }, type: QueryTypes.SELECT },
   );
-  const worked = new Set<number>();
-  const connected = new Set<number>();
+  // MTD = the sum of each day's distinct leads (a lead worked on two days counts on both), so it adds up the daily figures.
+  const worked = { ftd: new Set<number>(), mtd: new Set<string>() };
+  const connected = { ftd: new Set<number>(), mtd: new Set<string>() };
+  const moved = (statuses: string[]) => {
+    const ftd = new Set<number>();
+    const mtd = new Set<number>();
+    log.forEach((r) => {
+      if (r.action !== 'status_changed' || !statuses.includes(norm(r.new_value))) return;
+      mtd.add(r.lead_id);
+      if (dubaiDayOfUtc(r.created_at) === date) ftd.add(r.lead_id);
+    });
+    return { ftd: ftd.size, mtd: mtd.size };
+  };
   // Hot / Warm / Cold / DNP / Junk are how many of the counselor's leads sit in that status at the END of the day
   // (today: right now). A past day is rebuilt from the status log: a lead that changed status after that day was in
   // the status it changed away from.
@@ -199,8 +212,14 @@ export async function buildDailySheet(employeeId: number, date: string): Promise
   });
   const inStatus = (statuses: string[]) => [...statusAtEndOfDay.values()].filter((value) => statuses.includes(value)).length;
   log.forEach((r) => {
-    worked.add(r.lead_id);
-    if (r.action === 'status_changed' && !NO_CONTACT.has(norm(r.new_value))) connected.add(r.lead_id);
+    const dayKey = dubaiDayOfUtc(r.created_at);
+    const isToday = dayKey === date;
+    worked.mtd.add(`${dayKey}:${r.lead_id}`);
+    if (isToday) worked.ftd.add(r.lead_id);
+    if (r.action === 'status_changed' && !NO_CONTACT.has(norm(r.new_value))) {
+      connected.mtd.add(`${dayKey}:${r.lead_id}`);
+      if (isToday) connected.ftd.add(r.lead_id);
+    }
   });
 
   const [counselling] = await sequelize.query<{ ftd: number; mtd: number }>(
@@ -222,13 +241,18 @@ export async function buildDailySheet(employeeId: number, date: string): Promise
     rows: [
       { label: 'Fresh Lead FTD:-', value: Number(fresh?.ftd || 0) },
       { label: 'Fresh Lead MTD:-', value: Number(fresh?.mtd || 0) },
-      { label: 'Calls FTD:-', value: worked.size },
-      { label: 'Connected FTD:-', value: connected.size },
-      { label: 'Hot:-', value: inStatus(['hot']) },
-      { label: 'Warm:-', value: inStatus(['warm']) },
-      { label: 'Cold:-', value: inStatus(['cold']) },
-      { label: 'DNP:-', value: inStatus(['dnp', 'not_answered', 'not answered']) },
-      { label: 'Junk:-', value: inStatus(['junk']) },
+      { label: 'Calls FTD:-', value: worked.ftd.size },
+      { label: 'Calls MTD:-', value: worked.mtd.size },
+      { label: 'Connected FTD:-', value: connected.ftd.size },
+      { label: 'Connected MTD:-', value: connected.mtd.size },
+      ...([['Hot', ['hot']], ['Warm', ['warm']], ['Cold', ['cold']], ['DNP', ['dnp', 'not_answered', 'not answered']], ['Junk', ['junk']]] as Array<[string, string[]]>).flatMap(([name, statuses]) => {
+        const m = moved(statuses);
+        return [
+          { label: `${name}:-`, value: inStatus(statuses) },
+          { label: `${name} FTD:-`, value: m.ftd },
+          { label: `${name} MTD:-`, value: m.mtd },
+        ];
+      }),
       { label: 'Counselling FTD:-', value: Number(counselling?.ftd || 0) },
       { label: 'Counselling MTD:-', value: Number(counselling?.mtd || 0) },
       { label: 'Rev FTD:-', value: Math.round(Number(revenue?.ftd || 0)) },
