@@ -5,6 +5,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
+import ViewModeToggle from '@/components/layout/ViewModeToggle';
 import { canAccessAdminPath, getDefaultAdminPathForUser } from '@/lib/roleAccess';
 import { isCeo, isCeoOrDirectorOfSales, isFoeOrCeo } from '@/lib/roleChecks';
 import NotificationCenter from '@/components/notifications/NotificationCenter';
@@ -683,7 +684,8 @@ const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
         </header>
 
         {/* Page content */}
-        <main className="flex-1 min-h-0 overflow-auto p-6">
+        <main data-view-root className="flex-1 min-h-0 overflow-auto p-6">
+          <ViewModeToggle />
           {children}
         </main>
       </div>

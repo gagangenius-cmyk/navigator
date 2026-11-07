@@ -62,7 +62,7 @@ export function RecordCard({
   className,
 }: RecordCardProps) {
   return (
-    <article className={`min-w-0 rounded-lg border border-gray-200 bg-white p-3 shadow-sm transition hover:border-blue-200 hover:shadow-md lg:p-4 ${className || ''}`}>
+    <article data-record-card className={`min-w-0 rounded-lg border border-gray-200 bg-white p-3 shadow-sm transition hover:border-blue-200 hover:shadow-md lg:p-4 ${className || ''}`}>
       <div className="grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_auto]">
         <div className="flex min-w-0 gap-3">
           {avatar !== undefined && (
@@ -77,7 +77,7 @@ export function RecordCard({
             </div>
 
             {metaItems && metaItems.length > 0 && (
-              <div className="mt-2 grid grid-cols-1 gap-2 text-sm text-gray-600 sm:grid-cols-2 xl:grid-cols-3">
+              <div data-rc="meta" className="mt-2 grid grid-cols-1 gap-2 text-sm text-gray-600 sm:grid-cols-2 xl:grid-cols-3">
                 {metaItems.map((item, index) => {
                   const Icon = item.icon;
                   return (
@@ -91,7 +91,7 @@ export function RecordCard({
             )}
 
             {stats && stats.length > 0 && (
-              <div className="mt-3 grid grid-cols-1 gap-2 text-xs sm:grid-cols-2 xl:grid-cols-4">
+              <div data-rc="stats" className="mt-3 grid grid-cols-1 gap-2 text-xs sm:grid-cols-2 xl:grid-cols-4">
                 {stats.map((stat, index) => (
                   <div key={index} className="min-w-0 rounded-md bg-gray-50 p-2">
                     <div className="font-semibold uppercase text-gray-400">{stat.label}</div>
@@ -107,7 +107,7 @@ export function RecordCard({
         </div>
 
         {actions && actions.some((a) => !a.hidden) && (
-          <div className="flex flex-wrap items-center gap-1.5 xl:max-w-[220px] xl:justify-end">
+          <div data-rc="actions" className="flex flex-wrap items-center gap-1.5 xl:max-w-[220px] xl:justify-end">
             {actions.filter((a) => !a.hidden).map((action) => {
               const Icon = action.icon;
               const cls = `inline-flex h-9 w-9 items-center justify-center rounded-md ${action.colorClass || 'bg-gray-100 text-gray-700 hover:bg-gray-200'} ${action.disabled ? 'pointer-events-none opacity-40' : ''}`;
@@ -209,5 +209,5 @@ export function RecordList({
     );
   }
 
-  return <div className="grid grid-cols-1 gap-3">{children}</div>;
+  return <div data-record-list className="grid grid-cols-1 gap-3">{children}</div>;
 }
