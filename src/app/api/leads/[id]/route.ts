@@ -353,6 +353,10 @@ export async function PUT(
     await ensureDBConnection();
     await ensureClientActualNameColumn();
     const { id } = await params;
+    // A counselor may only edit a lead assigned to them (branch / region roles: their branch / region) - the lead
+    // list and GET already enforce this; PUT used to accept any lead id.
+    const putAccessError = Number(id) ? await assertLeadAccess(auth, Number(id)) : null;
+    if (putAccessError) return putAccessError;
     const data = await request.json();
 
     const validationErrors = validateLeadUpdate(data);
