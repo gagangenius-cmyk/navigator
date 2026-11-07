@@ -1,282 +1,151 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useSortableData } from '@/components/ui/sortable-th';
-import { RecordCard, RecordList, SortButtonRow } from '@/components/shared/ResponsiveRecordList';
-import {
-  FolderOpen, FileText, Users, Calendar, Download, Eye, 
-  Search, Filter, Plus, Star, Share2, Clock, ChevronRight,
-  BarChart3, TrendingUp, DollarSign, UserCheck
-} from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
+import { BarChart3, Clock, DollarSign, FileText, Search, Star, Target, TrendingUp, Users, Award, Building2 } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
+import { canAccessAdminPath } from '@/lib/roleAccess';
+import { RecordCard, RecordList } from '@/components/shared/ResponsiveRecordList';
 
-interface Report {
-  id: number;
+// The reports that exist in the CRM, grouped by area. Only reports the signed-in user may open are listed.
+interface CatalogReport {
+  id: string;
   name: string;
   description: string;
-  folder: string;
-  createdBy: string;
-  createdOn: string;
-  subscribed: boolean;
-  type?: string;
-  category?: string;
+  folder: 'Leads' | 'Sales' | 'Finance' | 'Branch' | 'Tools';
+  href: string;
+  icon: typeof BarChart3;
 }
 
+const CATALOG: CatalogReport[] = [
+  { id: 'lead-status', name: 'Lead Status & My Daily Work', description: 'Daily / weekly lead work: status changes, follow-ups, appointments, with Excel / CSV export.', folder: 'Leads', href: '/admin/reports/lead-status', icon: Users },
+  { id: 'lead-source', name: 'Lead Source Analytics', description: 'Where leads come from and how each source converts.', folder: 'Leads', href: '/admin/reports/lead-source-analytics', icon: TrendingUp },
+  { id: 'lead-performance', name: 'Lead Performance', description: 'Leads handled and outcomes per counselor.', folder: 'Leads', href: '/admin/reports/lead-performance', icon: Award },
+  { id: 'lead-funnel', name: 'Conversion Funnel', description: 'Lead to opportunity to contract conversion by stage.', folder: 'Leads', href: '/admin/reports/lead-conversion-funnel', icon: Target },
+  { id: 'lead-aging', name: 'Lead Aging', description: 'How long leads have been sitting in each status.', folder: 'Leads', href: '/admin/reports/lead-aging', icon: Clock },
+  { id: 'sales-performance', name: 'Sales Performance', description: 'Revenue and contracts by counselor and period.', folder: 'Sales', href: '/admin/reports/sales-performance', icon: DollarSign },
+  { id: 'finance', name: 'Finance Report', description: 'Payments, receipts and outstanding balances.', folder: 'Finance', href: '/admin/reports/finance', icon: DollarSign },
+  { id: 'branch-performance', name: 'Branch Performance', description: 'Leads, contracts and revenue per branch.', folder: 'Branch', href: '/admin/reports/branch-performance', icon: Building2 },
+  { id: 'generator', name: 'Report Generator', description: 'Build a custom report from CRM data.', folder: 'Tools', href: '/admin/reports/generator', icon: FileText },
+];
+
+const FOLDERS = ['All', 'Leads', 'Sales', 'Finance', 'Branch', 'Tools'] as const;
+const FAV_KEY = 'reports-panel-favorites';
+const RECENT_KEY = 'reports-panel-recent';
+
+const readList = (key: string): string[] => {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(key) || '[]');
+    return Array.isArray(parsed) ? parsed.filter((v): v is string => typeof v === 'string') : [];
+  } catch {
+    return [];
+  }
+};
+
 export default function ReportsPanel() {
-  const [activeCategory, setActiveCategory] = useState('recent');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedFolder, setSelectedFolder] = useState('all');
-  const [reports, setReports] = useState<Report[]>([]);
+  const { user } = useAuth();
+  const [view, setView] = useState<'all' | 'favorites' | 'recent'>('all');
+  const [folder, setFolder] = useState<(typeof FOLDERS)[number]>('All');
+  const [search, setSearch] = useState('');
+  const [favorites, setFavorites] = useState<string[]>([]);
+  const [recent, setRecent] = useState<string[]>([]);
 
   useEffect(() => {
-    const loadSavedReports = async () => {
-      try {
-        const response = await fetch('/api/admin/reports?action=getSavedReports');
-        if (!response.ok) throw new Error('Failed to load saved reports');
-        const result = await response.json();
-        setReports((result.reports || result.data || []).map((report: any, index: number) => ({
-          id: Number(report.id || index + 1),
-          name: report.name || report.title || 'Saved Report',
-          description: report.description || '',
-          folder: report.folder || 'Reports',
-          createdBy: report.createdBy || report.created_by || '',
-          createdOn: report.createdOn || report.createdAt || '',
-          subscribed: Boolean(report.subscribed),
-          type: report.type,
-          category: report.category,
-        })));
-      } catch (error) {
-        console.error('Error loading saved reports:', error);
-        setReports([]);
-      }
-    };
-
-    loadSavedReports();
+    // localStorage is only readable in the browser, after hydration.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setFavorites(readList(FAV_KEY));
+    setRecent(readList(RECENT_KEY));
   }, []);
 
-  const categories = [
-    { id: 'recent', name: 'Recent', icon: Clock },
-    { id: 'createdByMe', name: 'Created by Me', icon: UserCheck },
-    { id: 'private', name: 'Private Reports', icon: FileText },
-    { id: 'public', name: 'Public Reports', icon: Users },
-    { id: 'all', name: 'All Reports', icon: BarChart3 },
-    { id: 'allFolders', name: 'All Folders', icon: FolderOpen },
-    { id: 'myFolders', name: 'Created by Me', icon: UserCheck },
-    { id: 'shared', name: 'Shared with Me', icon: Share2 },
-    { id: 'favorites', name: 'All Favorites', icon: Star }
-  ];
+  const allowed = useMemo(() => CATALOG.filter((r) => canAccessAdminPath(user, r.href)), [user]);
 
-  const folders = [
-    { id: 'all', name: 'All Folders' },
-    { id: 'ceo', name: 'CEO' },
-    { id: 'india', name: 'India Branch Manager' },
-    { id: 'branch', name: 'Branch Manager Reports' },
-    { id: 'finance', name: 'Finance' },
-    { id: 'operations', name: 'Operations' }
-  ];
+  const shown = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return allowed
+      .filter((r) => folder === 'All' || r.folder === folder)
+      .filter((r) => view !== 'favorites' || favorites.includes(r.id))
+      .filter((r) => view !== 'recent' || recent.includes(r.id))
+      .filter((r) => !q || r.name.toLowerCase().includes(q) || r.description.toLowerCase().includes(q))
+      .sort((a, b) => (view === 'recent' ? recent.indexOf(a.id) - recent.indexOf(b.id) : 0));
+  }, [allowed, folder, view, favorites, recent, search]);
 
-  const filteredReports = reports.filter(report => {
-    const matchesSearch = report.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         report.description.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesFolder = selectedFolder === 'all' || report.folder.includes(selectedFolder);
-    return matchesSearch && matchesFolder;
-  });
-
-  const { sorted: sortedReports, sortKey: reportSortKey, sortDirection: reportSortDirection, toggleSort: toggleReportSort } = useSortableData(
-    filteredReports,
-    {
-      name: (r) => r.name,
-      description: (r) => r.description,
-      folder: (r) => r.folder,
-      createdBy: (r) => r.createdBy,
-      createdOn: (r) => r.createdOn,
-      subscribed: (r) => r.subscribed,
-    },
-  );
-
-  const toggleSubscription = (reportId: number) => {
-    setReports(reports.map(report => 
-      report.id === reportId 
-        ? { ...report, subscribed: !report.subscribed }
-        : report
-    ));
+  const toggleFavorite = (id: string) => {
+    const next = favorites.includes(id) ? favorites.filter((f) => f !== id) : [...favorites, id];
+    setFavorites(next);
+    localStorage.setItem(FAV_KEY, JSON.stringify(next));
   };
 
-  const getReportIcon = (type?: string) => {
-    switch(type) {
-      case 'financial': return <DollarSign className="w-4 h-4 text-green-600" />;
-      case 'branch': return <Users className="w-4 h-4 text-blue-600" />;
-      case 'leads': return <TrendingUp className="w-4 h-4 text-purple-600" />;
-      case 'program': return <FileText className="w-4 h-4 text-orange-600" />;
-      default: return <BarChart3 className="w-4 h-4 text-gray-600" />;
-    }
+  const markOpened = (id: string) => {
+    const next = [id, ...recent.filter((r) => r !== id)].slice(0, 8);
+    localStorage.setItem(RECENT_KEY, JSON.stringify(next));
   };
+
+  const tabs = [
+    { id: 'all', label: 'All reports' },
+    { id: 'favorites', label: 'Favorites' },
+    { id: 'recent', label: 'Recently opened' },
+  ] as const;
 
   return (
-    <div className="min-h-[60vh] bg-gray-50">
-      <div className="flex">
-        {/* Sidebar */}
-        <div className="w-64 bg-white border-r border-gray-200 min-h-[60vh]">
-          <div className="p-4">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Reports</h2>
-            
-            {/* Categories */}
-            <div className="space-y-1 mb-6">
-              {categories.map((category) => {
-                const Icon = category.icon;
-                return (
-                  <button
-                    key={category.id}
-                    onClick={() => setActiveCategory(category.id)}
-                    className={`w-full flex items-center px-3 py-2 text-sm rounded-lg transition-colors ${
-                      activeCategory === category.id
-                        ? 'bg-blue-50 text-blue-700 font-medium'
-                        : 'text-gray-700 hover:bg-gray-100'
-                    }`}
-                  >
-                    <Icon className="w-4 h-4 mr-3" />
-                    {category.name}
-                    {activeCategory === category.id && (
-                      <ChevronRight className="w-4 h-4 ml-auto" />
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Folders Section */}
-            <div className="border-t border-gray-200 pt-4">
-              <h3 className="text-sm font-semibold text-gray-900 mb-3">Folders</h3>
-              <div className="space-y-1">
-                {folders.map((folder) => (
-                  <button
-                    key={folder.id}
-                    onClick={() => setSelectedFolder(folder.id)}
-                    className={`w-full flex items-center px-3 py-2 text-sm rounded-lg transition-colors ${
-                      selectedFolder === folder.id
-                        ? 'bg-blue-50 text-blue-700 font-medium'
-                        : 'text-gray-700 hover:bg-gray-100'
-                    }`}
-                  >
-                    <FolderOpen className="w-4 h-4 mr-3" />
-                    {folder.name}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Quick Actions */}
-            <div className="border-t border-gray-200 pt-4 mt-6">
-              <button className="w-full flex items-center px-3 py-2 text-sm text-blue-700 hover:bg-blue-50 rounded-lg transition-colors">
-                <Plus className="w-4 h-4 mr-3" />
-                New Report
-              </button>
-            </div>
-          </div>
+    <div className="space-y-4 p-4 sm:p-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold text-gray-900">Reports</h1>
+          <p className="text-sm text-gray-600">{shown.length} of {allowed.length} reports available to you</p>
         </div>
-
-        {/* Main Content */}
-        <div className="flex-1">
-          {/* Header */}
-          <div className="bg-white border-b border-gray-200 px-6 py-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h1 className="text-2xl font-semibold text-gray-900">Reports</h1>
-                <p className="text-sm text-gray-600 mt-1">
-                  {filteredReports.length} reports found
-                </p>
-              </div>
-              
-              <div className="flex items-center space-x-4">
-                {/* Search */}
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                  <input
-                    type="text"
-                    placeholder="Search reports..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent w-64"
-                  />
-                </div>
-
-                {/* Filter Button */}
-                <button className="flex items-center px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">
-                  <Filter className="w-4 h-4 mr-2" />
-                  Filter
-                </button>
-
-                {/* Export Button */}
-                <button className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
-                  <Download className="w-4 h-4 mr-2" />
-                  Export
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Reports Table */}
-          <div className="p-6">
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-              <SortButtonRow
-                options={[
-                  ['name', 'Report Name'],
-                  ['description', 'Description'],
-                  ['folder', 'Folder'],
-                  ['createdBy', 'Created By'],
-                  ['createdOn', 'Created On'],
-                  ['subscribed', 'Subscribed'],
-                ] as const}
-                activeKey={reportSortKey}
-                direction={reportSortDirection}
-                onSort={toggleReportSort}
-              />
-              <RecordList isEmpty={false}>
-                {sortedReports.map((report) => (
-                  <RecordCard
-                    key={report.id}
-                    avatar={getReportIcon(report.type)}
-                    avatarColorClass="from-gray-600 to-gray-400"
-                    title={<span className="min-w-0 break-words text-base font-bold text-gray-950">{report.name}</span>}
-                    titleBadges={report.type ? <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-600">{report.type}</span> : undefined}
-                    metaItems={[{ icon: FolderOpen, text: report.folder, key: 'folder' }]}
-                    stats={[
-                      { label: 'Description', value: report.description || '—' },
-                      { label: 'Created By', value: report.createdBy || '—' },
-                      { label: 'Created On', value: report.createdOn || '—' },
-                    ]}
-                    extra={
-                      <button
-                        onClick={() => toggleSubscription(report.id)}
-                        className={`mt-2 flex w-fit items-center px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-                          report.subscribed
-                            ? 'bg-green-100 text-green-800'
-                            : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
-                        }`}
-                      >
-                        <Star className={`w-3 h-3 mr-1 ${report.subscribed ? 'fill-current' : ''}`} />
-                        {report.subscribed ? 'Subscribed' : 'Subscribe'}
-                      </button>
-                    }
-                    actions={[
-                      { key: 'view', icon: Eye, label: 'View', onClick: () => {} },
-                      { key: 'download', icon: Download, label: 'Download', onClick: () => {} },
-                      { key: 'share', icon: Share2, label: 'Share', onClick: () => {} },
-                    ]}
-                  />
-                ))}
-              </RecordList>
-
-              {filteredReports.length === 0 && (
-                <div className="text-center py-12">
-                  <FileText className="mx-auto text-gray-400 w-12 h-12 mb-4" />
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">No reports found</h3>
-                  <p className="text-gray-600">Try adjusting your search or filters</p>
-                </div>
-              )}
-            </div>
-          </div>
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+          <input
+            type="text"
+            placeholder="Search reports..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-64 rounded-lg border border-gray-300 py-2 pl-10 pr-4 focus:border-transparent focus:ring-2 focus:ring-blue-500"
+          />
         </div>
       </div>
+
+      <div className="flex flex-wrap gap-2">
+        {tabs.map((t) => (
+          <button key={t.id} type="button" onClick={() => setView(t.id)} className={`rounded-md border px-3 py-1.5 text-sm font-medium ${view === t.id ? 'border-blue-600 bg-blue-600 text-white' : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'}`}>{t.label}</button>
+        ))}
+        <span className="mx-2 hidden w-px bg-gray-200 sm:block" />
+        {FOLDERS.map((f) => (
+          <button key={f} type="button" onClick={() => setFolder(f)} className={`rounded-md border px-3 py-1.5 text-sm ${folder === f ? 'border-blue-200 bg-blue-50 font-medium text-blue-700' : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'}`}>{f === 'All' ? 'All folders' : f}</button>
+        ))}
+      </div>
+
+      <RecordList isEmpty={false}>
+        {shown.map((report) => {
+          const Icon = report.icon;
+          const fav = favorites.includes(report.id);
+          return (
+            <RecordCard
+              key={report.id}
+              avatar={<Icon className="h-4 w-4 text-white" />}
+              avatarColorClass="from-blue-600 to-blue-400"
+              title={<Link href={report.href} onClick={() => markOpened(report.id)} className="min-w-0 break-words text-base font-bold text-gray-950 hover:text-blue-700">{report.name}</Link>}
+              titleBadges={<span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-600">{report.folder}</span>}
+              stats={[{ label: 'About', value: report.description }]}
+              extra={
+                <button type="button" onClick={() => toggleFavorite(report.id)} className={`mt-2 flex w-fit items-center rounded-full px-3 py-1 text-xs font-medium ${fav ? 'bg-yellow-100 text-yellow-800' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>
+                  <Star className={`mr-1 h-3 w-3 ${fav ? 'fill-current' : ''}`} />
+                  {fav ? 'Favorite' : 'Add to favorites'}
+                </button>
+              }
+              actions={[{ key: 'open', icon: BarChart3, label: 'Open', onClick: () => { markOpened(report.id); window.location.href = report.href; } }]}
+            />
+          );
+        })}
+      </RecordList>
+
+      {shown.length === 0 && (
+        <div className="py-12 text-center">
+          <FileText className="mx-auto mb-4 h-12 w-12 text-gray-400" />
+          <h3 className="mb-2 text-lg font-medium text-gray-900">No reports found</h3>
+          <p className="text-gray-600">Try another folder, tab or search.</p>
+        </div>
+      )}
     </div>
   );
 }
