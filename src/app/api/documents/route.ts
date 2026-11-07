@@ -3,7 +3,7 @@ import { Op, QueryTypes } from 'sequelize'
 import { CrmAdditionalDocuments, CrmOpsDocuments, CrmcOpportunityDocuments } from '@/models'
 import { sequelize } from '@/lib/sequelize'
 import { verifyToken } from '@/lib/auth'
-import { isCeo, isBranchManagerOrCeo } from '@/lib/roleChecks'
+import { isCeo, isBranchManagerOrCeo, getRecordVisibilityScope } from '@/lib/roleChecks'
 import { requireAuth, isAuthError } from '@/lib/apiAuth'
 
 async function assertLeadBranchWritable(auth: { branch?: string | number | null }, leadId: unknown): Promise<string | null> {
@@ -27,14 +27,17 @@ export async function GET(request: NextRequest) {
     const leadId = searchParams.get('leadId')
     const search = searchParams.get('search')?.trim() || ''
 
-    const leadFilter = leadId ? 'AND d.leadId = :leadId' : ''
+    // Same visibility as the lead list: a counselor sees only their own leads' documents, a branch role their branch.
+    const scope = getRecordVisibilityScope(auth)
+    const scopeSql = scope === 'all' ? '' : scope === 'own' ? 'AND (l.assignTo = :authId OR l.Counsilor = :authId)' : 'AND l.branch = :authBranch'
+    const leadFilter = `${leadId ? 'AND d.leadId = :leadId' : ''} ${scopeSql}`
     const searchFilter = search ? "AND (d.purpose LIKE :search OR l.fname LIKE :search OR l.lname LIKE :search)" : ''
     // The opportunity-documents branch has no leadId/purpose column of its own
     // (leadId comes via a join on crm_opportunities, and the closest text
     // field is category/documentName) — same filter intent, different columns.
-    const oppLeadFilter = leadId ? 'AND o.leadId = :leadId' : ''
+    const oppLeadFilter = `${leadId ? 'AND o.leadId = :leadId' : ''} ${scopeSql}`
     const oppSearchFilter = search ? "AND (d.category LIKE :search OR d.documentName LIKE :search OR l.fname LIKE :search OR l.lname LIKE :search)" : ''
-    const replacements: Record<string, unknown> = { leadId: leadId ? Number(leadId) : null, search: `%${search}%` }
+    const replacements: Record<string, unknown> = { leadId: leadId ? Number(leadId) : null, search: `%${search}%`, authId: auth.id, authBranch: Number(auth.branch || 0) }
 
     // This legacy schema has three different column collations across the
     // tables unioned below (crm_additional_documents: utf8mb4_unicode_ci;

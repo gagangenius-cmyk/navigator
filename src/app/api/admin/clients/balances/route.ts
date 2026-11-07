@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { sequelize, connectDB } from '@/lib/sequelize';
 import { QueryTypes } from 'sequelize';
 import { requireAuth, isAuthError } from '@/lib/apiAuth';
-import { isBranchManagerOrCeo, isCeo } from '@/lib/roleChecks';
+import { isBranchManagerOrCeo, isCeoOrDirectorOfSales, getRecordVisibilityScope } from '@/lib/roleChecks';
 
 let dbReady = false;
 async function ensureDB() {
@@ -29,7 +29,8 @@ export async function GET(request: NextRequest) {
   // receipt count/date double-counted against every other one.
   // Branch Manager gets the same own-branch-only scoping as the clients list
   // itself - CEO and every other clients.view holder see everything.
-  const branchScoped = isBranchManagerOrCeo(auth) && !isCeo(auth);
+  const branchScoped = isBranchManagerOrCeo(auth) && !isCeoOrDirectorOfSales(auth);
+  const ownScoped = !branchScoped && getRecordVisibilityScope(auth) === 'own';
   const rows = await sequelize.query<{
     clientId: number;
     leadId: number;
@@ -61,8 +62,9 @@ export async function GET(request: NextRequest) {
        OR (ct.id IS NULL AND ph.leadId = w.lead_id AND ph.contract_id IS NULL)
      WHERE w.finance_status = 'approved' AND w.compliance_status = 'approved'
        ${branchScoped ? 'AND COALESCE(ct.branch_id, l.branch) = :userBranch' : ''}
+       ${ownScoped ? 'AND (l.assignTo = :authId OR l.Counsilor = :authId)' : ''}
      GROUP BY w.id, w.lead_id, ct.id, ct.contract_number, l.payTotal, l.paidYet, l.payBalance, ct.pay_total, ct.paid_yet, ct.pay_balance`,
-    { replacements: branchScoped ? { userBranch: auth.branch || 0 } : {}, type: QueryTypes.SELECT }
+    { replacements: { ...(branchScoped ? { userBranch: auth.branch || 0 } : {}), ...(ownScoped ? { authId: auth.id } : {}) }, type: QueryTypes.SELECT }
   );
   return NextResponse.json({ data: rows });
   } catch (err: any) {

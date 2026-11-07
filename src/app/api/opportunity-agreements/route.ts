@@ -6,7 +6,7 @@ import { verifyToken } from '@/lib/auth';
 import { isCeo, isBranchManagerOrCeo } from '@/lib/roleChecks';
 import { requireAuth, isAuthError } from '@/lib/apiAuth';
 import { resolveBranchCurrency } from '@/lib/branchCurrency';
-import { assertOpportunityAccess } from '@/lib/leadAccess';
+import { assertOpportunityAccess, getScopedOpportunityIds } from '@/lib/leadAccess';
 import { formatDocumentNumber } from '@/lib/documentNumbering';
 
 export async function GET(request: NextRequest) {
@@ -31,7 +31,13 @@ export async function GET(request: NextRequest) {
     const whereClause: any = { isDeleted: 0 };
 
     if (opportunityId) {
+      const accessError = await assertOpportunityAccess(auth, Number(opportunityId));
+      if (accessError) return accessError;
       whereClause.opportunityId = opportunityId;
+    } else {
+      // Browsing every agreement: only those of opportunities this user may see.
+      const scopedIds = await getScopedOpportunityIds(auth);
+      if (scopedIds) whereClause.opportunityId = scopedIds.length ? scopedIds : [0];
     }
 
     if (status) {

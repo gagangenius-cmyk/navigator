@@ -4,7 +4,7 @@ import { CrmClients } from '@/models';
 import { createCrudHandlers } from '@/lib/apiCrud';
 import { sequelize, connectDB } from '@/lib/sequelize';
 import { requireAuth, isAuthError } from '@/lib/apiAuth';
-import { isBranchManagerOrCeo, isCeo } from '@/lib/roleChecks';
+import { isBranchManagerOrCeo, isCeo, isCeoOrDirectorOfSales, getRecordVisibilityScope } from '@/lib/roleChecks';
 
 let dbReady = false;
 const ensureDB = async () => { if (!dbReady) { await connectDB(); dbReady = true; } };
@@ -107,9 +107,13 @@ export async function GET(request: NextRequest) {
     // via the express flow can be at a different branch from the lead's home
     // branch), falling back to the lead's own branch for legacy won
     // opportunities that predate the contract model.
-    if (isBranchManagerOrCeo(auth) && !isCeo(auth)) {
+    if (isBranchManagerOrCeo(auth) && !isCeoOrDirectorOfSales(auth)) {
       conditions.push(`COALESCE(ct.branch_id, l.branch) = :userBranch`);
       replacements.userBranch = auth.branch || 0;
+    } else if (getRecordVisibilityScope(auth) === 'own') {
+      // A counselor sees only the clients of their own leads.
+      conditions.push(`(l.assignTo = :authId OR l.Counsilor = :authId OR o.assignedTo = :authId)`);
+      replacements.authId = auth.id;
     }
 
     const fromAndWhere = `

@@ -1598,6 +1598,9 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    const leadAccessError = await assertLeadAccess(auth, leadId);
+    if (leadAccessError) return leadAccessError;
+
     const opportunityIds = (await models.CrmcOpportunities.findAll({
       where: { leadId, isDeleted: 0 },
       attributes: ['id'],
