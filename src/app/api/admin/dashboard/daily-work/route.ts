@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { buildDailyWork } from '@/lib/dailyLeadWork';
+import { buildDailyWork, buildDailySheet } from '@/lib/dailyLeadWork';
 import { resolveWorkTarget } from '@/lib/dailyWorkTarget';
 
 /**
@@ -13,6 +13,10 @@ export async function GET(request: NextRequest) {
   try {
     const target = await resolveWorkTarget(request);
     if (target instanceof NextResponse) return target;
+    // ?sheet=1: just the one-column FTD / MTD daily report (the same figures as the Excel "Daily report" sheet).
+    if (new URL(request.url).searchParams.get('sheet') === '1') {
+      return NextResponse.json({ success: true, data: await buildDailySheet(target.employeeId, target.endDate) });
+    }
     const data = await buildDailyWork(target.employeeId, target.endDate, target.days);
     // The per-lead rows (which lead moved from which status to which) are only sent when asked for (?detail=1, the
     // Lead Status report page); the dashboard widget doesn't need them.

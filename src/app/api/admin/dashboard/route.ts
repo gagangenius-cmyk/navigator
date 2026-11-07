@@ -582,6 +582,13 @@ export async function GET(request: NextRequest) {
 
     const data = await getCachedDashboardData(cat, userBranch, userId, dateFromParam, dateToParam);
 
+    // Company-wide totals (staff, branches, every opportunity) are not a counselor's business: blank them so they
+    // aren't in the payload even though the counselor dashboard doesn't draw them.
+    if (cat === 'counselor') {
+      const companyWide = { totalEmployees: 0, totalBranches: 0, totalOperations: 0, activeOperations: 0, completedOperations: 0, completionRate: 0 };
+      Object.assign(data.stats, companyWide);
+    }
+
     return NextResponse.json({
       ...data.stats,
       success: true,
