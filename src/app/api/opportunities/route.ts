@@ -4,6 +4,7 @@ import { CrmcOpportunities } from '@/models';
 import { sequelize } from '@/lib/sequelize';
 import { QueryTypes } from 'sequelize';
 import { requireAuth, isAuthError } from '@/lib/apiAuth';
+import { assertLeadAccess, assertOpportunityAccess } from '@/lib/leadAccess';
 import { isBranchManagerOrCeo, isCeo } from '@/lib/roleChecks';
 
 export async function GET(request: NextRequest) {
@@ -172,6 +173,11 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
 
+    if (Number(body.leadId)) {
+      const leadAccessError = await assertLeadAccess(auth, Number(body.leadId));
+      if (leadAccessError) return leadAccessError;
+    }
+
     if (body.estimatedValue !== undefined && body.estimatedValue !== null && body.estimatedValue !== '') {
       const estimatedValue = Number(body.estimatedValue);
       if (!Number.isFinite(estimatedValue) || estimatedValue <= 0) {
@@ -205,6 +211,10 @@ export async function PUT(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
+    if (Number(id)) {
+      const oppAccessError = await assertOpportunityAccess(auth, Number(id));
+      if (oppAccessError) return oppAccessError;
+    }
     const body = await request.json();
 
     if (body.estimatedValue !== undefined && body.estimatedValue !== null && body.estimatedValue !== '') {

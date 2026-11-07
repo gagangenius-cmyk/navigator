@@ -5,6 +5,7 @@ import { sequelize } from '@/lib/sequelize'
 import { verifyToken } from '@/lib/auth'
 import { isCeo, isBranchManagerOrCeo, getRecordVisibilityScope } from '@/lib/roleChecks'
 import { requireAuth, isAuthError } from '@/lib/apiAuth'
+import { assertLeadAccess } from '@/lib/leadAccess'
 
 async function assertLeadBranchWritable(auth: { branch?: string | number | null }, leadId: unknown): Promise<string | null> {
   const id = Number(leadId)
@@ -146,6 +147,12 @@ export async function POST(request: NextRequest) {
     const { documentType, ...documentData } = data
 
     let document;
+
+    // A counselor may only attach documents to their own leads (branch roles: their branch).
+    if (Number(documentData.leadId)) {
+      const leadAccessError = await assertLeadAccess(auth, Number(documentData.leadId))
+      if (leadAccessError) return leadAccessError
+    }
 
     if (isBranchManagerOrCeo(auth) && !isCeo(auth)) {
       const scopeError = await assertLeadBranchWritable(auth, documentData.leadId)

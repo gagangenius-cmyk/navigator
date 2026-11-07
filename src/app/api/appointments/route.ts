@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { dubaiToday } from '@/lib/dubaiDate';
+import { assertLeadAccess } from '@/lib/leadAccess';
 import { Appointments } from '@/models'
 import { sequelize } from '@/lib/sequelize'
 import { QueryTypes } from 'sequelize'
@@ -172,6 +173,10 @@ export async function POST(request: NextRequest) {
 
     const data = await request.json()
     const leadId = normalizeNumber(data.leadid ?? data.leadId)
+    if (leadId) {
+      const leadAccessError = await assertLeadAccess(currentUser, leadId)
+      if (leadAccessError) return leadAccessError
+    }
     const counselorId = normalizeNumber(data.counsilorid ?? data.counselorId ?? data.employeeId)
     const appointmentDate = data.date || dubaiToday()
     const appointmentTime = normalizeTime(data.appointtime || data.time || '09:00')

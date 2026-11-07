@@ -3,6 +3,7 @@ import { QueryTypes } from 'sequelize';
 import { sequelize } from '@/lib/sequelize';
 import { notifyUser, notifyRole } from '@/lib/notify';
 import { requireAuth, isAuthError } from '@/lib/apiAuth';
+import { assertLeadAccess } from '@/lib/leadAccess';
 import { isBranchManagerOrCeo, isCeo } from '@/lib/roleChecks';
 import { logAudit } from '@/lib/auditLog';
 import { captureError } from '@/lib/errorTracking';
@@ -163,6 +164,8 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+    const leadAccessError = await assertLeadAccess(auth, Number(body.leadId));
+    if (leadAccessError) return leadAccessError;
 
     // Duplicate-submission guard: the frontend already guards this well
     // (submittingCompliance state + status checks), but that's not airtight

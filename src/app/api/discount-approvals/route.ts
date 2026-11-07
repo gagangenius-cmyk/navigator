@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { sequelize } from '@/lib/sequelize';
 import { QueryTypes } from 'sequelize';
 import { verifyToken } from '@/lib/auth';
+import { assertLeadAccess } from '@/lib/leadAccess';
 import { isBranchManagerOrCeo, isCeo } from '@/lib/roleChecks';
 import { branchCurrencyError, resolveBranchCurrency } from '@/lib/branchCurrency';
 import { notifyRole } from '@/lib/notify';
@@ -142,6 +143,10 @@ export async function POST(request: NextRequest) {
         { success: false, error: 'You must be logged in to request a discount approval' },
         { status: 401 }
       );
+    }
+    if (Number(body.leadId)) {
+      const leadAccessError = await assertLeadAccess(requester as never, Number(body.leadId));
+      if (leadAccessError) return leadAccessError;
     }
     const branchCurrency = await resolveBranchCurrency(requester.branch);
     if (!branchCurrency) {
