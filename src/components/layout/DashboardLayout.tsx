@@ -281,7 +281,7 @@ const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
     {
       title: 'IT Support',
       items: [
-        { name: 'IT Dashboard', href: '/admin/it-support', icon: BarChart3, permissions: ['it.dashboard', 'it.view', 'it.self'] },
+        { name: 'IT Dashboard', href: '/admin/it-support', icon: BarChart3, permissions: ['it.dashboard', 'it.view'] },
         { name: 'My Tickets', href: '/admin/it-support/my-tickets', icon: FileCheck, permissions: ['it.self'] },
       ]
     },

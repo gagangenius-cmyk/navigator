@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { QueryTypes } from 'sequelize';
 import { sequelize } from '@/lib/sequelize';
 import { requireAuth, isAuthError } from '@/lib/apiAuth';
-import { isBranchManagerOrCeo, isCeo } from '@/lib/roleChecks';
+import { isBranchManagerOrCeo, isCeo, isCeoOrDirectorOfSales } from '@/lib/roleChecks';
 
 interface ReportRequest {
   config: {
@@ -109,7 +109,7 @@ const generateLiveReportData = async (request: ReportRequest, auth: any): Promis
   // counselor's id to pass); everyone else can only ever pull their own
   // report, regardless of what config.counselors requested.
   let branchClause = '';
-  if (!isCeo(auth)) {
+  if (!isCeoOrDirectorOfSales(auth)) {
     if (isBranchManagerOrCeo(auth)) {
       branchClause = ' AND l.branch = ?';
       replacements.push(Number(auth.branch || 0));

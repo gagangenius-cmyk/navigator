@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { QueryTypes } from 'sequelize';
 import { sequelize } from '@/lib/sequelize';
 import { requireAuth, isAuthError } from '@/lib/apiAuth';
-import { isCeo } from '@/lib/roleChecks';
+import { isCeo, isCounsellor } from '@/lib/roleChecks';
 import { resolveVisaTypeBucket, VISA_TYPE_BUCKETS, type VisaTypeBucket } from '@/lib/opsVisaType';
 
 const CLIENT_STATUSES = ['Active', 'Expired', 'Dormant but Active', 'Renewals', 'Refunds', 'Close'] as const;
@@ -30,6 +30,10 @@ const emptyVisaRow = () => {
 export async function GET(request: NextRequest) {
   const auth = requireAuth(request, ['operations.view', 'operations.manage']);
   if (isAuthError(auth)) return auth;
+  // The Ops Dashboard totals every client and lists all staff - for the operations team, not counselors.
+  if (isCounsellor(auth)) {
+    return NextResponse.json({ success: false, error: 'The Ops Dashboard is not available to counselors' }, { status: 403 });
+  }
 
   try {
     const { searchParams } = new URL(request.url);

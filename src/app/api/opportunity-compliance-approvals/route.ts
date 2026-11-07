@@ -65,7 +65,14 @@ export async function GET(request: NextRequest) {
       replacements.push(status);
     }
 
-    const whereClause = whereConditions.length ? `WHERE ${whereConditions.map((condition) => `a.${condition}`).join(' AND ')}` : '';
+    const scoped = whereConditions.map((condition) => `a.${condition}`);
+    // Only reviewers (compliance / branch manager / CEO) see everyone's submissions; anyone else sees the
+    // approvals of leads assigned to them or submitted by them.
+    if (!isComplianceReviewer(auth)) {
+      scoped.push('(a.submittedBy = ? OR l.assignTo = ? OR l.Counsilor = ?)');
+      replacements.push(auth.id, auth.id, auth.id);
+    }
+    const whereClause = scoped.length ? `WHERE ${scoped.join(' AND ')}` : '';
     const rows = await sequelize.query(`
       SELECT
         a.*,
