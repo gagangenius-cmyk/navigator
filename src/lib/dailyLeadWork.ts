@@ -162,7 +162,7 @@ export async function buildDailySheet(employeeId: number, date: string): Promise
   const monthStart = month.dates[0];
 
   // Fresh leads = leads ASSIGNED to the counselor that day / this month and still theirs. The assignment log says when (its new_value is
-  // the employee's name); a lead that was created already assigned and has no assignment entry counts on its created day.
+  // the employee's name); a lead created in the period and now theirs with no assignment entry for them (handed over another way) counts on its created day.
   const [emp] = await sequelize.query<{ name: string }>('SELECT name FROM crm_employee WHERE id = :employeeId LIMIT 1', {
     replacements: { employeeId }, type: QueryTypes.SELECT,
   });
@@ -175,8 +175,7 @@ export async function buildDailySheet(employeeId: number, date: string): Promise
   );
   const createdOwn = await sequelize.query<{ id: number; created: string }>(
     `SELECT l.id, l.created FROM crm_forum_leads l
-     WHERE (l.assignTo = :employeeId OR l.Counsilor = :employeeId) AND l.created >= :monthStart AND l.created < :dayEnd
-       AND NOT EXISTS (SELECT 1 FROM crm_remarks r WHERE r.lead_id = l.id AND r.action = 'lead_assigned')`,
+     WHERE (l.assignTo = :employeeId OR l.Counsilor = :employeeId) AND l.created >= :monthStart AND l.created < :dayEnd`,
     { replacements: { employeeId, monthStart: month.startUtc, dayEnd: day.endUtc }, type: QueryTypes.SELECT },
   );
   const firstAssignedDay = new Map<number, string>();
