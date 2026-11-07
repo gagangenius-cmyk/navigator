@@ -175,7 +175,29 @@ export async function buildDailySheet(employeeId: number, date: string): Promise
   );
   const worked = new Set<number>();
   const connected = new Set<number>();
-  const into = (statuses: string[]) => new Set(log.filter((r) => r.action === 'status_changed' && statuses.includes(norm(r.new_value))).map((r) => r.lead_id));
+  // Hot / Warm / Cold / DNP / Junk are how many of the counselor's leads sit in that status at the END of the day
+  // (today: right now). A past day is rebuilt from the status log: a lead that changed status after that day was in
+  // the status it changed away from.
+  const myLeads = await sequelize.query<{ id: number; status: string | null }>(
+    'SELECT id, status FROM crm_forum_leads WHERE assignTo = :employeeId OR Counsilor = :employeeId',
+    { replacements: { employeeId }, type: QueryTypes.SELECT },
+  );
+  const later = myLeads.length
+    ? await sequelize.query<{ lead_id: number; previous_value: string | null }>(
+      `SELECT r.lead_id, r.previous_value FROM crm_remarks r
+       WHERE r.action = 'status_changed' AND r.created_at >= :dayEnd AND r.lead_id IN (:ids)
+       ORDER BY r.created_at ASC, r.id ASC`,
+      { replacements: { dayEnd: day.endUtc, ids: myLeads.map((l) => l.id) }, type: QueryTypes.SELECT },
+    )
+    : [];
+  const statusAtEndOfDay = new Map<number, string>(myLeads.map((l) => [l.id, norm(l.status)]));
+  const seenLater = new Set<number>();
+  later.forEach((r) => {
+    if (seenLater.has(r.lead_id)) return;
+    seenLater.add(r.lead_id);
+    statusAtEndOfDay.set(r.lead_id, norm(r.previous_value));
+  });
+  const inStatus = (statuses: string[]) => [...statusAtEndOfDay.values()].filter((value) => statuses.includes(value)).length;
   log.forEach((r) => {
     worked.add(r.lead_id);
     if (r.action === 'status_changed' && !NO_CONTACT.has(norm(r.new_value))) connected.add(r.lead_id);
@@ -202,11 +224,11 @@ export async function buildDailySheet(employeeId: number, date: string): Promise
       { label: 'Fresh Lead MTD:-', value: Number(fresh?.mtd || 0) },
       { label: 'Calls FTD:-', value: worked.size },
       { label: 'Connected FTD:-', value: connected.size },
-      { label: 'Hot:-', value: into(['hot']).size },
-      { label: 'Warm:-', value: into(['warm']).size },
-      { label: 'Cold:-', value: into(['cold']).size },
-      { label: 'DNP:-', value: into(['dnp', 'not_answered', 'not answered', 'could not connect']).size },
-      { label: 'Junk:-', value: into(['junk']).size },
+      { label: 'Hot:-', value: inStatus(['hot']) },
+      { label: 'Warm:-', value: inStatus(['warm']) },
+      { label: 'Cold:-', value: inStatus(['cold']) },
+      { label: 'DNP:-', value: inStatus(['dnp', 'not_answered', 'not answered']) },
+      { label: 'Junk:-', value: inStatus(['junk']) },
       { label: 'Counselling FTD:-', value: Number(counselling?.ftd || 0) },
       { label: 'Counselling MTD:-', value: Number(counselling?.mtd || 0) },
       { label: 'Rev FTD:-', value: Math.round(Number(revenue?.ftd || 0)) },
