@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import ExcelJS from 'exceljs';
 import { QueryTypes } from 'sequelize';
 import { sequelize } from '@/lib/sequelize';
-import { buildDailyWork } from '@/lib/dailyLeadWork';
+import { buildDailyWork, buildDailySheet } from '@/lib/dailyLeadWork';
 import { resolveWorkTarget } from '@/lib/dailyWorkTarget';
 import { dubaiToday } from '@/lib/dubaiDate';
 import { logDataAccess } from '@/lib/dataAccessAudit';
@@ -87,6 +87,27 @@ export async function GET(request: NextRequest) {
       rows.forEach((r) => ws.addRow(r));
       return ws;
     };
+
+    // First sheet: the one-column daily report (date | counselor first name, then FTD / MTD figures) in the format
+    // counselors send to their manager. Day = the last day of the chosen period.
+    const sheet = await buildDailySheet(target.employeeId, data.range.to);
+    const daily = wb.addWorksheet('Daily report');
+    daily.columns = [{ width: 24 }, { width: 14 }];
+    const [, mm, dd] = data.range.to.split('-').map(Number);
+    const monthName = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][mm - 1];
+    const header = daily.addRow([`${dd}-${monthName}`, who.split(' ')[0]]);
+    sheet.rows.forEach((r) => daily.addRow([r.label, r.value]));
+    daily.eachRow((row, rowNumber) => {
+      row.eachCell((cell, col) => {
+        cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+        cell.alignment = { horizontal: rowNumber === 1 || col === 2 ? 'right' : 'left' };
+        if (rowNumber > 1 && col === 1) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE7E6E6' } };
+        if (rowNumber > 1 && col === 2) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE7E6E6' } };
+      });
+    });
+    header.font = { bold: false };
+    daily.getCell('A16').value = 'FTD = for the day, MTD = month to date (Dubai days). Calls = leads worked that day; Connected = leads moved into a talked-to status; DNP = Not answered / DNP / Could not connect; Counselling = appointments; Rev = payments received on the leads of the counselor.';
+    daily.getCell('A16').font = { italic: true, size: 9, color: { argb: 'FF6B7280' } };
 
     addSheet('Summary', [{ header: 'Item', key: 'item', width: 34 }, { header: 'Value', key: 'value', width: 30 }], [
       { item: 'Counselor', value: who },

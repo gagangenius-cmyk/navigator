@@ -145,3 +145,72 @@ export async function buildDailyWork(employeeId: number, endDate: string, days: 
     truncated: rows.length >= ROW_LIMIT,
   };
 }
+
+// ---- The one-column "daily sheet" a counselor sends in (FTD = for the day, MTD = month to date) ----
+const NO_CONTACT = new Set(['new', 'not_answered', 'not answered', 'dnp', 'could not connect', 'junk', '(no status)']);
+const norm = (value: string | null | undefined) => (value || '').trim().toLowerCase();
+
+export interface DailySheet {
+  date: string;
+  rows: Array<{ label: string; value: number }>;
+}
+
+export async function buildDailySheet(employeeId: number, date: string): Promise<DailySheet> {
+  const dayOfMonth = Number(date.slice(8, 10)) || 1;
+  const day = dubaiDayRangeUtc(date, 1);
+  const month = dubaiDayRangeUtc(date, dayOfMonth);
+  const monthStart = month.dates[0];
+
+  const [fresh] = await sequelize.query<{ ftd: number; mtd: number }>(
+    `SELECT SUM(l.created >= :dayStart AND l.created < :dayEnd) AS ftd, COUNT(*) AS mtd
+     FROM crm_forum_leads l
+     WHERE (l.assignTo = :employeeId OR l.Counsilor = :employeeId) AND l.created >= :monthStart AND l.created < :dayEnd`,
+    { replacements: { employeeId, dayStart: day.startUtc, dayEnd: day.endUtc, monthStart: month.startUtc }, type: QueryTypes.SELECT },
+  );
+
+  const log = await sequelize.query<{ lead_id: number; action: string; new_value: string | null }>(
+    `SELECT r.lead_id, r.action, r.new_value FROM crm_remarks r
+     WHERE r.actor_id = :employeeId AND r.action IN (:actions) AND r.created_at >= :dayStart AND r.created_at < :dayEnd`,
+    { replacements: { employeeId, actions: WORK_ACTIONS, dayStart: day.startUtc, dayEnd: day.endUtc }, type: QueryTypes.SELECT },
+  );
+  const worked = new Set<number>();
+  const connected = new Set<number>();
+  const into = (statuses: string[]) => new Set(log.filter((r) => r.action === 'status_changed' && statuses.includes(norm(r.new_value))).map((r) => r.lead_id));
+  log.forEach((r) => {
+    worked.add(r.lead_id);
+    if (r.action === 'status_changed' && !NO_CONTACT.has(norm(r.new_value))) connected.add(r.lead_id);
+  });
+
+  const [counselling] = await sequelize.query<{ ftd: number; mtd: number }>(
+    `SELECT SUM(a.date = :date) AS ftd, COUNT(*) AS mtd FROM appointments a
+     WHERE a.counsilorid = :employeeId AND a.date >= :monthStart AND a.date <= :date`,
+    { replacements: { employeeId, date, monthStart }, type: QueryTypes.SELECT },
+  );
+
+  const [revenue] = await sequelize.query<{ ftd: number | null; mtd: number | null }>(
+    `SELECT SUM(CASE WHEN DATE(ph.date) = :date THEN ph.amount ELSE 0 END) AS ftd, SUM(ph.amount) AS mtd
+     FROM crm_pay_history ph JOIN crm_forum_leads l ON l.id = ph.leadId
+     WHERE (l.assignTo = :employeeId OR l.Counsilor = :employeeId) AND DATE(ph.date) >= :monthStart AND DATE(ph.date) <= :date
+       AND COALESCE(LOWER(ph.status), '') NOT IN ('rejected', 'cancelled', 'canceled', 'refunded')`,
+    { replacements: { employeeId, date, monthStart }, type: QueryTypes.SELECT },
+  );
+
+  return {
+    date,
+    rows: [
+      { label: 'Fresh Lead FTD:-', value: Number(fresh?.ftd || 0) },
+      { label: 'Fresh Lead MTD:-', value: Number(fresh?.mtd || 0) },
+      { label: 'Calls FTD:-', value: worked.size },
+      { label: 'Connected FTD:-', value: connected.size },
+      { label: 'Hot:-', value: into(['hot']).size },
+      { label: 'Warm:-', value: into(['warm']).size },
+      { label: 'Cold:-', value: into(['cold']).size },
+      { label: 'DNP:-', value: into(['dnp', 'not_answered', 'not answered', 'could not connect']).size },
+      { label: 'Junk:-', value: into(['junk']).size },
+      { label: 'Counselling FTD:-', value: Number(counselling?.ftd || 0) },
+      { label: 'Counselling MTD:-', value: Number(counselling?.mtd || 0) },
+      { label: 'Rev FTD:-', value: Math.round(Number(revenue?.ftd || 0)) },
+      { label: 'Rev MTD:-', value: Math.round(Number(revenue?.mtd || 0)) },
+    ],
+  };
+}
