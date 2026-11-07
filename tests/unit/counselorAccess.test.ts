@@ -19,6 +19,7 @@ describe('counselor page access', () => {
 
   it.each([
     '/admin/lead-assignment-availability', '/admin/leads/assignment-rules', '/admin/lead-pool', '/admin/finance', '/admin/employees', '/admin/roles',
+    '/admin/reports/finance', '/admin/reports/branch-performance', '/admin/reports/generator',
     '/admin/ops-dashboard', '/admin/operations-management', '/admin/ops-report', '/admin/ops-clients/visit-visa', '/admin/ops-assign', '/admin/it-support',
   ])('cannot open %s', (path) => expect(canAccessAdminPath(counselor, path)).toBe(false));
 });

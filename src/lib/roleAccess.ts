@@ -73,7 +73,8 @@ export const canAccessAdminPath = (user: AccessUser | null | undefined, pathname
   // Operations-team tools show every client / case in the company, which a counselor must not see. They keep
   // "My Assignments" (tasks assigned to them); the other Operations pages and the Operations Report are for the ops team.
   if (roleKey === 'sales' && !isCeoOrDirectorOfSales(user)
-    && (path === '/admin/it-support' || path === '/admin/operations-management' || path === '/admin/ops-report'
+    && (path === '/admin/reports/finance' || path === '/admin/reports/branch-performance' || path === '/admin/reports/generator'
+      || path === '/admin/it-support' || path === '/admin/operations-management' || path === '/admin/ops-report'
       || (path.startsWith('/admin/ops-') && path !== '/admin/ops-my-assignments'))) {
     return false;
   }
