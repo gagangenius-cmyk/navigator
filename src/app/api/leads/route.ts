@@ -284,8 +284,8 @@ export async function GET(request: NextRequest) {
       // client in their scope. Counselors already only ever see their own via the
       // !canViewAll branch below, so 'my-clients' is equivalent to plain 'clients' for them.
       if (opportunityView === 'my-clients') {
-        whereConditions.push(`(l.Counsilor = ? OR l.assignTo = ? OR EXISTS (SELECT 1 FROM crm_opportunities o WHERE o.leadId = l.id AND o.is_deleted = 0 AND (o.assignedTo = ? OR o.createdBy = ?)))`)
-        replacements.push(currentUser.id, currentUser.id, currentUser.id, currentUser.id)
+        whereConditions.push(`(l.Counsilor = ? OR l.assignTo = ? OR EXISTS (SELECT 1 FROM crm_opportunities o WHERE o.leadId = l.id AND o.is_deleted = 0 AND o.assignedTo = ?))`)
+        replacements.push(currentUser.id, currentUser.id, currentUser.id)
       } else if (isBranchManager) {
         whereConditions.push('l.branch = ?')
         replacements.push(currentUser.branch)
@@ -293,8 +293,8 @@ export async function GET(request: NextRequest) {
         whereConditions.push('l.region = ?')
         replacements.push(currentUser.region)
       } else if (!canViewAll) {
-        whereConditions.push(`(l.Counsilor = ? OR l.assignTo = ? OR EXISTS (SELECT 1 FROM crm_opportunities o WHERE o.leadId = l.id AND o.is_deleted = 0 AND (o.assignedTo = ? OR o.createdBy = ?)))`)
-        replacements.push(currentUser.id, currentUser.id, currentUser.id, currentUser.id)
+        whereConditions.push(`(l.Counsilor = ? OR l.assignTo = ? OR EXISTS (SELECT 1 FROM crm_opportunities o WHERE o.leadId = l.id AND o.is_deleted = 0 AND o.assignedTo = ?))`)
+        replacements.push(currentUser.id, currentUser.id, currentUser.id)
       }
     } else if (opportunityView === 'opportunities') {
       whereConditions.push(HAS_OPP_SQL)
@@ -310,12 +310,12 @@ export async function GET(request: NextRequest) {
           l.Counsilor = ? OR l.assignTo = ?
           OR EXISTS (
             SELECT 1 FROM crm_opportunities o
-            WHERE o.leadId = l.id AND o.is_deleted = 0 AND (o.assignedTo = ? OR o.createdBy = ?)
+            WHERE o.leadId = l.id AND o.is_deleted = 0 AND o.assignedTo = ?
           )
-          OR (l.Counsilor IS NULL AND l.assignTo IS NULL
-              AND NOT EXISTS (SELECT 1 FROM crm_opportunities o2 WHERE o2.leadId = l.id AND o2.is_deleted = 0 AND o2.assignedTo IS NOT NULL))
         )`)
-        replacements.push(currentUser.id, currentUser.id, currentUser.id, currentUser.id)
+        // A counselor sees only leads assigned to them (the lead's, or their opportunity). Unassigned
+        // leads that have an opportunity used to be visible to every counselor here.
+        replacements.push(currentUser.id, currentUser.id, currentUser.id)
       }
     } else if (opportunityView === 'rejected') {
       whereConditions.push(HAS_OPP_SQL)
@@ -336,10 +336,10 @@ export async function GET(request: NextRequest) {
           l.Counsilor = ? OR l.assignTo = ?
           OR EXISTS (
             SELECT 1 FROM crm_opportunities o
-            WHERE o.leadId = l.id AND o.is_deleted = 0 AND (o.assignedTo = ? OR o.createdBy = ?)
+            WHERE o.leadId = l.id AND o.is_deleted = 0 AND o.assignedTo = ?
           )
         )`)
-        replacements.push(currentUser.id, currentUser.id, currentUser.id, currentUser.id)
+        replacements.push(currentUser.id, currentUser.id, currentUser.id)
       }
     } else if (opportunityView === 'duplicates') {
       whereConditions.push('l.duplicate = 1')

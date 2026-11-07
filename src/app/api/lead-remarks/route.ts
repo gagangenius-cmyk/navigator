@@ -1,3 +1,5 @@
+import { assertLeadAccess } from '@/lib/leadAccess';
+import { getRecordVisibilityScope } from '@/lib/roleChecks';
 import { NextRequest, NextResponse } from 'next/server';
 import { QueryTypes } from 'sequelize';
 import { sequelize, connectDB } from '@/lib/sequelize';
@@ -21,7 +23,6 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
     const leadId = Number(body.leadId ?? body.lead_id ?? body.lead);
-    const employeeId = Number(body.employeeId ?? body.emp ?? body.userId ?? 1);
     const remark = String(body.remark ?? body.notes ?? '').trim();
     const now = new Date();
 
@@ -43,6 +44,18 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    // leads.update alone let a counselor add a remark to ANY lead id; apply the same lead scope as the
+    // rest of the app (a counselor: only leads assigned to them).
+    const accessError = await assertLeadAccess(auth, leadId);
+    if (accessError) return accessError;
+
+    // The author comes from the session. The body's employeeId was trusted (and defaulted to employee 1),
+    // so a remark could be written in someone else's name; only a role that may see other people's leads
+    // (Branch Manager / CEO ...) may still post on behalf of another employee.
+    const postsAsSelfOnly = getRecordVisibilityScope(auth) === 'own';
+    const requestedEmployeeId = Number(body.employeeId ?? body.emp ?? body.userId);
+    const employeeId = postsAsSelfOnly || !requestedEmployeeId ? Number(auth.id) : requestedEmployeeId;
 
     const [recentDuplicate] = await sequelize.query<{ id: number }>(
       `SELECT id FROM crm_forum_leads_remarks
@@ -142,6 +155,9 @@ export async function PATCH(request: NextRequest) {
     if (!existing) {
       return NextResponse.json({ error: 'Remark not found' }, { status: 404 });
     }
+    // Editing a remark needs access to the lead it belongs to (any counselor could rewrite any remark by id).
+    const remarkAccessError = await assertLeadAccess(auth, Number(existing.lead));
+    if (remarkAccessError) return remarkAccessError;
 
     await sequelize.query(
       'UPDATE crm_forum_leads_remarks SET remark = ? WHERE id = ?',

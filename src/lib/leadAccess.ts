@@ -37,7 +37,7 @@ export async function assertLeadAccess(user: User, leadId: number): Promise<Next
   }>(
     `SELECT l.branch, l.region, l.assignTo, l.Counsilor,
             EXISTS (SELECT 1 FROM crm_opportunities o
-                    WHERE o.leadId = l.id AND o.is_deleted = 0 AND (o.assignedTo = :uid OR o.createdBy = :uid)) AS onMyOpportunity
+                    WHERE o.leadId = l.id AND o.is_deleted = 0 AND o.assignedTo = :uid) AS onMyOpportunity
      FROM crm_forum_leads l WHERE l.id = :leadId LIMIT 1`,
     { replacements: { leadId, uid: user.id }, type: QueryTypes.SELECT },
   );
@@ -89,7 +89,7 @@ export async function getScopedOpportunityIds(user: User): Promise<number[] | nu
          ? 'COALESCE(l.branch, o.branchId) = :branch'
          : scope === 'region'
            ? 'l.region = :region'
-           : '(o.assignedTo = :uid OR o.createdBy = :uid OR l.assignTo = :uid OR l.Counsilor = :uid)'
+           : '(o.assignedTo = :uid OR l.assignTo = :uid OR l.Counsilor = :uid)'
      }`,
     { replacements: { branch: user.branch || 0, region: user.region || 0, uid: user.id }, type: QueryTypes.SELECT },
   );

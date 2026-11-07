@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { useAuth } from '@/contexts/AuthContext';
+import DailyLeadWork from '@/components/dashboard/DailyLeadWork';
 
 interface DashboardStats {
   totalLeads: number;
@@ -239,6 +240,9 @@ export default function CounselorDashboard() {
         <StatTile label="Collected" value={money(stats.totalPaidAmount)} icon={Wallet} accent="bg-green-50 text-green-600" />
         <StatTile label="Outstanding Balance" value={money(stats.totalBalance)} icon={Wallet} accent="bg-red-50 text-red-600" />
       </div>
+
+      {/* What the counselor did on their leads, per day, and which status the leads moved into */}
+      <DailyLeadWork />
 
       <div className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-3">
         {/* Performance trend / achievement */}

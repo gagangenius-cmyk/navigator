@@ -49,14 +49,14 @@ async function computeDashboardData(
   // the CRM. toISOString() alone is the UTC day, which lags Dubai by a day
   // between 00:00 and 04:00 local and hid today's follow-ups/appointments.
   const today    = dubaiToday();
-  const weekAgo  = new Date(Date.now() -  7 * 86400000).toISOString().split('T')[0];
-  const monthAgo = new Date(Date.now() - 30 * 86400000).toISOString().split('T')[0];
-  const yearAgo  = new Date(Date.now() - 365 * 86400000).toISOString().split('T')[0];
+  const weekAgo  = dubaiToday(-7);
+  const monthAgo = dubaiToday(-30);
+  const yearAgo  = dubaiToday(-365);
 
   const hasDateRange = Boolean(dateFromParam && dateToParam
     && !Number.isNaN(new Date(dateFromParam).getTime())
     && !Number.isNaN(new Date(dateToParam).getTime()));
-  const dateRangeSql = hasDateRange ? 'DATE(COALESCE(l.created, l.regdate)) BETWEEN :dateFrom AND :dateTo' : '';
+  const dateRangeSql = hasDateRange ? 'DATE(COALESCE(DATE_ADD(l.created, INTERVAL 4 HOUR), l.regdate)) BETWEEN :dateFrom AND :dateTo' : '';
   const dateRangeReplacements = hasDateRange ? { dateFrom: dateFromParam, dateTo: dateToParam } : {};
 
   // ── Build WHERE clause for lead queries based on role ────────────────────
@@ -111,9 +111,9 @@ async function computeDashboardData(
   const [leadStats] = await sequelize.query<any>(`
     SELECT
       COUNT(*) AS totalLeads,
-      SUM(CASE WHEN DATE(COALESCE(l.created, l.regdate)) = :today THEN 1 ELSE 0 END) AS todayLeads,
-      SUM(CASE WHEN DATE(COALESCE(l.created, l.regdate)) >= :weekAgo THEN 1 ELSE 0 END) AS weekLeads,
-      SUM(CASE WHEN DATE(COALESCE(l.created, l.regdate)) >= :monthAgo THEN 1 ELSE 0 END) AS monthLeads,
+      SUM(CASE WHEN DATE(COALESCE(DATE_ADD(l.created, INTERVAL 4 HOUR), l.regdate)) = :today THEN 1 ELSE 0 END) AS todayLeads,
+      SUM(CASE WHEN DATE(COALESCE(DATE_ADD(l.created, INTERVAL 4 HOUR), l.regdate)) >= :weekAgo THEN 1 ELSE 0 END) AS weekLeads,
+      SUM(CASE WHEN DATE(COALESCE(DATE_ADD(l.created, INTERVAL 4 HOUR), l.regdate)) >= :monthAgo THEN 1 ELSE 0 END) AS monthLeads,
       SUM(CASE WHEN LOWER(COALESCE(l.status, '')) IN ('converted', 'retained', 'client', 'enrolled')
              OR LOWER(COALESCE(l.opportunity_status, '')) = 'won' THEN 1 ELSE 0 END) AS convertedLeads,
       -- Leads with a REAL open follow-up due today or earlier. This used to read the
@@ -186,12 +186,12 @@ async function computeDashboardData(
 
   const [leadTrendStats] = await sequelize.query<any>(`
     SELECT
-      SUM(CASE WHEN DATE(COALESCE(l.created, l.regdate)) >= :thisMonthStart THEN 1 ELSE 0 END) AS thisMonthLeads,
-      SUM(CASE WHEN DATE(COALESCE(l.created, l.regdate)) >= :thisMonthStart
+      SUM(CASE WHEN DATE(COALESCE(DATE_ADD(l.created, INTERVAL 4 HOUR), l.regdate)) >= :thisMonthStart THEN 1 ELSE 0 END) AS thisMonthLeads,
+      SUM(CASE WHEN DATE(COALESCE(DATE_ADD(l.created, INTERVAL 4 HOUR), l.regdate)) >= :thisMonthStart
              AND (LOWER(COALESCE(l.status, '')) IN ('converted','retained','client','enrolled') OR LOWER(COALESCE(l.opportunity_status, '')) = 'won')
            THEN 1 ELSE 0 END) AS thisMonthConverted,
-      SUM(CASE WHEN DATE(COALESCE(l.created, l.regdate)) BETWEEN :lastMonthStart AND :lastMonthEnd THEN 1 ELSE 0 END) AS lastMonthLeads,
-      SUM(CASE WHEN DATE(COALESCE(l.created, l.regdate)) BETWEEN :lastMonthStart AND :lastMonthEnd
+      SUM(CASE WHEN DATE(COALESCE(DATE_ADD(l.created, INTERVAL 4 HOUR), l.regdate)) BETWEEN :lastMonthStart AND :lastMonthEnd THEN 1 ELSE 0 END) AS lastMonthLeads,
+      SUM(CASE WHEN DATE(COALESCE(DATE_ADD(l.created, INTERVAL 4 HOUR), l.regdate)) BETWEEN :lastMonthStart AND :lastMonthEnd
              AND (LOWER(COALESCE(l.status, '')) IN ('converted','retained','client','enrolled') OR LOWER(COALESCE(l.opportunity_status, '')) = 'won')
            THEN 1 ELSE 0 END) AS lastMonthConverted
     FROM crm_forum_leads l
@@ -409,7 +409,7 @@ async function computeDashboardData(
       DATE_FORMAT(COALESCE(l.created, l.regdate), '%Y-%m') AS month,
       COUNT(*) AS count
     FROM crm_forum_leads l
-    ${roleOnlyWhere ? roleOnlyWhere + ' AND' : 'WHERE'} DATE(COALESCE(l.created, l.regdate)) >= :yearAgo
+    ${roleOnlyWhere ? roleOnlyWhere + ' AND' : 'WHERE'} DATE(COALESCE(DATE_ADD(l.created, INTERVAL 4 HOUR), l.regdate)) >= :yearAgo
     GROUP BY DATE_FORMAT(COALESCE(l.created, l.regdate), '%Y-%m')
     ORDER BY month ASC
   `, { replacements: { yearAgo, ...roleOnlyReplacements }, type: QueryTypes.SELECT });
@@ -417,11 +417,11 @@ async function computeDashboardData(
   // ── Daily Trend (30 days) ──────────────────────────────────────────────────
   const leadTrend = await sequelize.query<any>(`
     SELECT
-      DATE(COALESCE(l.created, l.regdate)) AS date,
+      DATE(COALESCE(DATE_ADD(l.created, INTERVAL 4 HOUR), l.regdate)) AS date,
       COUNT(*) AS leads
     FROM crm_forum_leads l
-    ${roleOnlyWhere ? roleOnlyWhere + ' AND' : 'WHERE'} DATE(COALESCE(l.created, l.regdate)) >= :monthAgo
-    GROUP BY DATE(COALESCE(l.created, l.regdate))
+    ${roleOnlyWhere ? roleOnlyWhere + ' AND' : 'WHERE'} DATE(COALESCE(DATE_ADD(l.created, INTERVAL 4 HOUR), l.regdate)) >= :monthAgo
+    GROUP BY DATE(COALESCE(DATE_ADD(l.created, INTERVAL 4 HOUR), l.regdate))
     ORDER BY date ASC
   `, { replacements: { monthAgo, ...roleOnlyReplacements }, type: QueryTypes.SELECT });
 

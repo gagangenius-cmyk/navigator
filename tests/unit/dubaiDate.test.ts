@@ -44,3 +44,21 @@ describe('parseCrmDateTime', () => {
     expect(parseCrmDateTime(d)).toBe(d);
   });
 });
+
+import { dubaiDayOfUtc, dubaiDayRangeUtc } from '@/lib/dubaiDate';
+
+describe('dubaiDayRangeUtc / dubaiDayOfUtc', () => {
+  it('one Dubai day is 20:00Z the day before to 20:00Z', () => {
+    expect(dubaiDayRangeUtc('2026-11-07', 1)).toEqual({ startUtc: '2026-11-06 20:00:00', endUtc: '2026-11-07 20:00:00', dates: ['2026-11-07'] });
+  });
+  it('a week ends on the given day and lists every date', () => {
+    const r = dubaiDayRangeUtc('2026-11-07', 7);
+    expect(r.startUtc).toBe('2026-11-00 20:00:00'.replace('2026-11-00', '2026-10-31'));
+    expect(r.dates[0]).toBe('2026-11-01');
+    expect(r.dates).toHaveLength(7);
+  });
+  it('maps UTC timestamps to the Dubai day', () => {
+    expect(dubaiDayOfUtc('2026-11-06 20:30:00')).toBe('2026-11-07');
+    expect(dubaiDayOfUtc('2026-11-06 19:59:59')).toBe('2026-11-06');
+  });
+});

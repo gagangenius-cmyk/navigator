@@ -62,3 +62,25 @@ export function toLocalDateString(date: Date): string {
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
+
+/**
+ * UTC bounds ('YYYY-MM-DD HH:mm:ss', start inclusive / end exclusive) of the last `days` Dubai calendar
+ * days ending on `endDate` (a Dubai YYYY-MM-DD, default today). Tables that store UTC timestamps
+ * (crm_remarks.created_at ...) must be compared against these, not against a bare date.
+ */
+export function dubaiDayRangeUtc(endDate: string = dubaiToday(), days = 1): { startUtc: string; endUtc: string; dates: string[] } {
+  const safeDays = Math.min(Math.max(Math.floor(days) || 1, 1), 62);
+  const [y, m, d] = endDate.split('-').map(Number);
+  const endDayStartUtcMs = Date.UTC(y, (m || 1) - 1, d || 1) - DUBAI_OFFSET_MS;
+  const startUtcMs = endDayStartUtcMs - (safeDays - 1) * 86400000;
+  const fmt = (ms: number) => new Date(ms).toISOString().slice(0, 19).replace('T', ' ');
+  const dates = Array.from({ length: safeDays }, (_, i) => new Date(startUtcMs + DUBAI_OFFSET_MS + i * 86400000).toISOString().slice(0, 10));
+  return { startUtc: fmt(startUtcMs), endUtc: fmt(endDayStartUtcMs + 86400000), dates };
+}
+
+/** The Dubai calendar day (YYYY-MM-DD) of a UTC 'YYYY-MM-DD HH:mm:ss' / ISO timestamp. */
+export function dubaiDayOfUtc(value: string | Date): string {
+  const text = value instanceof Date ? value.toISOString() : String(value).trim().replace(' ', 'T');
+  const date = new Date(/(Z|[+-]\d{2}:?\d{2})$/.test(text) ? text : `${text}Z`);
+  return new Date(date.getTime() + DUBAI_OFFSET_MS).toISOString().slice(0, 10);
+}
