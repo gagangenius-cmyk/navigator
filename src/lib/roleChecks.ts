@@ -24,7 +24,7 @@ export function isFoeOrCeo(user: RoleCheckUser): boolean {
 }
 
 export function isFoeOrBranchManagerOrCeo(user: RoleCheckUser): boolean {
-  if (isCeo(user)) return true;
+  if (isCeoOrDirectorOfSales(user)) return true;
   // `type` isn't reliably a short code — it falls back to a verbose role
   // label (e.g. "FOE (Front Office Executive)") whenever crm_role.type is
   // unset in the DB, so match by substring across roleName + type rather
@@ -57,7 +57,9 @@ export function isCeoOrDirectorOfSales(user: RoleCheckUser): boolean {
 // Deliberately excludes FOE - for actions (e.g. editing a lead's contact info
 // once it's already in the CRM) that only a manager tier and CEO may perform.
 export function isBranchManagerOrCeo(user: RoleCheckUser): boolean {
-  if (isCeo(user)) return true;
+  // Director of Sales manages the whole org, so counts as manager tier (and, via the callers' isCeoOrDirectorOfSales
+  // checks, is not limited to one branch).
+  if (isCeoOrDirectorOfSales(user)) return true;
   const text = `${String(user?.roleName || '')} ${String(user?.type || '')}`.toLowerCase();
   return (
     text.includes('branch manager')

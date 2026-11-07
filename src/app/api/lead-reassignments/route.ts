@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { sequelize } from '@/lib/sequelize';
 import { requireAuth, isAuthError } from '@/lib/apiAuth';
-import { isFoeOrBranchManagerOrCeo, isBranchManagerOrCeo, isCeo } from '@/lib/roleChecks';
+import { isFoeOrBranchManagerOrCeo, isBranchManagerOrCeo, isCeo, isCeoOrDirectorOfSales } from '@/lib/roleChecks';
 
 export async function GET(request: NextRequest) {
   const auth = requireAuth(request);
@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
     // user), so this needs its own visibility clamp: CEO sees everything,
     // Branch Manager their own branch, everyone else only reassignments
     // they were personally involved in.
-    if (!isCeo(auth)) {
+    if (!isCeoOrDirectorOfSales(auth)) {
       if (isBranchManagerOrCeo(auth)) {
         whereConditions.push('l.branch = ?');
         replacements.push(auth.branch || 0);

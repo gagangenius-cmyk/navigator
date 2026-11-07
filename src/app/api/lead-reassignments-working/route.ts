@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { QueryTypes } from 'sequelize';
 import { sequelize } from '@/lib/sequelize';
 import { requireAuth, isAuthError } from '@/lib/apiAuth';
-import { isFoeOrBranchManagerOrCeo, isBranchManagerOrCeo, isCeo } from '@/lib/roleChecks';
+import { isFoeOrBranchManagerOrCeo, isBranchManagerOrCeo, isCeo, isCeoOrDirectorOfSales } from '@/lib/roleChecks';
 import { recordLeadAssignment } from '@/lib/leadRemarks';
 
 function getInsertId(result: unknown): number {
@@ -129,7 +129,7 @@ export async function POST(request: NextRequest) {
     // FOE/Branch Manager may only auto-approve within their own branch; CEO
     // is unrestricted. This is the immediate-move path (autoApprove), so the
     // lead's branch must be checked before the reassignment record is even created.
-    if (body.autoApprove && !isCeo(auth)) {
+    if (body.autoApprove && !isCeoOrDirectorOfSales(auth)) {
       const leadBranch = (leadCheck as any[])[0].branch;
       if (leadBranch !== null && Number(leadBranch) !== Number(auth.branch || 0)) {
         return NextResponse.json(
@@ -309,7 +309,7 @@ export async function PUT(request: NextRequest) {
       }
 
       // FOE/Branch Manager may only approve within their own branch; CEO is unrestricted.
-      if (!isCeo(auth)) {
+      if (!isCeoOrDirectorOfSales(auth)) {
         const [leadBranchRows] = await sequelize.query(
           'SELECT branch FROM crm_forum_leads WHERE id = ? LIMIT 1',
           { replacements: [reassignmentRow.leadId] },

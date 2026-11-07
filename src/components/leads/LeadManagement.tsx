@@ -21,7 +21,7 @@ import { Lead } from '@/types/lead';
 
 const SendTemplateDrawer = dynamic(() => import('@/components/leads/SendTemplateDrawer'), { ssr: false });
 import { useAuth } from '@/contexts/AuthContext';
-import { isBranchManagerOrCeo, isCeo, isFoe, isFoeOrBranchManagerOrCeo, isCounsellor } from '@/lib/roleChecks';
+import { isBranchManagerOrCeo, isCeo, isFoe, isFoeOrBranchManagerOrCeo, isCounsellor, isCeoOrDirectorOfSales } from '@/lib/roleChecks';
 import { getLeadBranchDetails, printReceipt as printReceiptDocument } from '@/lib/receiptTemplate';
 
 interface LeadManagementProps {
@@ -347,7 +347,7 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
         // BM only sees counselors in their own branch; CEO sees everyone -
         // same branch-scoping convention used for lead reassignment (loadCounselors, below).
         const params = new URLSearchParams({ status: '1', limit: '200' });
-        if (!isCeo(user) && user?.branch) params.set('branch', String(user.branch));
+        if (!isCeoOrDirectorOfSales(user) && user?.branch) params.set('branch', String(user.branch));
         const res = await fetch(`/api/employees?${params.toString()}`);
         if (!res.ok) return;
         const data = await res.json();

@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { QueryTypes } from 'sequelize';
 import { sequelize, connectDB } from '@/lib/sequelize';
 import { requireAuth, isAuthError } from '@/lib/apiAuth';
-import { isFoeOrBranchManagerOrCeo, isBranchManagerOrCeo, isCeo } from '@/lib/roleChecks';
+import { isFoeOrBranchManagerOrCeo, isBranchManagerOrCeo, isCeo, isCeoOrDirectorOfSales } from '@/lib/roleChecks';
 import { logLeadRemark } from '@/lib/leadRemarks';
 import { notifyLeadAssigned } from '@/lib/notify';
 import { enqueueTransferNotice } from '@/lib/leadTransferNotices';
@@ -375,7 +375,7 @@ export async function PUT(
     // the assign-modal UI already filters its employee list to the caller's
     // branch, but that's client-side only. Enforce it here too so it can't be
     // bypassed by calling this endpoint directly with an out-of-branch employee id.
-    if (touchesAssignment && !isCeo(auth)) {
+    if (touchesAssignment && !isCeoOrDirectorOfSales(auth)) {
       const targetEmployeeId = Number(data.assignTo ?? data.Counsilor ?? data.leadOwner);
       if (targetEmployeeId) {
         const [targetRow] = await sequelize.query<{ branch: number | null }>(
@@ -408,7 +408,7 @@ export async function PUT(
     // lead) is unaffected by this check - it exists specifically to stop a
     // Branch Manager correcting/editing another branch's record, which today
     // nothing prevents.
-    if (isBranchManagerOrCeo(auth) && !isCeo(auth)) {
+    if (isBranchManagerOrCeo(auth) && !isCeoOrDirectorOfSales(auth)) {
       const leadBranch = Number((existingLead as Record<string, unknown>).branch);
       if (leadBranch !== Number(auth.branch || 0)) {
         return NextResponse.json({ error: 'You can only update leads/clients in your own branch' }, { status: 403 });
