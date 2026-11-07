@@ -62,3 +62,18 @@ describe('dubaiDayRangeUtc / dubaiDayOfUtc', () => {
     expect(dubaiDayOfUtc('2026-11-06 19:59:59')).toBe('2026-11-06');
   });
 });
+
+import { parseUtcTimestamp } from '@/lib/dubaiDate';
+
+describe('parseUtcTimestamp', () => {
+  it('reads zone-less server timestamps as UTC', () => {
+    expect(parseUtcTimestamp('2026-11-07 09:50:00').toISOString()).toBe('2026-11-07T09:50:00.000Z');
+    expect(parseUtcTimestamp('2026-11-07T09:50:00').toISOString()).toBe('2026-11-07T09:50:00.000Z');
+  });
+  it('leaves zoned values and Dates alone, and gives an invalid Date for empty', () => {
+    expect(parseUtcTimestamp('2026-11-07T09:50:00.000Z').toISOString()).toBe('2026-11-07T09:50:00.000Z');
+    expect(Number.isNaN(parseUtcTimestamp('').getTime())).toBe(true);
+    const d = new Date('2026-01-01T00:00:00Z');
+    expect(parseUtcTimestamp(d)).toBe(d);
+  });
+});

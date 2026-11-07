@@ -1,4 +1,5 @@
 import { syncLeadAppointment } from '@/lib/leadSchedule';
+import { invalidateReportCaches, CACHE_TAGS } from '../lib/reportCache';
 import { Model, DataTypes, Optional } from 'sequelize';
 import { sequelize } from '../lib/sequelize';
 interface AppointmentsAttributes {
@@ -206,6 +207,9 @@ const syncSafely = async (leadId: unknown, options: { transaction?: unknown }) =
     // Never fail the appointment write because the mirror column couldn't update.
     console.error('Failed to sync lead appointment column:', error);
   }
+  // The dashboards cache their aggregates (60s): without this a just-booked appointment showed as
+  // "No appointments fixed for today" until the cache expired.
+  invalidateReportCaches([CACHE_TAGS.appointments]);
 };
 Appointments.addHook('beforeUpdate', (appt) => {
   (appt as unknown as SyncState).__prevLeadId = appt.previous('leadid') as number | null;

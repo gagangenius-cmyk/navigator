@@ -447,6 +447,9 @@ export async function PUT(
     for (const [rawKey, value] of Object.entries(data)) {
       const key = aliases[rawKey] || rawKey;
       if (key === 'id' || !editableFields.has(key) || value === undefined) continue;
+      // followup is a NOT NULL date column, and an empty Prospect Follow-Up (nothing scheduled) must leave it alone
+      // rather than try to write '' into it.
+      if (key === 'followup' && (value === '' || value === null)) continue;
       updateFields.push(`${key} = ?`);
       const normalizedValue = normalizeLeadUpdateValue(key, value);
       let resolvedValue: unknown;

@@ -71,6 +71,8 @@ interface LeadApiData {
   assignTo?: number | string | null;
   created?: string | null;
   followup?: string | null;
+  folowuptime?: string | null;
+  followupstat?: number | string | null;
   status?: string | null;
   priority?: string | null;
   lead_remark?: string | null;
@@ -161,6 +163,17 @@ const formatDateTime = (value?: string | null) => {
   return Number.isNaN(date.getTime()) ? '' : date.toISOString().slice(0, 16);
 };
 
+// The lead's follow-up is a DATE column (followup) plus a TIME column (folowuptime). Reading only the date showed every
+// follow-up as 00:00 here, and saving the form then moved it to midnight and created a second reminder. When nothing
+// is pending (followupstat = 1) the stored date is only a placeholder, so the field is left empty.
+const formatFollowUp = (date?: string | null, time?: string | null, stat?: number | string | null) => {
+  if (Number(stat) === 1) return '';
+  const day = String(date || '').match(/^(\d{4}-\d{2}-\d{2})/);
+  if (!day) return '';
+  const clock = String(time || '').match(/^(\d{2}:\d{2})/);
+  return `${day[1]}T${clock ? clock[1] : '00:00'}`;
+};
+
 const toFormData = (lead: LeadApiData): LeadFormData => ({
   ...emptyForm,
   salutation: lead.salutation || '--None--',
@@ -191,7 +204,7 @@ const toFormData = (lead: LeadApiData): LeadFormData => ({
   assignedDate: formatDateTime(lead.transfer_date) || formatDateTime(lead.created),
   reEnquiry: Boolean(lead.re_enquiry),
   reEnquiryCounter: lead.re_enquiry_counter ? Number(lead.re_enquiry_counter) : 0,
-  prospectFollowUp: formatDateTime(lead.followup),
+  prospectFollowUp: formatFollowUp(lead.followup, lead.folowuptime, lead.followupstat),
   callAttempt1: formatDateTime(lead.call_attempt_1),
   callBackAttempts: lead.call_back_attempts ? Number(lead.call_back_attempts) : 0,
   callAttemptsDeadline: formatDateTime(lead.call_attempts_deadline),

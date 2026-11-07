@@ -1,6 +1,7 @@
 import { DataTypes, Model, Optional } from 'sequelize';
 import { sequelize } from '../lib/sequelize';
 import { syncLeadFollowup } from '../lib/leadSchedule';
+import { invalidateReportCaches, CACHE_TAGS } from '../lib/reportCache';
 
 export interface CrmcFollowUpRemindersAttributes {
   id: number;
@@ -127,6 +128,8 @@ const syncSafely = async (leadId: unknown, options: { transaction?: unknown }) =
     // Never fail the reminder write because the mirror columns couldn't update.
     console.error('Failed to sync lead follow-up columns:', error);
   }
+  // Dashboards cache their aggregates (Today's Follow-ups, pending counts); refresh them now.
+  invalidateReportCaches([CACHE_TAGS.leads]);
 };
 CrmcFollowUpReminders.addHook('beforeUpdate', (reminder) => {
   (reminder as unknown as ReminderSyncState).__prevLeadId = reminder.previous('lead_id') as number | null;

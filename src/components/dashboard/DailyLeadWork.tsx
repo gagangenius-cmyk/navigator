@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { RefreshCw } from 'lucide-react';
+import { Download, RefreshCw } from 'lucide-react';
 import { dubaiToday } from '@/lib/dubaiDate';
 
 interface DailyWorkData {
@@ -65,6 +65,15 @@ export default function DailyLeadWork({ employeeId }: { employeeId?: number }) {
 
   useEffect(() => { void load(); }, [load]);
 
+  // The report covers the selected period (Today / Yesterday / week / month); a plain link keeps the auth cookie.
+  const exportHref = (format: 'xlsx' | 'csv') => {
+    const date = period === 'yesterday' ? dubaiToday(-1) : dubaiToday();
+    const days = period === 'today' || period === 'yesterday' ? 1 : Number(period);
+    const params = new URLSearchParams({ date, days: String(days), format });
+    if (employeeId) params.set('employeeId', String(employeeId));
+    return `/api/admin/dashboard/daily-work/export?${params}`;
+  };
+
   const totalMoves = data?.byStatus.reduce((sum, row) => sum + row.leads, 0) || 0;
 
   return (
@@ -86,6 +95,18 @@ export default function DailyLeadWork({ employeeId }: { employeeId?: number }) {
               {p.label}
             </button>
           ))}
+          <a
+            href={exportHref('xlsx')}
+            className="inline-flex items-center gap-1.5 rounded-md border border-emerald-600 bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700"
+          >
+            <Download className="h-3.5 w-3.5" /> Excel report
+          </a>
+          <a
+            href={exportHref('csv')}
+            className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+          >
+            <Download className="h-3.5 w-3.5" /> CSV
+          </a>
           <button onClick={() => void load()} aria-label="Refresh daily work" className="rounded-md border border-slate-200 p-1.5 text-slate-600 hover:bg-slate-50">
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
           </button>

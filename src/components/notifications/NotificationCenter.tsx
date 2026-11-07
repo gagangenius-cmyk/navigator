@@ -1,5 +1,6 @@
 'use client';
 
+import { parseUtcTimestamp } from '@/lib/dubaiDate';
 import { resolveNotificationLink } from '@/lib/notificationLink';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
@@ -316,7 +317,7 @@ export default function NotificationCenter() {
   };
 
   const formatTime = (dateString: string) => {
-    const date = new Date(dateString);
+    const date = parseUtcTimestamp(dateString);
     const now = new Date();
     const diffMs = now.getTime() - date.getTime();
     const diffMins = Math.floor(diffMs / (1000 * 60));

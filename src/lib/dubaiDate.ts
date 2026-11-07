@@ -84,3 +84,15 @@ export function dubaiDayOfUtc(value: string | Date): string {
   const date = new Date(/(Z|[+-]\d{2}:?\d{2})$/.test(text) ? text : `${text}Z`);
   return new Date(date.getTime() + DUBAI_OFFSET_MS).toISOString().slice(0, 10);
 }
+
+/**
+ * Parses a server timestamp. The API returns UTC datetimes as 'YYYY-MM-DD HH:MM:SS' (no zone); new Date() reads
+ * that as the browser's LOCAL time, so in Dubai every "x ago" came out 4 hours too old. Zone-less values are UTC.
+ */
+export function parseUtcTimestamp(value: string | Date | null | undefined): Date {
+  if (value instanceof Date) return value;
+  const text = String(value ?? '').trim();
+  if (!text) return new Date(NaN);
+  if (/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(:\d{2}(\.\d+)?)?$/.test(text)) return new Date(`${text.replace(' ', 'T')}Z`);
+  return new Date(text);
+}
