@@ -92,13 +92,14 @@ export async function GET(request: NextRequest) {
     // counselors send to their manager. Day = the last day of the chosen period.
     const sheet = await buildDailySheet(target.employeeId, data.range.to);
     const daily = wb.addWorksheet('Daily report');
-    daily.columns = [{ width: 24 }, { width: 14 }];
+    daily.columns = [{ width: 24 }, { width: 14 }, { width: 46 }];
     const [, mm, dd] = data.range.to.split('-').map(Number);
     const monthName = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][mm - 1];
     const header = daily.addRow([`${dd}-${monthName}`, who.split(' ')[0]]);
-    sheet.rows.forEach((r) => daily.addRow([r.label, r.value]));
+    sheet.rows.forEach((r) => daily.addRow([r.label, r.value, r.note || '']));
     daily.eachRow((row, rowNumber) => {
-      row.eachCell((cell, col) => {
+      row.eachCell({ includeEmpty: false }, (cell, col) => {
+        if (col === 3) return; // the description column is plain text, outside the boxed table
         cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
         cell.alignment = { horizontal: rowNumber === 1 || col === 2 ? 'right' : 'left' };
         if (rowNumber > 1 && col === 1) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE7E6E6' } };
@@ -106,7 +107,7 @@ export async function GET(request: NextRequest) {
       });
     });
     header.font = { bold: false };
-    daily.getCell('A'+(sheet.rows.length+3)).value = 'FTD = for the day, MTD = month to date (Dubai days). Calls = leads worked that day; Connected = leads moved that day into a talked-to status; Hot / Warm / Cold / DNP (DNP + Not answered) / Junk = leads in that status at the end of the day; their FTD / MTD rows = leads moved into that status that day / this month; Counselling = appointments; Rev = payments received on the leads of the counselor.';
+    daily.getCell('A'+(sheet.rows.length+3)).value = 'FTD = for the day, MTD = month to date (Dubai days). Calls = leads worked that day; Connected = leads moved that day into a talked-to status; Hot / Warm / Cold / DNP (incl. Not answered) / Junk = leads in that status at the end of the day.';
     daily.getCell('A'+(sheet.rows.length+3)).font = { italic: true, size: 9, color: { argb: 'FF6B7280' } };
 
     addSheet('Summary', [{ header: 'Item', key: 'item', width: 34 }, { header: 'Value', key: 'value', width: 30 }], [

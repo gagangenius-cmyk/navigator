@@ -152,7 +152,7 @@ const norm = (value: string | null | undefined) => (value || '').trim().toLowerC
 
 export interface DailySheet {
   date: string;
-  rows: Array<{ label: string; value: number }>;
+  rows: Array<{ label: string; value: number; note?: string }>;
 }
 
 export async function buildDailySheet(employeeId: number, date: string): Promise<DailySheet> {
@@ -161,12 +161,27 @@ export async function buildDailySheet(employeeId: number, date: string): Promise
   const month = dubaiDayRangeUtc(date, dayOfMonth);
   const monthStart = month.dates[0];
 
-  const [fresh] = await sequelize.query<{ ftd: number; mtd: number }>(
-    `SELECT SUM(l.created >= :dayStart AND l.created < :dayEnd) AS ftd, COUNT(*) AS mtd
-     FROM crm_forum_leads l
-     WHERE (l.assignTo = :employeeId OR l.Counsilor = :employeeId) AND l.created >= :monthStart AND l.created < :dayEnd`,
-    { replacements: { employeeId, dayStart: day.startUtc, dayEnd: day.endUtc, monthStart: month.startUtc }, type: QueryTypes.SELECT },
+  // Fresh leads = leads ASSIGNED to the counselor that day / this month. The assignment log says when (its new_value is
+  // the employee's name); a lead that was created already assigned and has no assignment entry counts on its created day.
+  const [emp] = await sequelize.query<{ name: string }>('SELECT name FROM crm_employee WHERE id = :employeeId LIMIT 1', {
+    replacements: { employeeId }, type: QueryTypes.SELECT,
+  });
+  const assignedEvents = await sequelize.query<{ lead_id: number; created_at: string }>(
+    `SELECT r.lead_id, r.created_at FROM crm_remarks r
+     WHERE r.action = 'lead_assigned' AND r.new_value = :name AND r.created_at >= :monthStart AND r.created_at < :dayEnd
+     ORDER BY r.created_at ASC`,
+    { replacements: { name: emp?.name || '', monthStart: month.startUtc, dayEnd: day.endUtc }, type: QueryTypes.SELECT },
   );
+  const createdOwn = await sequelize.query<{ id: number; created: string }>(
+    `SELECT l.id, l.created FROM crm_forum_leads l
+     WHERE (l.assignTo = :employeeId OR l.Counsilor = :employeeId) AND l.created >= :monthStart AND l.created < :dayEnd
+       AND NOT EXISTS (SELECT 1 FROM crm_remarks r WHERE r.lead_id = l.id AND r.action = 'lead_assigned')`,
+    { replacements: { employeeId, monthStart: month.startUtc, dayEnd: day.endUtc }, type: QueryTypes.SELECT },
+  );
+  const firstAssignedDay = new Map<number, string>();
+  assignedEvents.forEach((r) => { if (!firstAssignedDay.has(r.lead_id)) firstAssignedDay.set(r.lead_id, dubaiDayOfUtc(r.created_at)); });
+  createdOwn.forEach((r) => { if (!firstAssignedDay.has(r.id)) firstAssignedDay.set(r.id, dubaiDayOfUtc(r.created)); });
+  const fresh = { ftd: [...firstAssignedDay.values()].filter((d) => d === date).length, mtd: firstAssignedDay.size };
 
   // The whole month so far; each entry is tagged with its Dubai day so FTD (that day) and MTD (month to date) come from
   // the same data.
@@ -178,16 +193,6 @@ export async function buildDailySheet(employeeId: number, date: string): Promise
   // MTD = the sum of each day's distinct leads (a lead worked on two days counts on both), so it adds up the daily figures.
   const worked = { ftd: new Set<number>(), mtd: new Set<string>() };
   const connected = { ftd: new Set<number>(), mtd: new Set<string>() };
-  const moved = (statuses: string[]) => {
-    const ftd = new Set<number>();
-    const mtd = new Set<number>();
-    log.forEach((r) => {
-      if (r.action !== 'status_changed' || !statuses.includes(norm(r.new_value))) return;
-      mtd.add(r.lead_id);
-      if (dubaiDayOfUtc(r.created_at) === date) ftd.add(r.lead_id);
-    });
-    return { ftd: ftd.size, mtd: mtd.size };
-  };
   // Hot / Warm / Cold / DNP / Junk are how many of the counselor's leads sit in that status at the END of the day
   // (today: right now). A past day is rebuilt from the status log: a lead that changed status after that day was in
   // the status it changed away from.
@@ -239,24 +244,19 @@ export async function buildDailySheet(employeeId: number, date: string): Promise
   return {
     date,
     rows: [
-      { label: 'Fresh Lead FTD:-', value: Number(fresh?.ftd || 0) },
-      { label: 'Fresh Lead MTD:-', value: Number(fresh?.mtd || 0) },
-      { label: 'Calls FTD:-', value: worked.ftd.size },
-      { label: 'Calls MTD:-', value: worked.mtd.size },
-      { label: 'Connected FTD:-', value: connected.ftd.size },
-      { label: 'Connected MTD:-', value: connected.mtd.size },
-      ...([['Hot', ['hot']], ['Warm', ['warm']], ['Cold', ['cold']], ['DNP', ['dnp', 'not_answered', 'not answered']], ['Junk', ['junk']]] as Array<[string, string[]]>).flatMap(([name, statuses]) => {
-        const m = moved(statuses);
-        return [
-          { label: `${name}:-`, value: inStatus(statuses) },
-          { label: `${name} FTD:-`, value: m.ftd },
-          { label: `${name} MTD:-`, value: m.mtd },
-        ];
-      }),
-      { label: 'Counselling FTD:-', value: Number(counselling?.ftd || 0) },
-      { label: 'Counselling MTD:-', value: Number(counselling?.mtd || 0) },
-      { label: 'Rev FTD:-', value: Math.round(Number(revenue?.ftd || 0)) },
-      { label: 'Rev MTD:-', value: Math.round(Number(revenue?.mtd || 0)) },
+      { label: 'Fresh Lead FTD:-', value: Number(fresh.ftd || 0), note: 'fresh leads assigned today' },
+      { label: 'Fresh Lead MTD:-', value: Number(fresh.mtd || 0), note: 'fresh leads assigned for this month till date' },
+      { label: 'Calls FTD:-', value: worked.ftd.size, note: 'total calls done for today' },
+      { label: 'Connected FTD:-', value: connected.ftd.size, note: 'connected calls' },
+      { label: 'Hot:-', value: inStatus(['hot']), note: 'very interested' },
+      { label: 'Warm:-', value: inStatus(['warm']), note: 'interested' },
+      { label: 'Cold:-', value: inStatus(['cold']), note: 'not very interested' },
+      { label: 'DNP:-', value: inStatus(['dnp', 'not_answered', 'not answered']), note: 'did not pick the call' },
+      { label: 'Junk:-', value: inStatus(['junk']), note: 'junk / invalid leads' },
+      { label: 'Counselling FTD:-', value: Number(counselling?.ftd || 0), note: 'for the day how many counselling done' },
+      { label: 'Counselling MTD:-', value: Number(counselling?.mtd || 0), note: 'for the month how many counselling done' },
+      { label: 'Rev FTD:-', value: Math.round(Number(revenue?.ftd || 0)), note: 'revenue for the day achieved' },
+      { label: 'Rev MTD:-', value: Math.round(Number(revenue?.mtd || 0)), note: 'revenue for the month achieved' },
     ],
   };
 }
