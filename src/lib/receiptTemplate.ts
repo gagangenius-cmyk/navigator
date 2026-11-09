@@ -483,7 +483,8 @@ export function buildReceiptHtml(r: ReceiptFields): string {
   table.info tr.total td{font-weight:700;border-top:2px solid #1a1a1a}
   .below{display:flex;justify-content:space-between;align-items:flex-start;margin-top:18px;gap:24px}
   .below .field{font-size:9.8pt;margin-bottom:8px}
-  .stamp{width:130px;height:130px;border:3px double #1a3a8f;border-radius:50%;display:flex;align-items:center;justify-content:center;text-align:center;color:#1a3a8f;font-weight:700;font-size:7.6pt;line-height:1.3;transform:rotate(-8deg);padding:8px}
+  .stamp{width:150px;height:150px;flex:none;transform:rotate(-8deg);opacity:.88;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .stamp svg{width:100%;height:100%;display:block}
   .note{font-size:9.3pt;margin-top:4px}
   @media print{@page{size:A4 portrait;margin:0}body{padding:20px 38px 24px}}
 </style></head><body>
@@ -526,9 +527,23 @@ export function buildReceiptHtml(r: ReceiptFields): string {
     ${r.transactionId ? `<div class="field"><strong>${getReferenceLabel(r.paymentMethod, cfg)}:</strong> ${escapeHtml(r.transactionId)}</div>` : ''}
     <div class="field"><strong>Purpose:</strong> ${escapeHtml(purpose)}</div>
     <div class="note">Advance amount paid is not refundable.</div>
-    ${r.remark ? `<div class="note"><strong>Remark:</strong> ${escapeHtml(r.remark)}</div>` : ''}
+    <!-- r.remark is an internal note (it can name payment-split details etc.) and is deliberately never printed on the client-facing receipt. -->
   </div>
-  <div class="stamp">${escapeHtml(companyName.toUpperCase())}<br/>${cfg.countryLabel}</div>
+  <div class="stamp">
+    <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" fill="#1a3a8f" font-family="Arial,sans-serif" font-weight="700">
+      <circle cx="100" cy="100" r="95" fill="none" stroke="#1a3a8f" stroke-width="3"/>
+      <circle cx="100" cy="100" r="89" fill="none" stroke="#1a3a8f" stroke-width="1"/>
+      <circle cx="100" cy="100" r="52" fill="none" stroke="#1a3a8f" stroke-width="1"/>
+      <defs>
+        <path id="stampTop" d="M 100,100 m -70,0 a 70,70 0 1,1 140,0"/>
+        <path id="stampBottom" d="M 100,100 m -78,0 a 78,78 0 0,0 156,0"/>
+      </defs>
+      <text font-size="17" text-anchor="middle" letter-spacing="1"><textPath href="#stampTop" startOffset="50%">${escapeHtml(companyName.toUpperCase())}</textPath></text>
+      <text font-size="15" text-anchor="middle" letter-spacing="1"><textPath href="#stampBottom" startOffset="50%" dominant-baseline="hanging">${escapeHtml(String(cfg.countryLabel).toUpperCase())}</textPath></text>
+      <text x="100" y="97" font-size="13" text-anchor="middle">OFFICIAL</text>
+      <text x="100" y="115" font-size="13" text-anchor="middle">STAMP</text>
+    </svg>
+  </div>
 </div>
 </body></html>`;
 }

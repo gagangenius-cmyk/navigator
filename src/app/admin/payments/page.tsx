@@ -6,9 +6,9 @@ import { RecordCard, RecordList, SortButtonRow } from '@/components/shared/Respo
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
-import { FileText, Receipt, User, Wallet, ChevronLeft, ChevronRight, Pencil, CreditCard } from 'lucide-react';
+import { FileText, Receipt, User, Wallet, ChevronLeft, ChevronRight, Pencil, CreditCard, XCircle } from 'lucide-react';
 import { useDebounce } from '@/hooks/useDebounce';
-import { isBranchManagerOrCeo } from '@/lib/roleChecks';
+import { isBranchManagerOrCeo, isCeo } from '@/lib/roleChecks';
 import { AddThirdPartyPaymentDrawer } from '@/components/Payments/AddThirdPartyPaymentDrawer';
 import { EditOpportunityPaymentDrawer, type EditablePayment } from '@/components/Payments/EditOpportunityPaymentDrawer';
 import { EditThirdPartyPaymentDrawer, type EditableThirdPartyPayment } from '@/components/Payments/EditThirdPartyPaymentDrawer';
@@ -98,6 +98,7 @@ export default function PaymentsManagement() {
   const router = useRouter();
   const { user, currencyCode } = useAuth();
   const canEditPayments = isBranchManagerOrCeo(user);
+  const canRejectPayments = isCeo(user);
   const [opportunityPayments, setOpportunityPayments] = useState<OpportunityPayment[]>([]);
   const [payments, setPayments] = useState<ThirdPartyPayment[]>([]);
   const [leadFees, setLeadFees] = useState<LeadFee[]>([]);
@@ -283,6 +284,29 @@ export default function PaymentsManagement() {
       paymentDate: (f) => f.payDate,
     },
   );
+
+  // CEO-only: undo a mistaken approval. The server deletes the agreement and
+  // receipt access, restores the balance and rewinds the flow to step 1.
+  const handleRejectPayment = async (payment: OpportunityPayment) => {
+    const reason = window.prompt(
+      `Reject payment ${payment.paymentNumber}?\n\nThis deletes the agreement and receipt, and the counselor must restart the opportunity flow from the first step.\n\nEnter the reason:`
+    );
+    if (reason === null) return;
+    if (!reason.trim()) { setError('A reason is required to reject a payment.'); return; }
+    try {
+      setError('');
+      const res = await fetch('/api/admin/opportunity-payments/reject', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ paymentId: payment.id, reason: reason.trim() }),
+      });
+      const result = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(result.error || 'Failed to reject payment');
+      await fetchPayments();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to reject payment');
+    }
+  };
 
   const handleViewPayment = (payment: ThirdPartyPayment) => {
     setSelectedPayment(payment);
@@ -500,6 +524,14 @@ export default function PaymentsManagement() {
                     onClick: () => setEditingOppPayment(payment),
                     colorClass: 'bg-gray-100 text-gray-700 hover:bg-gray-200',
                     hidden: !canEditPayments,
+                  },
+                  {
+                    key: 'reject',
+                    icon: XCircle,
+                    label: 'Reject Payment (deletes agreement & receipt)',
+                    onClick: () => handleRejectPayment(payment),
+                    colorClass: 'bg-red-50 text-red-700 hover:bg-red-100',
+                    hidden: !canRejectPayments || payment.accountantStatus === 'rejected',
                   },
                 ]}
               />
