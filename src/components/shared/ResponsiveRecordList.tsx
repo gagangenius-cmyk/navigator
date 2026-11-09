@@ -1,51 +1,7 @@
 'use client';
 
-import { createContext, ReactNode, useContext, useSyncExternalStore } from 'react';
-import { LayoutGrid, List as ListIcon, type LucideIcon } from 'lucide-react';
-
-// One app-wide Card/List preference shared by every RecordList (and kept in
-// localStorage), so the toggle works on every page built on this component
-// without each page managing its own state.
-export type RecordViewMode = 'card' | 'list';
-const VIEW_KEY = 'crm:recordViewMode';
-const viewListeners = new Set<() => void>();
-const readViewMode = (): RecordViewMode => {
-  try { return window.localStorage.getItem(VIEW_KEY) === 'list' ? 'list' : 'card'; } catch { return 'card'; }
-};
-const subscribeView = (cb: () => void) => {
-  viewListeners.add(cb);
-  window.addEventListener('storage', cb);
-  return () => { viewListeners.delete(cb); window.removeEventListener('storage', cb); };
-};
-function setViewMode(mode: RecordViewMode) {
-  try { window.localStorage.setItem(VIEW_KEY, mode); } catch { /* private mode: still switch for this session below */ }
-  viewListeners.forEach((cb) => cb());
-}
-export function useRecordViewMode(): RecordViewMode {
-  return useSyncExternalStore(subscribeView, readViewMode, () => 'card' as RecordViewMode);
-}
-const RecordViewContext = createContext<RecordViewMode>('card');
-
-export function RecordViewToggle() {
-  const mode = useRecordViewMode();
-  const btn = (m: RecordViewMode, Icon: LucideIcon, label: string) => (
-    <button
-      type="button"
-      onClick={() => setViewMode(m)}
-      aria-pressed={mode === m}
-      title={`${label} view`}
-      className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-semibold ${mode === m ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-100'}`}
-    >
-      <Icon className="h-3.5 w-3.5" /> {label}
-    </button>
-  );
-  return (
-    <div className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white p-0.5">
-      {btn('card', LayoutGrid, 'Card')}
-      {btn('list', ListIcon, 'List')}
-    </div>
-  );
-}
+import { ReactNode } from 'react';
+import { type LucideIcon } from 'lucide-react';
 
 // Shared card-list layout replacing the `overflow-x-auto` wide-table pattern
 // used across most admin list pages — modeled directly on the Leads tab's
@@ -105,48 +61,6 @@ export function RecordCard({
   actions,
   className,
 }: RecordCardProps) {
-  const mode = useContext(RecordViewContext);
-  const visibleActions = actions?.filter((a) => !a.hidden) ?? [];
-  if (mode === 'list') {
-    return (
-      <article data-record-card className={`min-w-0 rounded-md border border-gray-200 bg-white px-3 py-2 shadow-sm transition hover:border-blue-200 ${className || ''}`}>
-        <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1">
-          {avatar !== undefined && (
-            <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-gradient-to-br ${avatarColorClass} text-xs font-black text-white`}>{avatar}</div>
-          )}
-          <div className="flex min-w-0 flex-wrap items-center gap-2 lg:w-72 lg:shrink-0">
-            {title}
-            {titleBadges}
-          </div>
-          <div data-rc="stats" className="flex min-w-0 flex-1 flex-wrap gap-x-5 gap-y-0.5 text-xs">
-            {(metaItems ?? []).map((item, index) => (
-              <span key={item.key ?? `m${index}`} className="truncate text-gray-600">{item.text}</span>
-            ))}
-            {(stats ?? []).map((stat, index) => (
-              <span key={index} className="min-w-0 truncate text-gray-600">
-                <span className="font-semibold uppercase text-gray-400">{stat.label}: </span>
-                <span className="font-semibold text-gray-900">{stat.value}</span>
-              </span>
-            ))}
-          </div>
-          {visibleActions.length > 0 && (
-            <div data-rc="actions" className="ml-auto flex flex-wrap items-center gap-1.5">
-              {visibleActions.map((action) => {
-                const Icon = action.icon;
-                const cls = `inline-flex h-8 w-8 items-center justify-center rounded-md ${action.colorClass || 'bg-gray-100 text-gray-700 hover:bg-gray-200'} ${action.disabled ? 'pointer-events-none opacity-40' : ''}`;
-                return action.href && !action.disabled ? (
-                  <a key={action.key} href={action.href} target={action.target} rel={action.target === '_blank' ? 'noopener noreferrer' : undefined} title={action.label} className={cls}><Icon className="h-4 w-4" /></a>
-                ) : (
-                  <button key={action.key} type="button" onClick={action.onClick} title={action.label} disabled={action.disabled} className={cls}><Icon className="h-4 w-4" /></button>
-                );
-              })}
-            </div>
-          )}
-        </div>
-        {extra && <div className="mt-2">{extra}</div>}
-      </article>
-    );
-  }
   return (
     <article data-record-card className={`min-w-0 rounded-lg border border-gray-200 bg-white p-3 shadow-sm transition hover:border-blue-200 hover:shadow-md lg:p-4 ${className || ''}`}>
       <div className="grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_auto]">
@@ -295,15 +209,5 @@ export function RecordList({
     );
   }
 
-  return <RecordListBody>{children}</RecordListBody>;
-}
-
-function RecordListBody({ children }: { children: ReactNode }) {
-  const mode = useRecordViewMode();
-  return (
-    <RecordViewContext.Provider value={mode}>
-      <div className="mb-2 flex justify-end"><RecordViewToggle /></div>
-      <div data-record-list className={`grid grid-cols-1 ${mode === 'list' ? 'gap-1.5' : 'gap-3'}`}>{children}</div>
-    </RecordViewContext.Provider>
-  );
+  return <div data-record-list className="grid grid-cols-1 gap-3">{children}</div>;
 }
