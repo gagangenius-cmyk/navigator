@@ -159,7 +159,11 @@ export default function DiscountApprovalsPage() {
         approverRole: 'ceo',
         approvedBy: user?.id || 1,
       };
-      if (modal.action === 'approve') {
+      // Rejecting an already-approved request is a CEO "revoke" that restores the pre-discount amounts.
+      if (modal.action === 'reject' && approvals.find((x) => x.id === modal.id)?.status === 'approved') {
+        body.revoke = true;
+        body.reviewNotes = reviewNotes;
+      } else if (modal.action === 'approve') {
         body.approvedAt = new Date().toISOString();
       } else {
         body.rejectedDate = new Date().toISOString();
@@ -382,7 +386,7 @@ export default function DiscountApprovalsPage() {
                   ) : undefined)}
                   actions={[
                     { key: 'approve', icon: CheckCircle, label: 'Approve', onClick: () => setModal({ id: a.id, action: 'approve' }), disabled: actionLoading === a.id, colorClass: 'bg-green-50 text-green-700 hover:bg-green-100', hidden: !(isPending && canApprove(a)) },
-                    { key: 'reject', icon: XCircle, label: 'Reject', onClick: () => setModal({ id: a.id, action: 'reject' }), disabled: actionLoading === a.id, colorClass: 'bg-red-50 text-red-700 hover:bg-red-100', hidden: !(isPending && canApprove(a)) },
+                    { key: 'reject', icon: XCircle, label: 'Reject', onClick: () => setModal({ id: a.id, action: 'reject' }), disabled: actionLoading === a.id, colorClass: 'bg-red-50 text-red-700 hover:bg-red-100', hidden: !((isPending && canApprove(a)) || (a.status === 'approved' && isCeo(user as any))) },
                     { key: 'toggle', icon: isExpanded ? ChevronUp : ChevronDown, label: 'Reason', onClick: () => setExpandedId(isExpanded ? null : a.id) },
                   ]}
                 />

@@ -107,7 +107,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     const body = await request.json();
 
     // The only transitions this endpoint supports are the review decisions.
-    if (!['approved', 'rejected'].includes(body.status)) {
+    if (body.revoke !== true && !['approved', 'rejected'].includes(body.status)) {
       return NextResponse.json(
         { success: false, error: "status must be 'approved' or 'rejected'" },
         { status: 422 }
@@ -135,6 +135,74 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     }
 
     const existingForAuth = (existingResult as any[])[0];
+
+    // CEO-only: reject a discount that was approved by mistake. Puts the
+    // pre-discount amounts back on the lead, opportunity and contract ledger.
+    if (body.revoke === true) {
+      if (!isCeo(sessionUser)) {
+        return NextResponse.json({ success: false, error: 'Only the CEO can reject an approved discount.' }, { status: 403 });
+      }
+      if (existingForAuth.status !== 'approved' || existingForAuth.is_deleted) {
+        return NextResponse.json({ success: false, error: 'Only an approved discount can be rejected this way.' }, { status: 409 });
+      }
+      const reason = String(body.reviewNotes || '').trim();
+      if (!reason) {
+        return NextResponse.json({ success: false, error: 'A reason is required.' }, { status: 400 });
+      }
+      await sequelize.transaction(async (t) => {
+        await sequelize.query(
+          `UPDATE crm_discount_approvals SET status = 'rejected', rejectedDate = NOW(), approvedAt = NULL, approvedBy = ?, updatedAt = NOW()
+           WHERE id = ? AND status = 'approved'`,
+          { replacements: [sessionUser.id, discountId], type: QueryTypes.UPDATE, transaction: t },
+        );
+        if (existingForAuth.leadId) {
+          await sequelize.query(
+            `UPDATE crm_forum_leads
+             SET discount = 0, payTotal = ?, payBalance = GREATEST(? - COALESCE(paidYet, 0), 0)
+             WHERE id = ? AND (opportunity_id IS NULL OR ? IS NULL OR opportunity_id = ?)`,
+            {
+              replacements: [existingForAuth.originalAmount, existingForAuth.originalAmount, existingForAuth.leadId, existingForAuth.opportunityId || null, existingForAuth.opportunityId || null],
+              transaction: t,
+            },
+          );
+        }
+        if (existingForAuth.opportunityId) {
+          await sequelize.query(
+            `UPDATE crm_opportunities
+             SET estimatedValue = ?, actualValue = CASE WHEN LOWER(status) = 'won' THEN ? ELSE actualValue END, updatedAt = NOW()
+             WHERE id = ? AND is_deleted = 0`,
+            { replacements: [existingForAuth.originalAmount, existingForAuth.originalAmount, existingForAuth.opportunityId], transaction: t },
+          );
+          await sequelize.query(
+            `UPDATE crm_contracts SET discount = 0, pay_balance = GREATEST(pay_total - paid_yet, 0), updated_at = NOW()
+             WHERE opportunity_id = ? AND is_deleted = 0`,
+            { replacements: [existingForAuth.opportunityId], transaction: t },
+          );
+        }
+      });
+      await logAudit({
+        entityType: 'discount_approval',
+        entityId: discountId,
+        action: 'discount_rejected_after_approval',
+        summary: `Approved discount #${discountId} rejected by CEO: ${reason}`,
+        actorId: sessionUser.id ?? null,
+        actorRole: (sessionUser as { roleName?: string }).roleName || null,
+      });
+      if (existingForAuth.requestedBy) {
+        await notifyUser({
+          userId: existingForAuth.requestedBy,
+          type: 'discount_reviewed',
+          title: 'Discount rejected',
+          message: `The CEO rejected your previously approved discount request. Reason: ${reason}`,
+          priority: 'high',
+          link: existingForAuth.leadId ? `/admin/leads/${existingForAuth.leadId}/edit` : undefined,
+          relatedId: existingForAuth.leadId ?? undefined,
+          relatedType: existingForAuth.leadId ? 'lead' : undefined,
+        });
+      }
+      return NextResponse.json({ success: true, message: 'Discount rejected and amounts restored' });
+    }
+
     const updateData: any = {
       updatedAt: new Date()
     };
