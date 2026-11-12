@@ -495,7 +495,9 @@ async function runNodeHandler(node: WorkflowGraphNode, enrollment: CrmWorkflowEn
         const assignment = await resolveLeadAssignment({
           branchId: lead.branch,
           forceAutoAssign: true,
-          allowFallback: true, // the workflow step is explicitly 'round_robin'
+          // No allowFallback: a workflow runs automatically, so like every other
+          // automatic path it only assigns when an active Assignment Rule matches.
+          // Otherwise the "No active employees" catch below leaves the lead as-is.
           roundRobin: true,
           sourceId: Number(lead.market_source) || null,
           priority: lead.priority,

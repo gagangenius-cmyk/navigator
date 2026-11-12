@@ -131,10 +131,10 @@ export interface SlaSweepResult {
   stillUnassignable: number;
 }
 
-// The SLA safety net: a lead nobody claims within getSlaMinutes() falls back
-// to the same round-robin engine every other auto-assignment path already
-// uses (src/lib/assignmentRuleEngine.ts), so a pool nobody is watching still
-// gets everyone routed eventually instead of aging forever. Invoked on a
+// The SLA safety net: a lead nobody claims within getSlaMinutes() is run
+// through the Assignment Rules engine (src/lib/assignmentRuleEngine.ts). It is
+// assigned ONLY if an active rule matches it - there is no branch round-robin
+// fallback, so with no matching rule the lead stays in the pool. Invoked on a
 // schedule by src/lib/lead-pool-sla-cron.ts.
 export async function runSlaSweep(limit = 200): Promise<SlaSweepResult> {
   const slaMinutes = await getSlaMinutes();

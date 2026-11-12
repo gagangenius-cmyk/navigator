@@ -381,8 +381,21 @@ export async function createAssignmentRule(input: AssignmentRuleInput, actorId?:
 
   let sortOrder = input.sortOrder;
   if (sortOrder === undefined || sortOrder === null) {
+    // A catch-all rule (no conditions) matches every lead, so it must stay LAST or it
+    // would shadow every rule below it. A new conditional rule is therefore placed
+    // after the other conditional rules but before any catch-all; a new catch-all
+    // simply goes to the very end.
+    const hasConditions = [
+      input.branchIds, input.sourceIds, input.priorities, input.leadQualities,
+      input.countryInterestIds, input.serviceInterestIds, input.campaigns, input.statuses,
+    ].some((list) => Array.isArray(list) && list.length > 0);
     const [{ maxOrder }] = await sequelize.query<{ maxOrder: number | null }>(
-      'SELECT MAX(sort_order) AS maxOrder FROM crm_assignment_rules',
+      hasConditions
+        ? `SELECT MAX(sort_order) AS maxOrder FROM crm_assignment_rules
+           WHERE COALESCE(branch_ids,'') <> '' OR COALESCE(source_ids,'') <> '' OR COALESCE(priorities,'') <> ''
+              OR COALESCE(lead_qualities,'') <> '' OR COALESCE(country_interest_ids,'') <> ''
+              OR COALESCE(service_interest_ids,'') <> '' OR COALESCE(campaigns,'') <> '' OR COALESCE(statuses,'') <> ''`
+        : 'SELECT MAX(sort_order) AS maxOrder FROM crm_assignment_rules',
       { type: QueryTypes.SELECT }
     );
     sortOrder = (maxOrder ?? -1) + 1;
