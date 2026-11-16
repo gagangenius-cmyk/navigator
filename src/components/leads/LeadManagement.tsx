@@ -1718,6 +1718,7 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'untouched': return 'bg-amber-100 text-amber-800';
+      case 'Interested': return 'bg-sky-100 text-sky-800';
       case 'Prospect': return 'bg-blue-100 text-blue-800';
       case 'Not Interested': return 'bg-red-100 text-red-800';
       case 'DNQ': return 'bg-gray-100 text-gray-800';
@@ -1782,6 +1783,15 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
     if (!value) return 'No date';
     const parsed = new Date(value);
     return Number.isNaN(parsed.getTime()) ? String(value) : parsed.toLocaleString();
+  };
+
+  // last_updated is a date-only string and last_updtd_time its HH:MM:SS companion;
+  // both are stamped together on every lead edit, so show them as one moment.
+  const formatLastUpdated = (lead: any) => {
+    if (!lead?.last_updated) return '';
+    const date = formatDate(lead.last_updated);
+    const time = lead.last_updtd_time ? String(lead.last_updtd_time).slice(0, 5) : '';
+    return time ? `${date}, ${time}` : date;
   };
 
   const formatTime = (value?: string | null) => {
@@ -2355,6 +2365,7 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
                                   <div className="mt-0.5 truncate font-semibold text-gray-900">{lead.dmEmployeeByASSIGNTo?.name || 'Unassigned'}</div>
                                 )}
                                 <div className="text-gray-600">{formatDate(lead.regdate)}</div>
+                                <div className="truncate text-gray-500" title="Last updated">Updated: {formatLastUpdated(lead) || '—'}</div>
                               </div>
                               <div className="min-w-0 rounded-md bg-gray-50 p-2">
                                 <div className="font-semibold uppercase text-gray-400">Status</div>
@@ -2555,6 +2566,7 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
                   <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Counselor</th>
                   <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date Registered</th>
                   <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Assigned Date</th>
+                  <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Updated</th>
                   <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Campaign</th>
                   <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Remarks</th>
                   <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
@@ -2638,6 +2650,9 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
                     </td>
                     <td className="px-4 py-2.5 whitespace-nowrap text-sm text-gray-600">
                       {formatDate(lead.assigned_date) || <span className="text-gray-400">—</span>}
+                    </td>
+                    <td className="px-4 py-2.5 whitespace-nowrap text-sm text-gray-600">
+                      {formatLastUpdated(lead) || <span className="text-gray-400">—</span>}
                     </td>
                     <td className="px-4 py-2.5 whitespace-nowrap max-w-[140px] truncate text-sm text-gray-600" title={lead.meta_campaign_name || lead.campaign || undefined}>
                       {lead.meta_campaign_name || lead.campaign || <span className="text-gray-400">—</span>}
@@ -3232,7 +3247,8 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                   >
                     <option value="">Select status</option>
-                    <option value="Prospect">Prospect/Interested</option>
+                    <option value="Interested">Interested</option>
+                <option value="Prospect">Prospect</option>
                     <option value="Not Interested">Not Interested</option>
                     <option value="DNQ">DNQ</option>
                     <option value="Not_answered">Not Answered</option>
@@ -3663,8 +3679,8 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
                 value={formData.status || ''}
                 onChange={(e) => {
                   const nextStatus = e.target.value;
-                  const wasProspect = formData.status === 'Prospect';
-                  const isProspect = nextStatus === 'Prospect';
+                  const wasProspect = formData.status === 'Prospect' || formData.status === 'Interested';
+                  const isProspect = nextStatus === 'Prospect' || nextStatus === 'Interested';
                   setFormData({
                     ...formData,
                     status: nextStatus,
@@ -3677,7 +3693,8 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
                 className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
               >
                 <option value="">Select Status</option>
-                <option value="Prospect">Prospect/Interested</option>
+                <option value="Interested">Interested</option>
+                <option value="Prospect">Prospect</option>
                 <option value="Not Interested">Not Interested</option>
                 <option value="DNQ">DNQ</option>
                 <option value="Not_answered">Not Answered</option>
@@ -3693,7 +3710,7 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
                 className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
               >
                 <option value="">Select Priority</option>
-                {formData.status === 'Prospect' ? (
+                {formData.status === 'Prospect' || formData.status === 'Interested' ? (
                   <>
                     <option value="Hot">Hot</option>
                     <option value="Warm">Warm</option>

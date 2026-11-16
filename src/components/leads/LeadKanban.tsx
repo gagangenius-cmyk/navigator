@@ -65,7 +65,8 @@ interface LeadKanbanProps {
 const kanbanColumns = [
   { id: 'untouched', title: 'Untouched', color: 'bg-slate-50 border-slate-200' },
   { id: 'New', title: 'New', color: 'bg-blue-50 border-blue-200' },
-  { id: 'Prospect', title: 'Prospect/Interested', color: 'bg-blue-50 border-blue-200' },
+  { id: 'Interested', title: 'Interested', color: 'bg-sky-50 border-sky-200' },
+  { id: 'Prospect', title: 'Prospect', color: 'bg-blue-50 border-blue-200' },
   { id: 'Not Interested', title: 'Not Interested', color: 'bg-gray-50 border-gray-200' },
   { id: 'DNQ', title: 'DNQ', color: 'bg-red-50 border-red-200' },
   { id: 'Not_answered', title: 'Not Answered', color: 'bg-yellow-50 border-yellow-200' },

@@ -9,6 +9,7 @@ interface KanbanDragDropProps {
 }
 
 const kanbanColumns = [
+  { id: 'Interested', title: 'Interested', color: 'bg-sky-50 border-sky-400' },
   { id: 'Prospect', title: 'Prospect', color: 'bg-blue-50 border-blue-400' },
   { id: 'Not Interested', title: 'Not Interested', color: 'bg-gray-50 border-gray-400' },
   { id: 'DNQ', title: 'DNQ', color: 'bg-red-50 border-red-400' },
