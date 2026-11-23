@@ -2777,7 +2777,8 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
                       {formatLastUpdated(lead) || <span className="text-gray-400">—</span>}
                     </td>
                     <td className="px-4 py-2.5 whitespace-nowrap text-sm text-gray-600">
-                      {formatScheduled(lead.followup, lead.folowuptime) || <span className="text-gray-400">—</span>}
+                      {/* followup is NOT NULL in the DB so every lead carries a date; followupstat 0 = a follow-up is actually pending, 1 = none. */}
+                      {(Number(lead.followupstat) === 0 ? formatScheduled(lead.followup, lead.folowuptime) : '') || <span className="text-gray-400">—</span>}
                     </td>
                     <td className="px-4 py-2.5 whitespace-nowrap text-sm text-gray-600">
                       {formatScheduled(lead.appointment) || <span className="text-gray-400">—</span>}

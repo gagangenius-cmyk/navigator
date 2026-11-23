@@ -505,7 +505,7 @@ export async function GET(request: NextRequest) {
         l.address, l.dob, l.gender, l.id_number, l.id_expiry, l.country_interest,
         l.service_interest, l.market_source, l.priority, l.status, l.lead_quality,
         l.regdate, l.payTotal, l.paidYet, l.payBalance, l.lead_remark, l.created, l.last_updated, l.last_updtd_time,
-        l.followup, l.folowuptime, l.appointment, l.lead_type,
+        l.followup, l.folowuptime, l.followupstat, l.appointment, l.lead_type,
         l.assignTo, l.branch, l.region, l.stepComplete,
         l.opportunity_id, l.opportunity_status, l.campaign, l.meta_leadgen_id, l.meta_campaign_name,
         lsc.score as lead_score, lsc.label as lead_score_label, lsc.reasons as lead_score_reasons,
