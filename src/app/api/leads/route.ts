@@ -97,6 +97,7 @@ export async function GET(request: NextRequest) {
     const serviceInterest = searchParams.get('serviceInterest')
     const marketSource = searchParams.get('marketSource')
     const leadQuality = searchParams.get('leadQuality')
+    const leadType = searchParams.get('leadType')
     const campaignFilter = searchParams.get('campaign')
     const dateFrom = searchParams.get('dateFrom')
     const dateTo = searchParams.get('dateTo')
@@ -199,6 +200,11 @@ export async function GET(request: NextRequest) {
     if (leadQuality) {
       whereConditions.push('l.lead_quality = ?')
       replacements.push(leadQuality)
+    }
+
+    if (leadType) {
+      whereConditions.push('l.lead_type = ?')
+      replacements.push(leadType)
     }
 
     if (dateFrom || dateTo) {
@@ -499,7 +505,7 @@ export async function GET(request: NextRequest) {
         l.address, l.dob, l.gender, l.id_number, l.id_expiry, l.country_interest,
         l.service_interest, l.market_source, l.priority, l.status, l.lead_quality,
         l.regdate, l.payTotal, l.paidYet, l.payBalance, l.lead_remark, l.created, l.last_updated, l.last_updtd_time,
-        l.followup, l.folowuptime, l.appointment,
+        l.followup, l.folowuptime, l.appointment, l.lead_type,
         l.assignTo, l.branch, l.region, l.stepComplete,
         l.opportunity_id, l.opportunity_status, l.campaign, l.meta_leadgen_id, l.meta_campaign_name,
         lsc.score as lead_score, lsc.label as lead_score_label, lsc.reasons as lead_score_reasons,
@@ -991,6 +997,12 @@ export async function POST(request: NextRequest) {
     const insertId = await insertLeadRecord(leadData);
     if (!insertId) {
       throw new Error('Lead was created but the new lead ID could not be resolved');
+    }
+
+    // Lead Type (crm_lead_type) isn't part of the shared default-lead column list, so stamp it separately.
+    const requestedLeadType = String(data.lead_type || data.leadType || '').trim()
+    if (requestedLeadType) {
+      await sequelize.query('UPDATE crm_forum_leads SET lead_type = ? WHERE id = ?', { replacements: [requestedLeadType.slice(0, 100), insertId], type: QueryTypes.UPDATE })
     }
 
     // Add Lead's "Prospect Follow-Up" used to land only in the lead's own followup

@@ -333,6 +333,7 @@ const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
         { name: 'Audit Log', href: '/admin/audit-log', icon: ListChecks, permission: 'admin.access' },
         { name: 'System Jobs', href: '/admin/system-jobs', icon: Activity, permission: 'admin.access' },
         { name: 'Lead Statuses', href: '/admin/lead-statuses', icon: Tag, permission: 'admin.access' },
+        { name: 'Lead Types', href: '/admin/lead-types', icon: Tag, permission: 'admin.access' },
         { name: 'Market Sources', href: '/admin/market-sources', icon: BarChart3, permission: 'marketing.manage' },
         { name: 'Campaigns', href: '/admin/campaigns', icon: MessageSquare, permission: 'campaigns.manage' },
         { name: 'Email Templates', href: '/admin/email-templates', icon: Mail, permission: 'templates.manage' },

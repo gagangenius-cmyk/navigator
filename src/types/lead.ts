@@ -48,6 +48,7 @@ export interface Lead {
   lead_remark: string;
   created: string;
   lead_quality: string;
+  lead_type?: string | null;
   campaign?: string;
   latest_remark?: string;
   latest_remark_id?: number;

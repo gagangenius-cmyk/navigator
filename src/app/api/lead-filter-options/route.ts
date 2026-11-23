@@ -193,6 +193,11 @@ export async function GET(request: NextRequest) {
     // this dropdown, e.g. "he is not interested" typed straight into the
     // column). Sort_order preserved rather than alphabetized, so it reads
     // the same left-to-right order as the Kanban columns.
+    const leadTypeRows = await sequelize.query<{ name: string }>(
+      'SELECT name FROM crm_lead_type WHERE is_enabled = 1 ORDER BY sort_order ASC, id ASC',
+      { type: QueryTypes.SELECT },
+    ).catch(() => [] as { name: string }[]);
+
     const statusOptions: FilterOption[] = [
       { value: 'New', label: 'New' },
       ...statuses.map((s) => ({ value: s.name, label: s.name })),
@@ -200,6 +205,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       statuses: statusOptions,
+      leadTypes: leadTypeRows.map((t) => ({ value: t.name, label: t.name })),
       // Priority is P1-P4 only (with definitions) - same list as the Add/Edit forms.
       priorities: LEAD_PRIORITIES.map((p) => ({ value: p.value, label: priorityLabel(p) })),
       branches: toOptions(branches),

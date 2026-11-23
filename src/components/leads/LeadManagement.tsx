@@ -52,6 +52,7 @@ interface LeadFilterOptions {
   services: FilterOption[];
   sources: FilterOption[];
   leadQualities: FilterOption[];
+  leadTypes: FilterOption[];
   campaigns: FilterOption[];
 }
 
@@ -175,6 +176,7 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
     serviceInterest: '',
     marketSource: '',
     leadQuality: '',
+    leadType: '',
     campaign: '',
     dateFrom: '',
     dateTo: '',
@@ -189,6 +191,7 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
     services: [],
     sources: [],
     leadQualities: [],
+    leadTypes: [],
     campaigns: []
   });
   const [pagination, setPagination] = useState<PaginationData>({
@@ -510,6 +513,7 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
     serviceInterest: '',
     marketSource: '',
     leadQuality: '',
+    leadType: '',
     campaign: '',
     dateFrom: '',
     dateTo: '',
@@ -709,6 +713,7 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
           services: data.services || [],
           sources: data.sources || [],
           leadQualities: data.leadQualities || [],
+          leadTypes: data.leadTypes || [],
           campaigns: data.campaigns || []
         });
       } catch (error) {
@@ -2224,6 +2229,10 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
               <option value="">Quality: All</option>
               {filterOptions.leadQualities.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
             </SearchableSelect>
+            <SearchableSelect value={filters.leadType} onChange={(e) => setFilters({...filters, leadType: e.target.value})} className="h-9 rounded-md border border-gray-200 bg-gray-50 px-3 text-sm font-medium focus:bg-white focus:ring-2 focus:ring-blue-500">
+              <option value="">Lead Type: All</option>
+              {filterOptions.leadTypes.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+            </SearchableSelect>
             <div className="relative">
               <Calendar className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
               <input type="date" value={filters.dateFrom} onChange={(e) => setFilters({...filters, dateFrom: e.target.value})} className="h-9 w-full rounded-md border border-gray-200 bg-gray-50 pl-9 pr-3 text-sm font-medium focus:bg-white focus:ring-2 focus:ring-blue-500" />
@@ -2648,6 +2657,7 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
                   <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
                   <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Phone</th>
                   <SortableTh label="Status" sortKey="status" activeKey={leadSortKey} direction={leadSortDirection} onSort={toggleLeadSort} />
+                  <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Lead Type</th>
                   <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Country Interested</th>
                   <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Program Interested</th>
                   <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Counselor</th>
@@ -2743,6 +2753,9 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
                           </span>
                         )}
                       </div>
+                    </td>
+                    <td className="px-4 py-2.5 whitespace-nowrap text-sm text-gray-700">
+                      {lead.lead_type || <span className="text-gray-400">—</span>}
                     </td>
                     <td className="px-4 py-2.5 whitespace-nowrap max-w-[160px] truncate text-sm text-gray-700" title={lead.country_interest_label || undefined}>
                       {lead.country_interest_label || <span className="text-gray-400">—</span>}
@@ -3739,6 +3752,17 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
                 {priorityChoices(formData.priority).map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
               </SearchableSelect>
               <SearchableSelect
+                value={formData.lead_type || ''}
+                onChange={(e) => setFormData({...formData, lead_type: e.target.value})}
+                className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">Select Lead Type</option>
+                {filterOptions.leadTypes.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                {formData.lead_type && !filterOptions.leadTypes.some((o) => o.value === formData.lead_type) && (
+                  <option value={formData.lead_type}>{formData.lead_type} (disabled)</option>
+                )}
+              </SearchableSelect>
+              <SearchableSelect
                 value={formData.lead_quality || ''}
                 onChange={(e) => setFormData({...formData, lead_quality: e.target.value})}
                 className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
@@ -3854,6 +3878,17 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
               >
                 <option value="">Select Priority</option>
                 {priorityChoices(formData.priority).map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </SearchableSelect>
+              <SearchableSelect
+                value={formData.lead_type || ''}
+                onChange={(e) => setFormData({...formData, lead_type: e.target.value})}
+                className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">Select Lead Type</option>
+                {filterOptions.leadTypes.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                {formData.lead_type && !filterOptions.leadTypes.some((o) => o.value === formData.lead_type) && (
+                  <option value={formData.lead_type}>{formData.lead_type} (disabled)</option>
+                )}
               </SearchableSelect>
             </div>
             <div className="mt-6 flex justify-end space-x-3">

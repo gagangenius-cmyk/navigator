@@ -12,6 +12,7 @@ import {
   FormPageHeader, FormActionBar, PrimaryButton, SecondaryButton,
 } from '@/components/leads/LeadFormFields';
 import { useLeadStatuses } from '@/hooks/useLeadStatuses';
+import { useLeadTypes } from '@/hooks/useLeadTypes';
 import { DEFAULT_LEAD_PRIORITY, priorityChoices } from '@/lib/leadPriorities';
 
 interface LeadFormData {
@@ -50,6 +51,7 @@ interface LeadFormData {
   priority: string;
   notes: string;
   leadQuality: string;
+  leadType: string;
   programCountry: string;
   program: string;
   programType: string;
@@ -78,6 +80,7 @@ interface LeadApiData {
   priority?: string | null;
   lead_remark?: string | null;
   lead_quality?: string | null;
+  lead_type?: string | null;
   country_interest?: number | string | null;
   service_interest?: number | string | null;
   salutation?: string | null;
@@ -147,6 +150,7 @@ const emptyForm: LeadFormData = {
   priority: DEFAULT_LEAD_PRIORITY,
   notes: '',
   leadQuality: 'Warm',
+  leadType: '',
   programCountry: '',
   program: '',
   programType: ''
@@ -216,6 +220,7 @@ const toFormData = (lead: LeadApiData): LeadFormData => ({
   priority: lead.priority || DEFAULT_LEAD_PRIORITY,
   notes: lead.lead_remark || '',
   leadQuality: lead.lead_quality || 'Warm',
+  leadType: lead.lead_type || '',
   programCountry: lead.country_interest ? String(lead.country_interest) : '',
   program: lead.service_interest ? String(lead.service_interest) : '',
   programType: lead.service_interest ? String(lead.service_interest) : ''
@@ -250,6 +255,7 @@ export default function AdminEditLeadPage() {
   // counselors; CEO (and anyone else) can pick from every branch.
   const { user } = useAuth();
   const { statuses: leadStatuses } = useLeadStatuses();
+  const leadTypes = useLeadTypes();
   const isBranchLockedRole = isFoeOrBranchManagerOrCeo(user as any) && String((user as any)?.roleName || '').trim().toLowerCase() !== 'ceo';
   // Once a lead is in the CRM, only Branch Manager or CEO can change its
   // contact details - counselors see them read-only here (also enforced
@@ -434,6 +440,7 @@ export default function AdminEditLeadPage() {
           priority: formData.priority,
           notes: formData.notes,
           leadQuality: formData.leadQuality,
+          leadType: formData.leadType,
           ...(metaLeadQuality ? { metaLeadQuality } : {}),
           programCountry: formData.programCountry,
           program: formData.program,
@@ -650,6 +657,13 @@ export default function AdminEditLeadPage() {
             </SelectField>
             <SelectField name="priority" label="Priority" value={formData.priority} onChange={handleInputChange}>
               {priorities.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+            </SelectField>
+            <SelectField name="leadType" label="Lead Type" value={formData.leadType} onChange={handleInputChange}>
+              <option value="">Select lead type</option>
+              {leadTypes.map((t) => <option key={t.id} value={t.name}>{t.name}</option>)}
+              {formData.leadType && !leadTypes.some((t) => t.name === formData.leadType) && (
+                <option value={formData.leadType}>{formData.leadType} (disabled)</option>
+              )}
             </SelectField>
             {isMetaLead && (
               <SelectField

@@ -14,6 +14,7 @@ import {
   FormPageHeader, FormActionBar, PrimaryButton, SecondaryButton, inputClass,
 } from '@/components/leads/LeadFormFields';
 import { useLeadStatuses } from '@/hooks/useLeadStatuses';
+import { useLeadTypes } from '@/hooks/useLeadTypes';
 import { DEFAULT_LEAD_PRIORITY, priorityChoices } from '@/lib/leadPriorities';
 
 interface LeadFormData {
@@ -66,6 +67,7 @@ interface LeadFormData {
   // System Fields
   status: string;
   priority: string;
+  lead_type: string;
   notes: string;
 
   // Chained Dropdown Fields
@@ -138,6 +140,7 @@ export default function AdminCreateLeadPage() {
 
     status: 'New',
     priority: DEFAULT_LEAD_PRIORITY,
+    lead_type: '',
     notes: '',
 
     programCountry: '',
@@ -159,6 +162,7 @@ export default function AdminCreateLeadPage() {
   // Get logged-in user
   const { user } = useAuth();
   const { statuses: leadStatuses } = useLeadStatuses();
+  const leadTypes = useLeadTypes();
   const isCeoUser = String((user as any)?.roleName || '').trim().toLowerCase() === 'ceo';
   // FOE and Branch Manager only ever add leads for their own branch's staff;
   // CEO can pick any branch via the selector below.
@@ -754,6 +758,10 @@ export default function AdminCreateLeadPage() {
             </SelectField>
             <SelectField name="priority" label="Priority" value={formData.priority} onChange={handleInputChange}>
               {priorities.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+            </SelectField>
+            <SelectField name="lead_type" label="Lead Type" value={formData.lead_type} onChange={handleInputChange}>
+              <option value="">Select lead type</option>
+              {leadTypes.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
             </SelectField>
             <TextAreaField name="notes" label="Notes" value={formData.notes} onChange={handleInputChange} rows={4} wide placeholder="Additional notes about this lead..." />
           </div>
