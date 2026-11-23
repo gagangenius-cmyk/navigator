@@ -40,7 +40,7 @@ export async function GET(request: NextRequest) {
       LEFT JOIN crm_coa_accounts c ON c.id = exp.coa_account_id
       LEFT JOIN crm_employee e ON e.id = exp.addBy`;
 
-    const [rows, countRows] = await Promise.all([
+    const [rows, countRows, sumRows] = await Promise.all([
       sequelize.query<{
         id: number; date: string; particular: string; amount: number; vat: number;
         branchId: number; branchName: string; coaAccountId: number | null; coaCode: string | null;
@@ -62,6 +62,11 @@ export async function GET(request: NextRequest) {
         `SELECT COUNT(*) AS total ${joins} WHERE ${whereSql}`,
         { replacements, type: QueryTypes.SELECT }
       ),
+      // Grand totals over every row matching the filters (not just this page).
+      sequelize.query<{ amount: number; vat: number }>(
+        `SELECT COALESCE(SUM(exp.amount),0) AS amount, COALESCE(SUM(COALESCE(exp.vat,0)),0) AS vat ${joins} WHERE ${whereSql}`,
+        { replacements, type: QueryTypes.SELECT }
+      ),
     ]);
 
     const total = n(countRows[0]?.total);
@@ -76,6 +81,12 @@ export async function GET(request: NextRequest) {
         approved: r.is_approval === 1 && r.mgmt_approval === 1,
       })),
       pagination: { page, limit, total, totalPages: Math.ceil(total / limit) || 1 },
+      summary: {
+        amount: n(sumRows[0]?.amount),
+        vat: n(sumRows[0]?.vat),
+        total: n(sumRows[0]?.amount) + n(sumRows[0]?.vat),
+        count: total,
+      },
     });
   } catch (error: any) {
     console.error('Error fetching expenses:', error);

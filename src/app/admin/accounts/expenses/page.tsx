@@ -8,6 +8,7 @@ import { SearchableSelect } from '@/components/ui/searchable-select';
 import { useAuth } from '@/contexts/AuthContext';
 import { isCeo, isFinanceOrAccounts } from '@/lib/roleChecks';
 import { uploadFileToBlob } from '@/lib/uploadToBlob';
+import TotalsBar from '@/components/shared/TotalsBar';
 import { Receipt, CheckCircle, RotateCcw, Trash2, Percent, FileSpreadsheet } from 'lucide-react';
 
 interface ExpenseRow {
@@ -45,6 +46,7 @@ export default function ExpensesPage() {
   const [branches, setBranches] = useState<BranchOption[]>([]);
   const [filters, setFilters] = useState(emptyFilters);
   const [pagination, setPagination] = useState({ page: 1, limit: 25, total: 0, totalPages: 1 });
+  const [summary, setSummary] = useState<{ amount: number; vat: number; total: number; count: number } | null>(null);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState('');
@@ -96,6 +98,7 @@ export default function ExpensesPage() {
       const result = await res.json();
       if (!res.ok) throw new Error(result.error || 'Failed to load expenses');
       setRows(result.data);
+      setSummary(result.summary ?? null);
       setPagination((p) => ({ ...p, total: result.pagination.total, totalPages: result.pagination.totalPages }));
     } catch (e: any) {
       setError(e.message);
@@ -345,6 +348,29 @@ export default function ExpensesPage() {
           </div>
         )}
       </div>
+
+      {summary && (
+        <>
+          <TotalsBar
+            title={`Total - all ${summary.count} matching expense${summary.count === 1 ? '' : 's'}`}
+            items={[
+              { label: 'Amount', value: fmtAed(summary.amount) },
+              { label: 'VAT', value: fmtAed(summary.vat) },
+              { label: 'Total', value: fmtAed(summary.total), tone: 'bad' },
+            ]}
+          />
+          {rows.length > 0 && rows.length < summary.count && (
+            <TotalsBar
+              title={`This page (${rows.length})`}
+              items={[
+                { label: 'Amount', value: fmtAed(rows.reduce((s, r) => s + r.amount, 0)) },
+                { label: 'VAT', value: fmtAed(rows.reduce((s, r) => s + r.vat, 0)) },
+                { label: 'Total', value: fmtAed(rows.reduce((s, r) => s + r.total, 0)) },
+              ]}
+            />
+          )}
+        </>
+      )}
 
       <div className="bg-white rounded-lg shadow p-4">
         <div className="flex items-center justify-between text-sm text-gray-600">

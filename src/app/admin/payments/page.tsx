@@ -9,6 +9,7 @@ import { useRouter } from 'next/navigation';
 import { FileText, Receipt, User, Wallet, ChevronLeft, ChevronRight, Pencil, CreditCard, XCircle } from 'lucide-react';
 import { useDebounce } from '@/hooks/useDebounce';
 import { isBranchManagerOrCeo, isCeo } from '@/lib/roleChecks';
+import TotalsBar from '@/components/shared/TotalsBar';
 import { AddThirdPartyPaymentDrawer } from '@/components/Payments/AddThirdPartyPaymentDrawer';
 import { EditOpportunityPaymentDrawer, type EditablePayment } from '@/components/Payments/EditOpportunityPaymentDrawer';
 import { EditThirdPartyPaymentDrawer, type EditableThirdPartyPayment } from '@/components/Payments/EditThirdPartyPaymentDrawer';
@@ -97,6 +98,7 @@ interface FilterOption {
 export default function PaymentsManagement() {
   const router = useRouter();
   const { user, currencyCode } = useAuth();
+  const fmtMoney = (v: number) => `${currencyCode} ${Number(v || 0).toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   const canEditPayments = isBranchManagerOrCeo(user);
   const canRejectPayments = isCeo(user);
   const [opportunityPayments, setOpportunityPayments] = useState<OpportunityPayment[]>([]);
@@ -537,6 +539,18 @@ export default function PaymentsManagement() {
               />
             ))}
           </RecordList>
+          {sortedOpportunityPayments.length > 0 && (
+            <div className="mt-3">
+              <TotalsBar
+                title={`Total - ${sortedOpportunityPayments.length} payment${sortedOpportunityPayments.length === 1 ? '' : 's'} on this page (of ${pagination.total})`}
+                items={[
+                  { label: 'Amount', value: fmtMoney(sortedOpportunityPayments.reduce((s, p) => s + Number(p.amount || 0), 0)) },
+                  { label: 'Tax', value: fmtMoney(sortedOpportunityPayments.reduce((s, p) => s + Number(p.taxAmount || 0), 0)) },
+                  { label: 'Discount', value: fmtMoney(sortedOpportunityPayments.reduce((s, p) => s + Number(p.discountAmount || 0), 0)) },
+                ]}
+              />
+            </div>
+          )}
         </div>
       )}
 
@@ -580,6 +594,18 @@ export default function PaymentsManagement() {
               />
             ))}
           </RecordList>
+          {sortedThirdPartyPayments.length > 0 && (
+            <div className="mt-3">
+              <TotalsBar
+                title={`Total - ${sortedThirdPartyPayments.length} payment${sortedThirdPartyPayments.length === 1 ? '' : 's'} on this page (of ${pagination.total})`}
+                items={[
+                  { label: 'Amount', value: fmtMoney(sortedThirdPartyPayments.reduce((s, p) => s + Number(p.amount || 0), 0)) },
+                  { label: 'Tax', value: fmtMoney(sortedThirdPartyPayments.reduce((s, p) => s + Number(p.Tax || 0), 0)) },
+                  { label: 'Amount + Tax', value: fmtMoney(sortedThirdPartyPayments.reduce((s, p) => s + Number(p.amount || 0) + Number(p.Tax || 0), 0)), tone: 'info' },
+                ]}
+              />
+            </div>
+          )}
         </div>
       )}
 
@@ -618,6 +644,19 @@ export default function PaymentsManagement() {
               />
             ))}
           </RecordList>
+          {sortedFees.length > 0 && (
+            <div className="mt-3">
+              <TotalsBar
+                title={`Total - ${sortedFees.length} fee${sortedFees.length === 1 ? '' : 's'} on this page (of ${pagination.total})`}
+                items={[
+                  { label: 'Total Amount', value: fmtMoney(sortedFees.reduce((s, p) => s + Number(p.amount || 0), 0)) },
+                  { label: 'Tax', value: fmtMoney(sortedFees.reduce((s, p) => s + Number(p.taxAmt || 0), 0)) },
+                  { label: 'Paid', value: fmtMoney(sortedFees.reduce((s, p) => s + Number(p.paidAmt || 0), 0)), tone: 'good' },
+                  { label: 'Professional', value: fmtMoney(sortedFees.reduce((s, p) => s + Number(p.profAmt || 0), 0)) },
+                ]}
+              />
+            </div>
+          )}
         </div>
       )}
 

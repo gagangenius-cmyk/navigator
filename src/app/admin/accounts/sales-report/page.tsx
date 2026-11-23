@@ -7,6 +7,7 @@ import { RecordCard, RecordList, SortButtonRow } from '@/components/shared/Respo
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { useAuth } from '@/contexts/AuthContext';
 import { isCeo, isFinanceOrAccounts, isBranchManagerOrCeo } from '@/lib/roleChecks';
+import TotalsBar from '@/components/shared/TotalsBar';
 import { Receipt } from 'lucide-react';
 
 interface SalesRow {
@@ -395,6 +396,19 @@ export default function SalesReportPage() {
           </div>
         )}
       </div>
+
+      {sortedRows.length > 0 && (
+        <TotalsBar
+          title={`Total - ${sortedRows.length} sale${sortedRows.length === 1 ? '' : 's'} on this page${summary ? ` (all ${summary.opportunities} matching: ${fmtAed(summary.totalAed)})` : ''}`}
+          items={[
+            { label: 'Total (AED)', value: fmtAed(sortedRows.reduce((s, r) => s + Number(r.totalFeeAed || 0), 0)) },
+            { label: 'Collected (AED)', value: fmtAed(sortedRows.reduce((s, r) => s + Number(r.paidAed || 0), 0)), tone: 'good' },
+            { label: 'Balance (AED)', value: fmtAed(sortedRows.reduce((s, r) => s + Number(r.balanceAed || 0), 0)), tone: 'bad' },
+            { label: 'Receipts', value: sortedRows.reduce((s, r) => s + Number(r.receiptCount || 0), 0) },
+            { label: 'Receipt Total (AED)', value: fmtAed(sortedRows.reduce((s, r) => s + Number(r.receiptTotalAed || 0), 0)), tone: 'info' },
+          ]}
+        />
+      )}
 
       {/* Pagination */}
       <div className="bg-white rounded-lg shadow p-4">

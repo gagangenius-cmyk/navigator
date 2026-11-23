@@ -9,7 +9,7 @@ import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import {
   Search, Plus, Edit, Trash2, Download, Upload, Users,
-  Filter, Calendar, Phone, Mail, MapPin, DollarSign, MessageCircle,
+  Filter, Calendar, Phone, Mail, MapPin, DollarSign,
   Eye, CheckCircle, Clock,
   Target, X, Save, LayoutList, LayoutGrid, Briefcase, MessageSquare, Settings,
   Receipt, AlertCircle, Printer, Loader2, ChevronsLeft, ChevronsRight, ChevronLeft, ChevronRight, RotateCcw, ExternalLink, XCircle,
@@ -22,6 +22,7 @@ import { Lead } from '@/types/lead';
 const SendTemplateDrawer = dynamic(() => import('@/components/leads/SendTemplateDrawer'), { ssr: false });
 import { useAuth } from '@/contexts/AuthContext';
 import { useLeadStatuses } from '@/hooks/useLeadStatuses';
+import WhatsAppIcon from '@/components/ui/WhatsAppIcon';
 import { priorityChoices } from '@/lib/leadPriorities';
 import { isBranchManagerOrCeo, isCeo, isFoe, isFoeOrBranchManagerOrCeo, isCounsellor, isCeoOrDirectorOfSales } from '@/lib/roleChecks';
 import { getLeadBranchDetails, printReceipt as printReceiptDocument } from '@/lib/receiptTemplate';
@@ -2560,7 +2561,7 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
                           </button>
                           {waLink && (
                             <a href={waLink} target="_blank" rel="noopener noreferrer" className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-green-50 text-green-700 hover:bg-green-100" title="Open in WhatsApp">
-                              <MessageCircle className="h-4 w-4" />
+                              <WhatsAppIcon variant="glyph" className="h-5 w-5" />
                             </a>
                           )}
                           {waNumber && (
@@ -2723,9 +2724,9 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
                                 rel="noopener noreferrer"
                                 onClick={(e) => e.stopPropagation()}
                                 title="Open WhatsApp chat"
-                                className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-green-500 text-white hover:bg-green-600"
+                                className="inline-flex shrink-0 rounded-full transition hover:scale-110 hover:shadow"
                               >
-                                <MessageCircle className="h-3 w-3" />
+                                <WhatsAppIcon className="h-5 w-5" />
                               </a>
                             )}
                             {lead.phone || lead.mobile || '—'}
