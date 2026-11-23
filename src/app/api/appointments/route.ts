@@ -6,7 +6,7 @@ import { sequelize } from '@/lib/sequelize'
 import { QueryTypes } from 'sequelize'
 import { logLeadRemark } from '@/lib/leadRemarks'
 import { verifyToken } from '@/lib/auth'
-import { isCeo, isBranchManagerOrCeo, isFoe } from '@/lib/roleChecks'
+import { isCeo, isBranchManagerOrCeo, isFoe, canViewCompanyWideWork } from '@/lib/roleChecks'
 import { notifyUser } from '@/lib/notify'
 import { ensureAppointmentRemarksColumn } from '@/lib/ensureAppointmentRemarksColumn'
 
@@ -25,6 +25,8 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '10')
     const counselorId = searchParams.get('counselorId')
     const date = searchParams.get('date')
+    const dateFrom = searchParams.get('dateFrom')
+    const dateTo = searchParams.get('dateTo')
     const status = searchParams.get('status')
     const search = searchParams.get('search')?.trim()
     const crossBranchOnly = ['1', 'true'].includes((searchParams.get('crossBranchOnly') || '').toLowerCase())
@@ -47,8 +49,8 @@ export async function GET(request: NextRequest) {
     // branch/counselor scoping entirely instead of narrowing it further.
     if (crossBranchOnly) {
       conditions.push('a.cross_branch = 1')
-    } else if (isCeo(currentUser)) {
-      // no restriction
+    } else if (isCeo(currentUser) || canViewCompanyWideWork(currentUser)) {
+      // no restriction (CEO, Director of Sales, Team Leader / Area Manager)
     } else if (isBranchManagerOrCeo(currentUser) || isFoe(currentUser)) {
       // Also surface appointments cross-branch-assigned *to* this branch
       // (assigned_branch), not just ones that originated here (branch) - the
@@ -65,7 +67,10 @@ export async function GET(request: NextRequest) {
       replacements.counselorId = Number(counselorId)
     }
 
-    if (date) {
+    if (dateFrom || dateTo) {
+      if (dateFrom) { conditions.push('a.date >= :dateFrom'); replacements.dateFrom = dateFrom }
+      if (dateTo) { conditions.push('a.date <= :dateTo'); replacements.dateTo = dateTo }
+    } else if (date) {
       conditions.push('a.date = :date')
       replacements.date = date
     }

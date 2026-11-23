@@ -12,6 +12,7 @@ import {
   FormPageHeader, FormActionBar, PrimaryButton, SecondaryButton,
 } from '@/components/leads/LeadFormFields';
 import { useLeadStatuses } from '@/hooks/useLeadStatuses';
+import { DEFAULT_LEAD_PRIORITY, priorityChoices } from '@/lib/leadPriorities';
 
 interface LeadFormData {
   salutation: string;
@@ -143,7 +144,7 @@ const emptyForm: LeadFormData = {
   roundrobin: false,
   whatsapp: false,
   status: 'New',
-  priority: 'Medium',
+  priority: DEFAULT_LEAD_PRIORITY,
   notes: '',
   leadQuality: 'Warm',
   programCountry: '',
@@ -212,7 +213,7 @@ const toFormData = (lead: LeadApiData): LeadFormData => ({
   roundrobin: Boolean(lead.roundrobin),
   whatsapp: Boolean(lead.whatsapp),
   status: lead.status || 'New',
-  priority: lead.priority || 'Medium',
+  priority: lead.priority || DEFAULT_LEAD_PRIORITY,
   notes: lead.lead_remark || '',
   leadQuality: lead.lead_quality || 'Warm',
   programCountry: lead.country_interest ? String(lead.country_interest) : '',
@@ -248,7 +249,7 @@ export default function AdminEditLeadPage() {
   // FOE and Branch Manager only ever reassign leads to their own branch's
   // counselors; CEO (and anyone else) can pick from every branch.
   const { user } = useAuth();
-  const { statuses: leadStatuses, usesPriorityScale } = useLeadStatuses();
+  const { statuses: leadStatuses } = useLeadStatuses();
   const isBranchLockedRole = isFoeOrBranchManagerOrCeo(user as any) && String((user as any)?.roleName || '').trim().toLowerCase() !== 'ceo';
   // Once a lead is in the CRM, only Branch Manager or CEO can change its
   // contact details - counselors see them read-only here (also enforced
@@ -360,10 +361,6 @@ export default function AdminEditLeadPage() {
       // status in/out of one must re-pick a priority valid for the
       // now-active option list.
       if (name === 'status') {
-        const wasPScale = usesPriorityScale(prev.status);
-        const isPScale = usesPriorityScale(value);
-        if (isPScale && !wasPScale) next.priority = 'Hot';
-        else if (!isPScale && wasPScale) next.priority = 'Medium';
       }
       return next;
     });
@@ -472,7 +469,7 @@ export default function AdminEditLeadPage() {
   const salutations = ['--None--', 'Mr.', 'Ms.', 'Mrs.', 'Dr.', 'Prof.'];
   const genderOptions = ['--None--', 'Male', 'Female', 'Other', 'Prefer not to say'];
   const staticCountries = ALL_COUNTRIES;
-  const priorities = usesPriorityScale(formData.status) ? ['Hot', 'Warm', 'Cold'] : ['High', 'Medium', 'Low'];
+  const priorities = priorityChoices(formData.priority);
   // 'untouched'/'New' are lifecycle sentinels, not part of the
   // admin-configurable crm_lead_status list — kept as fixed leading options
   // so a lead still sitting at either value shows a valid selection here.
@@ -652,7 +649,7 @@ export default function AdminEditLeadPage() {
               {statuses.map((option) => <option key={option} value={option}>{option}</option>)}
             </SelectField>
             <SelectField name="priority" label="Priority" value={formData.priority} onChange={handleInputChange}>
-              {priorities.map((option) => <option key={option} value={option}>{option}</option>)}
+              {priorities.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
             </SelectField>
             {isMetaLead && (
               <SelectField

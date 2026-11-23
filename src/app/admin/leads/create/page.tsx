@@ -14,6 +14,7 @@ import {
   FormPageHeader, FormActionBar, PrimaryButton, SecondaryButton, inputClass,
 } from '@/components/leads/LeadFormFields';
 import { useLeadStatuses } from '@/hooks/useLeadStatuses';
+import { DEFAULT_LEAD_PRIORITY, priorityChoices } from '@/lib/leadPriorities';
 
 interface LeadFormData {
   // Lead Information
@@ -136,7 +137,7 @@ export default function AdminCreateLeadPage() {
     whatsapp: false,
 
     status: 'New',
-    priority: 'Medium',
+    priority: DEFAULT_LEAD_PRIORITY,
     notes: '',
 
     programCountry: '',
@@ -157,7 +158,7 @@ export default function AdminCreateLeadPage() {
 
   // Get logged-in user
   const { user } = useAuth();
-  const { statuses: leadStatuses, usesPriorityScale } = useLeadStatuses();
+  const { statuses: leadStatuses } = useLeadStatuses();
   const isCeoUser = String((user as any)?.roleName || '').trim().toLowerCase() === 'ceo';
   // FOE and Branch Manager only ever add leads for their own branch's staff;
   // CEO can pick any branch via the selector below.
@@ -345,16 +346,6 @@ export default function AdminCreateLeadPage() {
       if (name === 'dateOfBirth') {
         next.age = calculateAgeFromDob(value);
       }
-      // Statuses flagged uses_p_priority_scale (crm_lead_status, e.g. Hot)
-      // are prioritized Hot/Warm/Cold instead of High/Medium/Low, so switching
-      // status in/out of one must re-pick a priority valid for the
-      // now-active option list.
-      if (name === 'status') {
-        const wasPScale = usesPriorityScale(prev.status);
-        const isPScale = usesPriorityScale(value);
-        if (isPScale && !wasPScale) next.priority = 'Hot';
-        else if (!isPScale && wasPScale) next.priority = 'Medium';
-      }
       return next;
     });
   };
@@ -522,7 +513,7 @@ export default function AdminCreateLeadPage() {
   const salutations = ['--None--', 'Mr.', 'Ms.', 'Mrs.', 'Dr.', 'Prof.'];
   const genderOptions = ['--None--', 'Male', 'Female', 'Other', 'Prefer not to say'];
   const staticCountries = ALL_COUNTRIES;
-  const priorities = usesPriorityScale(formData.status) ? ['Hot', 'Warm', 'Cold'] : ['High', 'Medium', 'Low'];
+  const priorities = priorityChoices(formData.priority);
   // 'New' is a lifecycle sentinel, not part of the admin-configurable
   // crm_lead_status list — kept as a fixed leading option since a freshly
   // created lead defaults to it.
@@ -762,7 +753,7 @@ export default function AdminCreateLeadPage() {
               {statuses.map(option => <option key={option} value={option}>{option}</option>)}
             </SelectField>
             <SelectField name="priority" label="Priority" value={formData.priority} onChange={handleInputChange}>
-              {priorities.map(option => <option key={option} value={option}>{option}</option>)}
+              {priorities.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
             </SelectField>
             <TextAreaField name="notes" label="Notes" value={formData.notes} onChange={handleInputChange} rows={4} wide placeholder="Additional notes about this lead..." />
           </div>

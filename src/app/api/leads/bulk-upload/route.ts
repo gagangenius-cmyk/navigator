@@ -254,7 +254,7 @@ export async function POST(request: NextRequest) {
           service_interest: null as number | null,
           market_source: marketSourceId,
           sub_market_source: 0,
-          priority: 'Medium',
+          priority: 'P3',
           // Unassigned unless a counselor name matched or the Assignment
           // Rules engine resolved an owner above — 'untouched' so an
           // unassigned import row is findable separately from a 'New' lead

@@ -343,3 +343,10 @@ main[data-view="list"] article[data-record-card] [data-rc="stats"] { display: fl
 main[data-view="list"] article[data-record-card] [data-rc="stats"] > div { background: transparent; padding: 0; display: flex; gap: .35rem; }
 main[data-view="list"] article[data-record-card] [data-rc="actions"] { margin-left: auto; }
 main[data-view="list"] [data-record-list] { gap: .35rem; }
+
+/* Global click-to-sort headers (see components/layout/TableSorting.tsx) */
+th[data-sortable="1"] { cursor: pointer; user-select: none; }
+th[data-sortable="1"]:hover { color: #374151; }
+th[data-sortable="1"]::after { content: " \2195"; opacity: .3; font-size: .85em; }
+th[data-sortable="1"][data-sort-dir="asc"]::after { content: " \25B2"; opacity: .9; }
+th[data-sortable="1"][data-sort-dir="desc"]::after { content: " \25BC"; opacity: .9; }

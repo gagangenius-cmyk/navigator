@@ -499,6 +499,7 @@ export async function GET(request: NextRequest) {
         l.address, l.dob, l.gender, l.id_number, l.id_expiry, l.country_interest,
         l.service_interest, l.market_source, l.priority, l.status, l.lead_quality,
         l.regdate, l.payTotal, l.paidYet, l.payBalance, l.lead_remark, l.created, l.last_updated, l.last_updtd_time,
+        l.followup, l.folowuptime, l.appointment,
         l.assignTo, l.branch, l.region, l.stepComplete,
         l.opportunity_id, l.opportunity_status, l.campaign, l.meta_leadgen_id, l.meta_campaign_name,
         lsc.score as lead_score, lsc.label as lead_score_label, lsc.reasons as lead_score_reasons,
@@ -681,7 +682,7 @@ export async function POST(request: NextRequest) {
               service_interest: '',
               market_source: '',
               sub_market_source: 0,
-              priority: 'Medium',
+              priority: 'P3',
               // Starts 'untouched' — recordLeadAssignment (called right after
               // insert below, since these leads are assigned to the importer
               // immediately) flips it to 'New' on the unassigned→assigned
@@ -956,7 +957,7 @@ export async function POST(request: NextRequest) {
           forceAutoAssign: wantsAutoAssign,
           roundRobin: true,
           sourceId: resolvedMarketSource,
-          priority: data.priority || 'Medium',
+          priority: data.priority || 'P3',
           leadQuality: data.lead_quality || data.leadQuality || null,
           countryInterestId: resolvedCountryInterest,
           serviceInterestId: resolvedServiceInterest,

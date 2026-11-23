@@ -21,6 +21,8 @@ import { Lead } from '@/types/lead';
 
 const SendTemplateDrawer = dynamic(() => import('@/components/leads/SendTemplateDrawer'), { ssr: false });
 import { useAuth } from '@/contexts/AuthContext';
+import { useLeadStatuses } from '@/hooks/useLeadStatuses';
+import { priorityChoices } from '@/lib/leadPriorities';
 import { isBranchManagerOrCeo, isCeo, isFoe, isFoeOrBranchManagerOrCeo, isCounsellor, isCeoOrDirectorOfSales } from '@/lib/roleChecks';
 import { getLeadBranchDetails, printReceipt as printReceiptDocument } from '@/lib/receiptTemplate';
 
@@ -178,6 +180,7 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
     dateTo: '',
     assignTo: ''
   });
+  const { badgeClassFor } = useLeadStatuses();
   const [filterOptions, setFilterOptions] = useState<LeadFilterOptions>({
     statuses: [],
     priorities: [],
@@ -235,6 +238,15 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
   const [showLeadActionModal, setShowLeadActionModal] = useState(false);
   const [returnToViewModalOnClose, setReturnToViewModalOnClose] = useState(false);
   const [leadActionType, setLeadActionType] = useState<LeadActionType>('appointment');
+  // "Add Lead Remark" can also change status / schedule a follow-up / book an
+  // appointment in one save. Each section is opt-in via its checkbox.
+  const emptyRemarkExtras = {
+    status: false, newStatus: '',
+    followup: false, fuDate: '', fuTime: '09:00', fuPriority: 'medium',
+    appointment: false, apDate: '', apTime: '09:00', apEmployee: '',
+  };
+  const [remarkExtras, setRemarkExtras] = useState(emptyRemarkExtras);
+  const remarkDoneRef = useRef<string[]>([]);
   const [leadActionForm, setLeadActionForm] = useState<LeadActionForm>({
     date: localToday(),
     time: '09:00',
@@ -346,7 +358,7 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
       try {
         // BM only sees counselors in their own branch; CEO sees everyone -
         // same branch-scoping convention used for lead reassignment (loadCounselors, below).
-        const params = new URLSearchParams({ status: '1', limit: '200' });
+        const params = new URLSearchParams({ status: '1', limit: '200', excludeCeo: '1' });
         if (!isCeoOrDirectorOfSales(user) && user?.branch) params.set('branch', String(user.branch));
         const res = await fetch(`/api/employees?${params.toString()}`);
         if (!res.ok) return;
@@ -1010,6 +1022,15 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
       programId: String((lead as any).service_interest || ''),
       countryId: String((lead as any).country_interest || '')
     });
+    setRemarkExtras({
+      ...emptyRemarkExtras,
+      newStatus: String(lead.status || ''),
+      fuDate: now.toISOString().split('T')[0],
+      apDate: now.toISOString().split('T')[0],
+      fuTime: currentTime,
+      apTime: currentTime,
+      apEmployee: String(lead.assignTo || lead.dmEmployeeByASSIGNTo?.id || ''),
+    });
     setCrossBranchEnabled(false);
     setCrossBranchTargetBranch('');
     setAppointmentEmployees([]);
@@ -1054,7 +1075,8 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
   // lead's own branch by default, or the chosen cross-branch's staff once
   // "Cross Branch" is toggled on and a target branch is picked.
   useEffect(() => {
-    if (!showLeadActionModal || leadActionType !== 'appointment' || !currentLead) return;
+    if (!showLeadActionModal || !currentLead) return;
+    if (!(leadActionType === 'appointment' || (leadActionType === 'remark' && remarkExtras.appointment))) return;
     const branchId = crossBranchEnabled ? crossBranchTargetBranch : String(currentLead.branch || '');
     if (!branchId) {
       setAppointmentEmployees([]);
@@ -1073,7 +1095,7 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
       .catch(() => { if (!cancelled) setAppointmentEmployees([]); })
       .finally(() => { if (!cancelled) setAppointmentEmployeesLoading(false); });
     return () => { cancelled = true; };
-  }, [showLeadActionModal, leadActionType, currentLead, crossBranchEnabled, crossBranchTargetBranch, token]);
+  }, [showLeadActionModal, leadActionType, remarkExtras.appointment, currentLead, crossBranchEnabled, crossBranchTargetBranch, token]);
 
   const handleLeadActionSubmit = async () => {
     if (!currentLead) return;
@@ -1100,6 +1122,17 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
     if (leadActionType === 'remark' && !leadActionForm.notes.trim()) {
       window.toast.warning('Please enter a remark');
       return;
+    }
+
+    if (leadActionType === 'remark') {
+      const x = remarkExtras;
+      const today = localToday();
+      if (x.status && !x.newStatus.trim()) { window.toast.warning('Please select a status'); return; }
+      if (x.followup && (!x.fuDate || !x.fuTime)) { window.toast.warning('Please select follow-up date and time'); return; }
+      if (x.followup && x.fuDate < today) { window.toast.error('Follow-up date cannot be in the past'); return; }
+      if (x.appointment && (!x.apDate || !x.apTime)) { window.toast.warning('Please select appointment date and time'); return; }
+      if (x.appointment && x.apDate < today) { window.toast.error('Appointment date cannot be in the past'); return; }
+      if (x.appointment && !Number(x.apEmployee)) { window.toast.warning('Please select an assigned employee for the appointment'); return; }
     }
 
     if (leadActionType === 'status' && !leadActionForm.status.trim()) {
@@ -1136,6 +1169,7 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
     }
 
     setLeadActionSaving(true);
+    remarkDoneRef.current = [];
     try {
       let response: Response;
 
@@ -1195,17 +1229,66 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
 
         if (!response.ok) throw new Error((await response.json().catch(() => ({}))).error || 'Failed to update status');
       } else {
-        response = await fetch('/api/lead-remarks', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            leadId,
-            employeeId,
-            remark: leadActionForm.notes
-          })
-        });
-
-        if (!response.ok) throw new Error((await response.json().catch(() => ({}))).error || 'Failed to add remark');
+        const x = remarkExtras;
+        const done: string[] = [];
+        const leadLabel = `${currentLead.fname || ''} ${currentLead.lname || ''}`.trim() || `Lead #${leadId}`;
+        if (x.status) {
+          // The status update carries the remark itself (same as "Update Status"),
+          // so the remark isn't also posted separately.
+          response = await fetch(`/api/leads/${leadId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: x.newStatus, notes: leadActionForm.notes }),
+          });
+          if (!response.ok) throw new Error((await response.json().catch(() => ({}))).error || 'Failed to update status');
+          done.push('status updated');
+        } else {
+          response = await fetch('/api/lead-remarks', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ leadId, employeeId, remark: leadActionForm.notes })
+          });
+          if (!response.ok) throw new Error((await response.json().catch(() => ({}))).error || 'Failed to add remark');
+        }
+        if (x.followup) {
+          const t = x.fuTime.length === 5 ? `${x.fuTime}:00` : x.fuTime;
+          const r = await fetch('/api/follow-up-reminders', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              leadId,
+              employeeId,
+              scheduledAt: `${x.fuDate}T${t}`,
+              subject: `Follow up with ${leadLabel}`,
+              message: leadActionForm.notes,
+              priority: x.fuPriority || 'medium',
+            })
+          });
+          if (!r.ok) throw new Error(`Remark saved, but follow-up failed: ${(await r.json().catch(() => ({}))).error || 'error'}`);
+          done.push('follow-up added');
+        }
+        if (x.appointment) {
+          const t = x.apTime.length === 5 ? `${x.apTime}:00` : x.apTime;
+          const r = await fetch('/api/appointments', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              leadId,
+              date: x.apDate,
+              appointtime: t,
+              counselorId: Number(x.apEmployee),
+              branch: currentLead.branch,
+              region: currentLead.region,
+              booked: 1,
+              screenshot: leadActionForm.notes,
+              crossBranch: false,
+              leadName: leadLabel,
+            })
+          });
+          if (!r.ok) throw new Error(`Remark saved, but appointment failed: ${(await r.json().catch(() => ({}))).error || 'error'}`);
+          done.push('appointment booked');
+        }
+        remarkDoneRef.current = done;
       }
 
       closeLeadActionModal();
@@ -1218,7 +1301,9 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
             ? 'Follow-up added successfully'
             : leadActionType === 'status'
               ? 'Status updated successfully'
-              : 'Remark added successfully'
+              : remarkDoneRef.current.length
+                ? `Remark saved; ${remarkDoneRef.current.join(', ')}`
+                : 'Remark added successfully'
       );
     } catch (error) {
       console.error('Error saving lead action:', error);
@@ -1715,20 +1800,22 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
     }
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'untouched': return 'bg-amber-100 text-amber-800';
-      case 'Interested': return 'bg-sky-100 text-sky-800';
-      case 'Prospect': return 'bg-blue-100 text-blue-800';
-      case 'Not Interested': return 'bg-red-100 text-red-800';
-      case 'DNQ': return 'bg-gray-100 text-gray-800';
-      case 'Not_answered': return 'bg-yellow-100 text-yellow-800';
-      case 'Could Not Connect': return 'bg-orange-100 text-orange-800';
-      case 'Call Back': return 'bg-purple-100 text-purple-800';
-      case 'Abroad Lead': return 'bg-green-100 text-green-800';
-      default: return 'bg-gray-100 text-gray-800';
-    }
+  // Badge colors come from the admin-configured crm_lead_status list so every
+  // status looks the same here as on the Kanban board and filters.
+  // Lead's next follow-up / appointment (synced from the reminders and
+  // appointments tables - see lib/leadSchedule.ts). Empty/zero dates show as blank.
+  const formatScheduled = (date?: string | null, time?: string | null) => {
+    const d = String(date || '').trim();
+    if (!d || d.startsWith('0000')) return '';
+    const base = formatDate(d);
+    const t = String(time || '').trim().slice(0, 5);
+    return base ? (t && t !== '00:00' ? `${base} ${t}` : base) : '';
   };
+
+  const getStatusColor = (status: string) =>
+    status === 'New' || status === 'untouched'
+      ? 'bg-amber-100 text-amber-800'
+      : badgeClassFor(status);
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
@@ -2567,6 +2654,8 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
                   <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date Registered</th>
                   <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Assigned Date</th>
                   <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Updated</th>
+                  <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Follow-up</th>
+                  <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Appointment</th>
                   <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Campaign</th>
                   <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Remarks</th>
                   <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
@@ -2613,7 +2702,26 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
                       {lead.email || '—'}
                     </td>
                     <td className="px-4 py-2.5 whitespace-nowrap text-sm text-gray-700">
-                      {lead.phone || lead.mobile || '—'}
+                      {(() => {
+                        const waLink = getWhatsAppLink(lead.whatsapp_number || lead.mobile || lead.phone);
+                        return (
+                          <span className="inline-flex items-center gap-1.5">
+                            {waLink && (
+                              <a
+                                href={waLink}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={(e) => e.stopPropagation()}
+                                title="Open WhatsApp chat"
+                                className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-green-500 text-white hover:bg-green-600"
+                              >
+                                <MessageCircle className="h-3 w-3" />
+                              </a>
+                            )}
+                            {lead.phone || lead.mobile || '—'}
+                          </span>
+                        );
+                      })()}
                     </td>
                     <td className="px-4 py-2.5 whitespace-nowrap">
                       <div className="flex flex-wrap items-center gap-1">
@@ -2653,6 +2761,12 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
                     </td>
                     <td className="px-4 py-2.5 whitespace-nowrap text-sm text-gray-600">
                       {formatLastUpdated(lead) || <span className="text-gray-400">—</span>}
+                    </td>
+                    <td className="px-4 py-2.5 whitespace-nowrap text-sm text-gray-600">
+                      {formatScheduled(lead.followup, lead.folowuptime) || <span className="text-gray-400">—</span>}
+                    </td>
+                    <td className="px-4 py-2.5 whitespace-nowrap text-sm text-gray-600">
+                      {formatScheduled(lead.appointment) || <span className="text-gray-400">—</span>}
                     </td>
                     <td className="px-4 py-2.5 whitespace-nowrap max-w-[140px] truncate text-sm text-gray-600" title={lead.meta_campaign_name || lead.campaign || undefined}>
                       {lead.meta_campaign_name || lead.campaign || <span className="text-gray-400">—</span>}
@@ -3247,16 +3361,9 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                   >
                     <option value="">Select status</option>
-                    <option value="Interested">Interested</option>
-                <option value="Prospect">Prospect</option>
-                    <option value="Not Interested">Not Interested</option>
-                    <option value="DNQ">DNQ</option>
-                    <option value="Not_answered">Not Answered</option>
-                    <option value="Could Not Connect">Could Not Connect/Wrong Number</option>
-                    <option value="Call Back">Call Back</option>
-                    <option value="Abroad Lead">Abroad Lead</option>
-                    <option value="Junk">Junk</option>
-                    <option value="Duplicate">Duplicate</option>
+                    {filterOptions.statuses
+                      .filter((o) => o.value !== 'Other' && o.value !== 'New')
+                      .map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                   </SearchableSelect>
                 </div>
               )}
@@ -3480,6 +3587,62 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
                   placeholder={leadActionType === 'status' ? 'Explain why the status is changing...' : leadActionType === 'remark' ? 'Enter lead remark...' : 'Enter notes...'}
                 />
               </div>
+
+              {leadActionType === 'remark' && (
+                <div className="rounded-lg border border-gray-200 p-3 space-y-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Also do (optional)</p>
+
+                  <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                    <input type="checkbox" checked={remarkExtras.status} onChange={(e) => setRemarkExtras({ ...remarkExtras, status: e.target.checked })} />
+                    Update status
+                  </label>
+                  {remarkExtras.status && (
+                    <SearchableSelect
+                      value={remarkExtras.newStatus}
+                      onChange={(e) => setRemarkExtras({ ...remarkExtras, newStatus: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                    >
+                      <option value="">Select status</option>
+                      {filterOptions.statuses.filter((o) => o.value !== 'Other' && o.value !== 'New').map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    </SearchableSelect>
+                  )}
+
+                  <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                    <input type="checkbox" checked={remarkExtras.followup} onChange={(e) => setRemarkExtras({ ...remarkExtras, followup: e.target.checked })} />
+                    Schedule follow-up
+                  </label>
+                  {remarkExtras.followup && (
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      <input type="date" value={remarkExtras.fuDate} onChange={(e) => setRemarkExtras({ ...remarkExtras, fuDate: e.target.value })} className="px-3 py-2 border border-gray-300 rounded-lg" />
+                      <input type="time" value={remarkExtras.fuTime} onChange={(e) => setRemarkExtras({ ...remarkExtras, fuTime: e.target.value })} className="px-3 py-2 border border-gray-300 rounded-lg" />
+                      <select value={remarkExtras.fuPriority} onChange={(e) => setRemarkExtras({ ...remarkExtras, fuPriority: e.target.value })} className="px-3 py-2 border border-gray-300 rounded-lg">
+                        <option value="low">Low</option>
+                        <option value="medium">Medium</option>
+                        <option value="high">High</option>
+                      </select>
+                    </div>
+                  )}
+
+                  <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                    <input type="checkbox" checked={remarkExtras.appointment} onChange={(e) => setRemarkExtras({ ...remarkExtras, appointment: e.target.checked })} />
+                    Book appointment
+                  </label>
+                  {remarkExtras.appointment && (
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      <input type="date" value={remarkExtras.apDate} onChange={(e) => setRemarkExtras({ ...remarkExtras, apDate: e.target.value })} className="px-3 py-2 border border-gray-300 rounded-lg" />
+                      <input type="time" value={remarkExtras.apTime} onChange={(e) => setRemarkExtras({ ...remarkExtras, apTime: e.target.value })} className="px-3 py-2 border border-gray-300 rounded-lg" />
+                      <SearchableSelect
+                        value={remarkExtras.apEmployee}
+                        onChange={(e) => setRemarkExtras({ ...remarkExtras, apEmployee: e.target.value })}
+                        className="px-3 py-2 border border-gray-300 rounded-lg"
+                      >
+                        <option value="">{appointmentEmployeesLoading ? 'Loading…' : 'Select employee'}</option>
+                        {appointmentEmployees.map((emp) => <option key={emp.id} value={String(emp.id)}>{emp.name}</option>)}
+                      </SearchableSelect>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="mt-6 flex justify-end gap-3">
@@ -3573,9 +3736,7 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
                 className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
               >
                 <option value="">Select Priority</option>
-                <option value="High">High</option>
-                <option value="Medium">Medium</option>
-                <option value="Low">Low</option>
+                {priorityChoices(formData.priority).map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
               </SearchableSelect>
               <SearchableSelect
                 value={formData.lead_quality || ''}
@@ -3679,30 +3840,12 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
                 value={formData.status || ''}
                 onChange={(e) => {
                   const nextStatus = e.target.value;
-                  const wasProspect = formData.status === 'Prospect' || formData.status === 'Interested';
-                  const isProspect = nextStatus === 'Prospect' || nextStatus === 'Interested';
-                  setFormData({
-                    ...formData,
-                    status: nextStatus,
-                    // Prospect leads use a Hot/Warm/Cold priority scale instead of
-                    // High/Medium/Low, so the previously selected priority
-                    // may no longer be a valid option once status changes.
-                    priority: isProspect && !wasProspect ? 'Hot' : !isProspect && wasProspect ? 'Medium' : formData.priority
-                  });
+                  setFormData({ ...formData, status: nextStatus });
                 }}
                 className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
               >
                 <option value="">Select Status</option>
-                <option value="Interested">Interested</option>
-                <option value="Prospect">Prospect</option>
-                <option value="Not Interested">Not Interested</option>
-                <option value="DNQ">DNQ</option>
-                <option value="Not_answered">Not Answered</option>
-                <option value="Could Not Connect">Could Not Connect/Wrong Number</option>
-                <option value="Call Back">Call Back</option>
-                <option value="Abroad Lead">Abroad Lead</option>
-                <option value="Junk">Junk</option>
-                <option value="Duplicate">Duplicate</option>
+                {filterOptions.statuses.filter((o) => o.value !== 'Other').map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
               </SearchableSelect>
               <SearchableSelect
                 value={formData.priority || ''}
@@ -3710,19 +3853,7 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
                 className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
               >
                 <option value="">Select Priority</option>
-                {formData.status === 'Prospect' || formData.status === 'Interested' ? (
-                  <>
-                    <option value="Hot">Hot</option>
-                    <option value="Warm">Warm</option>
-                    <option value="Cold">Cold</option>
-                  </>
-                ) : (
-                  <>
-                    <option value="High">High</option>
-                    <option value="Medium">Medium</option>
-                    <option value="Low">Low</option>
-                  </>
-                )}
+                {priorityChoices(formData.priority).map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
               </SearchableSelect>
             </div>
             <div className="mt-6 flex justify-end space-x-3">

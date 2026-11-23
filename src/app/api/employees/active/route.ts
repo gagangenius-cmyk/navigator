@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { QueryTypes } from 'sequelize';
 import { sequelize } from '@/lib/sequelize';
-import { CrmEmployee } from '@/models/CrmEmployee';
 import { requireAuth, isAuthError } from '@/lib/apiAuth';
 
 export async function GET(request: NextRequest) {
@@ -21,12 +20,14 @@ export async function GET(request: NextRequest) {
     if (!roleType) {
       // No role filter requested: preserve the original unfiltered behavior
       // (used by callers that just need every active employee, e.g. lead edit page).
-      const employees = await CrmEmployee.findAll({
-        where: branch ? { status: 1, branch: Number(branch) } : { status: 1 },
-        attributes: ['id', 'name', 'email', 'username', 'branch', 'role'],
-        order: [['name', 'ASC']],
-        raw: true
-      });
+      const employees = await sequelize.query(
+        `SELECT e.id, e.name, e.email, e.username, e.branch, e.role
+         FROM crm_employee e
+         WHERE e.status = 1 ${branch ? 'AND e.branch = :branch' : ''}
+           AND COALESCE(e.role, 0) NOT IN (SELECT id FROM crm_role WHERE LOWER(TRIM(name)) = 'ceo')
+         ORDER BY e.name ASC`,
+        { replacements: branch ? { branch: Number(branch) } : {}, type: QueryTypes.SELECT }
+      );
       return NextResponse.json(employees);
     }
 
@@ -38,7 +39,7 @@ export async function GET(request: NextRequest) {
       ? ['immigration_advisor', 'senior_immigration_advisor', 'counsellor', 'counselor', 'sales']
       : [roleType];
 
-    const conditions = ['e.status = 1', 'r.type IN (:roleTypes)'];
+    const conditions = ['e.status = 1', 'r.type IN (:roleTypes)', "LOWER(TRIM(r.name)) <> 'ceo'"];
     const replacements: Record<string, unknown> = { roleTypes };
     if (branch) {
       conditions.push('e.branch = :branch');

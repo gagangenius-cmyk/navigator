@@ -253,6 +253,7 @@ export default function AppointmentScheduler({ onAppointmentSelect, showActions 
   const [searchTerm, setSearchTerm] = useState('');
   const [filters, setFilters] = useState({
     date: '',
+    dateTo: '',
     status: '',
     type: '',
     counsilor: '',
@@ -300,7 +301,10 @@ export default function AppointmentScheduler({ onAppointmentSelect, showActions 
       setLoading(true);
       setError('');
       const params = new URLSearchParams({ page: String(pagination.page), limit: String(pagination.limit) });
-      if (filters.date) params.set('date', filters.date);
+      // From + To = date range; From alone = that single day (previous behavior).
+      if (filters.date && filters.dateTo) { params.set('dateFrom', filters.date); params.set('dateTo', filters.dateTo); }
+      else if (filters.date) params.set('date', filters.date);
+      else if (filters.dateTo) params.set('dateTo', filters.dateTo);
       if (filters.status) params.set('status', filters.status);
       if (filters.counsilor) params.set('counselorId', filters.counsilor);
       if (debouncedSearchTerm) params.set('search', debouncedSearchTerm);
@@ -326,7 +330,7 @@ export default function AppointmentScheduler({ onAppointmentSelect, showActions 
   useEffect(() => {
     fetchAppointments();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pagination.page, pagination.limit, filters.date, filters.status, filters.counsilor, debouncedSearchTerm, crossBranchOnly]);
+  }, [pagination.page, pagination.limit, filters.date, filters.dateTo, filters.status, filters.counsilor, debouncedSearchTerm, crossBranchOnly]);
 
   // Counselor filter dropdown - previously hardcoded to 3 fake names
   // (Sarah Wilson/Mike Johnson/Lisa Chen) that never matched real data.
@@ -334,7 +338,7 @@ export default function AppointmentScheduler({ onAppointmentSelect, showActions 
   useEffect(() => {
     (async () => {
       try {
-        const params = new URLSearchParams({ status: '1', limit: '200' });
+        const params = new URLSearchParams({ status: '1', limit: '200', excludeCeo: '1' });
         if (!isCeo(user as any) && (user as any)?.branch) params.set('branch', String((user as any).branch));
         const res = await fetch(`/api/employees?${params.toString()}`);
         if (!res.ok) return;
@@ -716,9 +720,29 @@ export default function AppointmentScheduler({ onAppointmentSelect, showActions 
           <input
             type="date"
             value={filters.date}
+            title="From date"
+            aria-label="From date"
             onChange={(e) => { setFilters({...filters, date: e.target.value}); setPagination((prev) => ({ ...prev, page: 1 })); }}
             className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
+          <input
+            type="date"
+            value={filters.dateTo}
+            min={filters.date || undefined}
+            title="To date"
+            aria-label="To date"
+            onChange={(e) => { setFilters({...filters, dateTo: e.target.value}); setPagination((prev) => ({ ...prev, page: 1 })); }}
+            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          />
+          {(filters.date || filters.dateTo) && (
+            <button
+              type="button"
+              onClick={() => { setFilters({...filters, date: '', dateTo: ''}); setPagination((prev) => ({ ...prev, page: 1 })); }}
+              className="px-3 py-2 text-sm text-blue-600 hover:underline"
+            >
+              Clear dates
+            </button>
+          )}
 
           <SearchableSelect
             value={filters.status}

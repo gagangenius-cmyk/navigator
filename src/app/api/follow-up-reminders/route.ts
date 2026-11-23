@@ -8,7 +8,7 @@ import { Op, QueryTypes } from 'sequelize';
 import { sequelize } from '@/lib/sequelize';
 import { logLeadRemark } from '@/lib/leadRemarks';
 import { verifyToken } from '@/lib/auth';
-import { isCeo, isBranchManagerOrCeo } from '@/lib/roleChecks';
+import { isCeo, isBranchManagerOrCeo, canViewCompanyWideWork } from '@/lib/roleChecks';
 
 // crm_follow_up_reminders.completion_notes is a lazily-added column (no
 // migration framework in this project) — ensured here so a database that
@@ -61,8 +61,8 @@ export async function GET(request: NextRequest) {
     // Visibility: counselors see only their own follow-ups, Branch Manager
     // sees their whole branch, CEO sees everything. Enforced server-side so
     // it can't be bypassed by omitting/changing the employeeId query param.
-    if (isCeo(currentUser)) {
-      // no restriction
+    if (isCeo(currentUser) || canViewCompanyWideWork(currentUser)) {
+      // no restriction (CEO, Director of Sales, Team Leader / Area Manager)
     } else if (isBranchManagerOrCeo(currentUser)) {
       conditions.push('e.branch = :userBranch');
       replacements.userBranch = Number(currentUser.branch || 0);

@@ -115,6 +115,7 @@ export default function LeadPool() {
   const [page, setPage]                 = useState(1);
   const [serviceOptions, setServiceOptions] = useState<FilterOption[]>([]);
   const [sourceOptions, setSourceOptions]   = useState<FilterOption[]>([]);
+  const [statusOptions, setStatusOptions]   = useState<FilterOption[]>([]);
 
   // Selection
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
@@ -199,7 +200,7 @@ export default function LeadPool() {
       channel.unbind('lead-pool:new', handleNew);
       pusher.unsubscribe(leadPoolChannelName(branchId));
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [data?.userBranch]);
 
   const handleClaim = async (lead: Lead) => {
@@ -235,6 +236,7 @@ export default function LeadPool() {
         if (!json) return;
         setServiceOptions(json.services || []);
         setSourceOptions(json.sources || []);
+        setStatusOptions(json.statuses || []);
       })
       .catch(() => {});
   }, []);
@@ -422,13 +424,7 @@ export default function LeadPool() {
           <SearchableSelect value={statusFilter} onChange={e => setStatus(e.target.value)}
             className="text-sm border border-[var(--cmg-border)] rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--cmg-blue)] text-[var(--cmg-ink)]">
             <option value="">All Statuses</option>
-            <option value="New">New</option>
-            <option value="Follow Up">Follow Up</option>
-            <option value="Not Interested">Not Interested</option>
-            <option value="Converted">Converted</option>
-            <option value="Client">Client</option>
-            <option value="Pending">Pending</option>
-            <option value="No Response">No Response</option>
+            {statusOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </SearchableSelect>
           <SearchableSelect value={priorityFilter} onChange={e => setPriority(e.target.value)}
             className="text-sm border border-[var(--cmg-border)] rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--cmg-blue)] text-[var(--cmg-ink)]">

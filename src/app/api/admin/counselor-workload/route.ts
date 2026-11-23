@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { QueryTypes } from 'sequelize';
 import { sequelize } from '@/lib/sequelize';
 import { requireAuth, isAuthError } from '@/lib/apiAuth';
-import { isCeo, isFoeOrCeo, isCounsellor } from '@/lib/roleChecks';
+import { isCeo, isFoeOrCeo, isCounsellor, canViewCompanyWideWork } from '@/lib/roleChecks';
 
 // crm_employee has no per-counselor quota column yet - this is the daily default
 // the workload sidebar's progress bar is measured against until one exists.
@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
     const leadPeriodClause = periodCondition(period);
     const capacity = DAILY_CAPACITY * (CAPACITY_MULTIPLIER[period] || 30);
 
-    const branchScoped = !isCeo(user);
+    const branchScoped = !isCeo(user) && !canViewCompanyWideWork(user);
     const userBranch = Number(user.branch || 0);
     const applyBranchFilter = branchScoped && userBranch > 0;
 

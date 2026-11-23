@@ -14,6 +14,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import DailyLeadWork from '@/components/dashboard/DailyLeadWork';
 import { isCounsellor } from '@/lib/roleChecks';
 import { useDebounce } from '@/hooks/useDebounce';
+import { useLeadStatuses } from '@/hooks/useLeadStatuses';
 
 interface LeadData {
   id: number;
@@ -64,6 +65,7 @@ function AllLeadsReport() {
       return `${currencyCode} ${Number(value || 0).toLocaleString()}`;
     }
   };
+  const { statuses: leadStatusList, badgeClassFor } = useLeadStatuses();
   const [leads, setLeads] = useState<LeadData[]>([]);
   const [statistics, setStatistics] = useState<Statistics | null>(null);
   const [loading, setLoading] = useState(true);
@@ -335,9 +337,7 @@ function AllLeadsReport() {
               >
                 <option value="">All Status</option>
                 <option value="New">New</option>
-                <option value="In Progress">In Progress</option>
-                <option value="Converted">Converted</option>
-                <option value="Closed">Closed</option>
+                {leadStatusList.map((st) => <option key={st.id} value={st.name}>{st.name}</option>)}
               </SearchableSelect>
             </div>
             
@@ -401,10 +401,7 @@ function AllLeadsReport() {
                     <>
                       <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-600">ID: {lead.id}</span>
                       <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                        lead.status === 'New' ? 'bg-green-100 text-green-800' :
-                        lead.status === 'In Progress' ? 'bg-yellow-100 text-yellow-800' :
-                        lead.status === 'Converted' ? 'bg-blue-100 text-blue-800' :
-                        'bg-gray-100 text-gray-800'
+                        lead.status === 'New' ? 'bg-green-100 text-green-800' : badgeClassFor(lead.status)
                       }`}>
                         {lead.status}
                       </span>

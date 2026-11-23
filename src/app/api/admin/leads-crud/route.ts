@@ -98,7 +98,7 @@ export async function POST(request: NextRequest) {
         body.followupstat ?? 1,
         body.enquiry || '',
         body.convet || 'New',
-        body.priority || 'Medium',
+        body.priority || 'P3',
         dubaiToday(), // regdate
         new Date().toTimeString().split(' ')[0], // regtime
         dubaiToday(), // last_updated

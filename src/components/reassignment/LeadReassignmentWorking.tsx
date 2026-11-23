@@ -95,7 +95,7 @@ export default function LeadReassignmentWorking() {
       }
 
       // Fetch employees
-      const employeesResponse = await fetch('/api/employees');
+      const employeesResponse = await fetch('/api/employees?excludeCeo=1');
       if (employeesResponse.ok) {
         const employeesData = await employeesResponse.json();
         setEmployees(employeesData.data || []);

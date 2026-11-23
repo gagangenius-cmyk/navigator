@@ -67,7 +67,10 @@ function buildLeadConditions(cat: string, userBranch: number, filters: LeadFilte
     conds.push(`(LOWER(CONCAT(COALESCE(l.fname,''),' ',COALESCE(l.lname,''))) LIKE LOWER(:search) OR LOWER(COALESCE(l.email,'')) LIKE LOWER(:search) OR COALESCE(l.phone,'') LIKE :search OR COALESCE(l.mobile,'') LIKE :search)`);
     rep.search = `%${filters.search}%`;
   }
-  if (filters.status) {
+  if (filters.status === 'Other') {
+    // Same "Other / Unclassified" bucket as the Leads page filter.
+    conds.push(`COALESCE(l.status,'New') NOT IN (SELECT name FROM crm_lead_status WHERE is_enabled = 1) AND COALESCE(l.status,'New') <> 'New'`);
+  } else if (filters.status) {
     conds.push(`LOWER(COALESCE(l.status,'')) = LOWER(:status)`);
     rep.status = filters.status;
   }

@@ -3,7 +3,7 @@ import { dubaiToday } from '@/lib/dubaiDate';
 import { QueryTypes } from 'sequelize';
 import { sequelize, connectDB } from '@/lib/sequelize';
 import { requireAuth, isAuthError } from '@/lib/apiAuth';
-import { isBranchManagerOrCeo, isCeo } from '@/lib/roleChecks';
+import { isBranchManagerOrCeo, canViewCompanyWideWork } from '@/lib/roleChecks';
 
 let dbReady = false;
 const ensureDB = async () => { if (!dbReady) { await connectDB(); dbReady = true; } };
@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
     // Branch Manager is clamped to their own branch regardless of ?branch= -
     // CEO and any other counselors.manage holder (finance/admin tier) may
     // pick any branch or leave it unset for all.
-    const isBmScoped = isBranchManagerOrCeo(auth) && !isCeo(auth);
+    const isBmScoped = isBranchManagerOrCeo(auth) && !canViewCompanyWideWork(auth);
     if (isBmScoped) {
       conditions.push(`e.branch = :branch`);
       replacements.branch = Number(auth.branch || 0);
@@ -69,7 +69,7 @@ export async function GET(request: NextRequest) {
       LEFT JOIN crm_region reg ON reg.id = e.region
       LEFT JOIN crm_department d ON d.id = e.department
       LEFT JOIN crm_forum_leads l ON (l.assignTo = e.id OR l.Counsilor = e.id)
-      WHERE 1=1 ${where}
+      WHERE LOWER(TRIM(COALESCE(r.name, ''))) <> 'ceo' ${where}
       GROUP BY e.id, e.name, e.email, e.mobile, r.name, e.branch, b.branch, reg.name, d.name, e.status, e.photo, e.doj, e.wfh
       ORDER BY total_leads DESC, e.name ASC`,
       { replacements, type: QueryTypes.SELECT }

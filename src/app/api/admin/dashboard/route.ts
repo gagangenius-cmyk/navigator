@@ -441,7 +441,7 @@ async function computeDashboardData(
     email: lead.email,
     phone: lead.phone,
     status: lead.status || 'New',
-    priority: lead.priority || 'Medium',
+    priority: lead.priority || 'P3',
     country_interest: lead.country_interest || 'Not specified',
     service_interest: lead.service_interest || 'Not specified',
     created: lead.created || lead.regdate,

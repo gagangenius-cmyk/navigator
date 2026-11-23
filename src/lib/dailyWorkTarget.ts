@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { QueryTypes } from 'sequelize';
 import { connectDB, sequelize } from '@/lib/sequelize';
 import { requireAuth, isAuthError } from '@/lib/apiAuth';
-import { isBranchManagerOrCeo, isCeo } from '@/lib/roleChecks';
+import { isBranchManagerOrCeo, canViewCompanyWideWork } from '@/lib/roleChecks';
 import { dubaiToday } from '@/lib/dubaiDate';
 import { ALLOWED_DAYS } from '@/lib/dailyLeadWork';
 
@@ -25,7 +25,7 @@ export async function resolveWorkTarget(
   let employeeId = Number(auth.id);
   const requestedEmployee = Number(searchParams.get('employeeId'));
   if (requestedEmployee && requestedEmployee !== employeeId) {
-    if (isCeo(auth)) {
+    if (canViewCompanyWideWork(auth)) {
       employeeId = requestedEmployee;
     } else if (isBranchManagerOrCeo(auth)) {
       const [emp] = await sequelize.query<{ branch: number | null }>(

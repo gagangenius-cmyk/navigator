@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { CrmEmployee, CrmRole, CrmBranch, CrmRegion } from '@/models'
-import { Op } from 'sequelize'
+import { Op, literal } from 'sequelize'
 import { requireAuth, isAuthError } from '@/lib/apiAuth'
 import { checkRoleAssignable } from '@/lib/accessAdmin'
 
@@ -43,6 +43,16 @@ export async function GET(request: NextRequest) {
 
     if (status) {
       where.status = parseInt(status)
+    }
+
+    // Counselor / transfer dropdowns pass excludeCeo=1 so the CEO is never
+    // offered as an assignee. The Employees admin screen omits it and still
+    // lists everyone. COALESCE keeps employees whose role is unset.
+    if (searchParams.get('excludeCeo') === '1') {
+      where[Op.and] = [
+        ...((where[Op.and] as any[]) || []),
+        literal("COALESCE(`CrmEmployee`.`role`, 0) NOT IN (SELECT id FROM crm_role WHERE LOWER(TRIM(name)) = 'ceo')"),
+      ]
     }
 
     const [employees, total] = await Promise.all([

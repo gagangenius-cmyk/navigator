@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
           forceAutoAssign: true,
           roundRobin: true,
           sourceId: resolvedMarketSource,
-          priority: data.priority || 'medium',
+          priority: data.priority || 'P3',
           countryInterestId: resolvedCountryInterest,
           serviceInterestId: resolvedServiceInterest,
           campaign: data.campaign || null,

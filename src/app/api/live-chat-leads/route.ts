@@ -210,7 +210,7 @@ export async function POST(request: NextRequest) {
       followupstat: 1,
       enquiry: immigrationType || 'Live chat lead enquiry',
       convet: 'New',
-      priority: 'Medium',
+      priority: 'P3',
       regdate: now,
       regtime: time,
       last_updated: dubaiToday(),

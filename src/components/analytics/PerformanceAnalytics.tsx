@@ -153,13 +153,15 @@ export default function PerformanceAnalytics() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [range, setRange] = useState('month');
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo] = useState('');
   const [activeTab, setActiveTab] = useState<'counselors' | 'branches'>('counselors');
 
   const load = useCallback(async (r: string) => {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch(`/api/analytics?range=${r}`);
+      const res = await fetch(r === 'custom' ? `/api/analytics?range=custom&from=${customFrom}&to=${customTo}` : `/api/analytics?range=${r}`);
       if (!res.ok) throw new Error(await res.text());
       setData(await res.json());
     } catch (e: any) {
@@ -167,7 +169,7 @@ export default function PerformanceAnalytics() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [customFrom, customTo]);
 
   useEffect(() => { load(range); }, [range, load]);
 
@@ -252,7 +254,7 @@ export default function PerformanceAnalytics() {
       <div className="flex flex-wrap items-center justify-between gap-3 bg-white border border-gray-200 rounded-xl px-5 py-4 shadow-sm">
         <div>
           <h2 className="text-xl font-bold text-gray-900">Analytics Dashboard</h2>
-          <p className="text-sm text-gray-500">{RANGE_LABELS[range]} · Live from database</p>
+          <p className="text-sm text-gray-500">{range === 'custom' ? 'Custom range' : RANGE_LABELS[range]} · Live from database</p>
         </div>
         <div className="flex items-center gap-3">
           <div className="flex rounded-lg border border-gray-200 overflow-hidden text-sm">
@@ -265,6 +267,27 @@ export default function PerformanceAnalytics() {
                 {label.replace('Last ', '')}
               </button>
             ))}
+          </div>
+          <div className="flex items-center gap-1 text-sm">
+            <input
+              type="date"
+              value={customFrom}
+              aria-label="From date"
+              onChange={(e) => { setCustomFrom(e.target.value); setRange('custom'); }}
+              className="rounded-lg border border-gray-200 px-2 py-1.5"
+            />
+            <span className="text-gray-400">to</span>
+            <input
+              type="date"
+              value={customTo}
+              min={customFrom || undefined}
+              aria-label="To date"
+              onChange={(e) => { setCustomTo(e.target.value); setRange('custom'); }}
+              className="rounded-lg border border-gray-200 px-2 py-1.5"
+            />
+            {range === 'custom' && (
+              <button onClick={() => { setCustomFrom(''); setCustomTo(''); setRange('month'); }} className="px-2 text-blue-600 hover:underline">Clear</button>
+            )}
           </div>
           <button
             onClick={() => load(range)}

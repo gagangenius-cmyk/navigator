@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { LayoutGrid, List, Rows3 } from 'lucide-react';
+import ColumnVisibility from './ColumnVisibility';
+import TableSorting from './TableSorting';
 
 // One List / Card switch for every CRM page. It sets data-view on <main data-view-root>; globals.css restyles
 // whatever the page renders: <table>s become cards, RecordCards become compact rows. "Default" leaves each
@@ -70,6 +72,8 @@ export default function ViewModeToggle() {
 
   return (
     <div className="mb-3 flex items-center justify-end gap-1" aria-label="View mode">
+      <TableSorting />
+      <ColumnVisibility />
       {options.map(({ id, label, icon: Icon }) => (
         <button
           key={label}

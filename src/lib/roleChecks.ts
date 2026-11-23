@@ -69,6 +69,16 @@ export function isBranchManagerOrCeo(user: RoleCheckUser): boolean {
   );
 }
 
+// Roles that follow every branch's follow-ups, appointments and daily work, not just their
+// own branch: CEO, Director of Sales, and Team Leader / Area Manager (the tier the spec
+// gives "complete leads and data" - see canViewAllBranches). Use this instead of
+// isCeo() wherever a manager-tier route would otherwise clamp them to one branch.
+export function canViewCompanyWideWork(user: RoleCheckUser): boolean {
+  if (isCeoOrDirectorOfSales(user)) return true;
+  const text = `${String(user?.roleName || '')} ${String(user?.type || '')}`.toLowerCase().replace(/_/g, ' ');
+  return text.includes('team leader') || text.includes('area manager');
+}
+
 // Accounts/Finance/Accountant - mirrors the text matching used by
 // resolveModuleRoleKey's 'finance' bucket (modulePermissions.ts) so this
 // stays in sync with which roles actually hold finance.view/finance.manage.

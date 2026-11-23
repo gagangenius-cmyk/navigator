@@ -24,6 +24,7 @@ export async function GET(request: NextRequest) {
          FROM crm_employee e
          LEFT JOIN crm_branch b ON b.id = e.branch
          WHERE e.status = 1
+           AND COALESCE(e.role, 0) NOT IN (SELECT id FROM crm_role WHERE LOWER(TRIM(name)) = 'ceo')
          ORDER BY e.name ASC`,
         { type: QueryTypes.SELECT }
       ),

@@ -48,6 +48,7 @@ export async function GET(request: NextRequest) {
      LEFT JOIN crm_role r ON r.id = e.role
      LEFT JOIN crm_department d ON d.id = e.department
      WHERE (e.name LIKE :search OR e.email LIKE :search)${roleFilter}
+       AND LOWER(TRIM(COALESCE(r.name, ''))) <> 'ceo'
      ORDER BY e.name ASC
      LIMIT 15`,
     { replacements, type: QueryTypes.SELECT }

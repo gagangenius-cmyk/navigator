@@ -53,14 +53,19 @@ async function computeAnalyticsData(isBM: boolean, isCounselor: boolean, userBra
     default:        startDate = null;
   }
 
-  const dateStr = startDate ? startDate.toISOString().slice(0, 10) : null;
-  const dateFilter = dateStr ? 'AND l.regdate >= :dateStr' : '';
+  let dateStr = startDate ? startDate.toISOString().slice(0, 10) : null;
+  let dateEnd: string | null = null;
+  // Custom range arrives as "custom:YYYY-MM-DD:YYYY-MM-DD" (either side may be empty);
+  // encoding it in `range` keeps it part of the unstable_cache key.
+  const custom = /^custom:(\d{4}-\d{2}-\d{2})?:(\d{4}-\d{2}-\d{2})?$/.exec(range);
+  if (custom) { dateStr = custom[1] || null; dateEnd = custom[2] || null; }
+  const dateFilter = `${dateStr ? 'AND l.regdate >= :dateStr' : ''} ${dateEnd ? 'AND l.regdate <= :dateEnd' : ''}`.trim();
   // Role scoping (not the selected date range) applies to the fixed
   // 12-month trend and appointments queries below, matching
   // src/app/api/admin/dashboard/route.ts's roleOnlyWhere convention of
   // scoping trend charts by role without narrowing them by the dashboard's
   // own date-range picker.
-  const rep = { branch: userBranch, uid: userId, dateStr };
+  const rep = { branch: userBranch, uid: userId, dateStr, dateEnd };
 
   const [
     summaryRows,
@@ -365,7 +370,13 @@ export async function GET(request: NextRequest) {
   if (isAuthError(auth)) return auth;
   try {
     const { searchParams } = new URL(request.url);
-    const range = searchParams.get('range') || 'month'; // week | month | quarter | year | all
+    let range = searchParams.get('range') || 'month'; // week | month | quarter | year | all | custom
+    if (range === 'custom') {
+      const iso = /^\d{4}-\d{2}-\d{2}$/;
+      const from = searchParams.get('from') || '';
+      const to = searchParams.get('to') || '';
+      range = `custom:${iso.test(from) ? from : ''}:${iso.test(to) ? to : ''}`;
+    }
 
     // Role-based scope
     const userRole   = auth.role ?? 0;

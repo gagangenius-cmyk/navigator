@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { QueryTypes } from 'sequelize';
 import { sequelize, connectDB } from '@/lib/sequelize';
 import { requireAuth, isAuthError } from '@/lib/apiAuth';
+import { LEAD_PRIORITIES, priorityLabel } from '@/lib/leadPriorities';
 
 interface RawOption {
   value: string | number | null;
@@ -186,7 +187,7 @@ export async function GET(request: NextRequest) {
     sources.forEach((row) => addOption(sourceMap, row.value, row.label));
     sourceValues.forEach((row) => addOption(sourceMap, row.value));
 
-    // Matches the Kanban board's columns exactly (see LeadKanbanSimple.tsx):
+    // 'New' (lifecycle sentinel) + the admin-configured disposition list.
     // 'New' (lifecycle sentinel) + the admin-configured disposition list +
     // 'Other' (anything else — mostly free-text legacy statuses that predate
     // this dropdown, e.g. "he is not interested" typed straight into the
@@ -195,12 +196,12 @@ export async function GET(request: NextRequest) {
     const statusOptions: FilterOption[] = [
       { value: 'New', label: 'New' },
       ...statuses.map((s) => ({ value: s.name, label: s.name })),
-      { value: 'Other', label: 'Other / Unclassified' },
     ];
 
     return NextResponse.json({
       statuses: statusOptions,
-      priorities: toOptions(priorities, basePriorities),
+      // Priority is P1-P4 only (with definitions) - same list as the Add/Edit forms.
+      priorities: LEAD_PRIORITIES.map((p) => ({ value: p.value, label: priorityLabel(p) })),
       branches: toOptions(branches),
       regions: toOptions(regions),
       countries: Array.from(countryMap.values()).sort((a, b) => a.label.localeCompare(b.label)),
