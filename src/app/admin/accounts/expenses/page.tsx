@@ -180,7 +180,9 @@ export default function ExpensesPage() {
   const handleDelete = async (id: number) => {
     if (!confirm('Delete this expense?')) return;
     const res = await fetch(`/api/admin/accounts/expenses?id=${id}`, { method: 'DELETE' });
-    if (res.ok) load();
+    if (res.ok) { load(); return; }
+    const result = await res.json().catch(() => ({}));
+    setError(result.error || 'Failed to delete expense');
   };
 
   const handleExport = async () => {

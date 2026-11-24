@@ -44,7 +44,7 @@ export async function getSalesReportData(params: SalesReportParams): Promise<{
   const page = Math.max(1, params.page || 1);
   const limit = Math.min(200, Math.max(1, params.limit || 50));
 
-  const conditions: string[] = ["LOWER(COALESCE(o.status,'')) = 'won'"];
+  const conditions: string[] = ["LOWER(COALESCE(o.status,'')) = 'won'", 'o.is_deleted = 0'];
   const replacements: Record<string, any> = {};
 
   if (params.dateFrom) { conditions.push('o.createdAt >= :dateFrom'); replacements.dateFrom = `${params.dateFrom} 00:00:00`; }

@@ -203,7 +203,9 @@ export async function PUT(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
-  const auth = requireAuth(request, ['finance.manage']);
+  // The CEO role check below is the real gate, so the CEO doesn't also need
+  // to hold finance.manage explicitly (finance.view is enough to reach here).
+  const auth = requireAuth(request, ['finance.view', 'finance.manage']);
   if (isAuthError(auth)) return auth;
   if (!isCeo(auth as any)) {
     return NextResponse.json({ error: 'Only the CEO can delete records' }, { status: 403 });
