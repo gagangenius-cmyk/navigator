@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useSortableData } from '@/components/ui/sortable-th';
 import { RecordCard, RecordList, SortButtonRow } from '@/components/shared/ResponsiveRecordList';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { BulkApproveBar, RowCheckbox, runBulk, useBulkSelection } from '@/components/shared/BulkApprove';
 import {
   Search, RefreshCw, CheckCircle, XCircle, Clock,
   ChevronLeft, ChevronRight, Eye, FileText, ExternalLink
@@ -135,6 +136,36 @@ export default function PaymentVerificationPage() {
     } finally { setSaving(false); }
   };
 
+  const bulk = useBulkSelection();
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkProgress, setBulkProgress] = useState('');
+  const pendingIds = sortedPayments.filter(p => p.accountantStatus === 'pending').map(p => p.id);
+
+  const bulkVerify = async () => {
+    const ids = pendingIds.filter(id => bulk.selected.has(id));
+    if (ids.length === 0) return;
+    if (!window.confirm(`Verify ${ids.length} selected payment(s)? Each one will be marked Verified and its agreement generated.`)) return;
+    setBulkBusy(true); setMsg('');
+    const result = await runBulk(
+      ids,
+      async (id) => {
+        const res = await fetch('/api/admin/opportunity-payments/verify', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ paymentId: id, status: 'verified', remarks: '' }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || 'Failed to verify');
+      },
+      (done, total) => setBulkProgress(`${done}/${total} processed…`),
+    );
+    setBulkBusy(false); setBulkProgress(''); bulk.clear();
+    setMsg(result.failed.length
+      ? `Failed: verified ${result.ok} of ${ids.length}. Not verified: ${result.failed.map(f => `#${f.id} (${f.error})`).join('; ')}`
+      : `${result.ok} payment(s) verified successfully.`);
+    load(pagination.page);
+  };
+
   const openDetail = (p: Payment) => { setSelected(p); setRemarks(p.accountantRemarks || ''); setMsg(''); };
 
   // Summary counts used in header chips
@@ -222,6 +253,16 @@ export default function PaymentVerificationPage() {
           direction={paymentSortDirection}
           onSort={togglePaymentSort}
         />
+        <BulkApproveBar
+          eligibleIds={pendingIds}
+          selected={bulk.selected}
+          onSetAll={bulk.setAll}
+          onClear={bulk.clear}
+          onApprove={bulkVerify}
+          busy={bulkBusy}
+          progress={bulkProgress}
+          label="Verify selected"
+        />
         <RecordList
           loading={loading}
           isEmpty={!loading && sortedPayments.length === 0}
@@ -231,6 +272,9 @@ export default function PaymentVerificationPage() {
           {sortedPayments.map(p => (
             <RecordCard
               key={p.id}
+              selectControl={p.accountantStatus === 'pending'
+                ? <RowCheckbox checked={bulk.selected.has(p.id)} onChange={() => bulk.toggle(p.id)} label={`Select payment ${p.paymentNumber || p.id}`} />
+                : undefined}
               avatar={<FileText className="h-4 w-4" />}
               avatarColorClass="from-blue-600 to-cyan-400"
               title={<span className="min-w-0 break-words text-base font-bold text-gray-950">{p.clientName?.trim() || '—'}</span>}

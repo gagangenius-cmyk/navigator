@@ -48,9 +48,12 @@ export interface RecordCardProps {
   extra?: ReactNode;
   actions?: RecordAction[];
   className?: string;
+  /** Optional leading control (e.g. a selection checkbox) rendered before the avatar. */
+  selectControl?: ReactNode;
 }
 
 export function RecordCard({
+  selectControl,
   avatar,
   avatarColorClass = 'from-blue-600 to-cyan-400',
   title,
@@ -65,6 +68,7 @@ export function RecordCard({
     <article data-record-card className={`min-w-0 rounded-lg border border-gray-200 bg-white p-3 shadow-sm transition hover:border-blue-200 hover:shadow-md lg:p-4 ${className || ''}`}>
       <div className="grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_auto]">
         <div className="flex min-w-0 gap-3">
+          {selectControl !== undefined && <div className="flex shrink-0 items-start pt-3">{selectControl}</div>}
           {avatar !== undefined && (
             <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br ${avatarColorClass} text-sm font-black text-white shadow-sm`}>
               {avatar}

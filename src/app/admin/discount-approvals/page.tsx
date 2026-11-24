@@ -5,6 +5,7 @@ import { useSortableData } from '@/components/ui/sortable-th';
 import { RecordCard, RecordList, SortButtonRow } from '@/components/shared/ResponsiveRecordList';
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { BulkApproveBar, RowCheckbox, runBulk, useBulkSelection } from '@/components/shared/BulkApprove';
 import { isCeo, isBranchManagerOrCeo } from '@/lib/roleChecks';
 import { getDiscountTier, canApproveDiscountTier, discountTierLabel, DEFAULT_DISCOUNT_TIER_THRESHOLDS, type DiscountTierThresholds } from '@/lib/discountApproval';
 import {
@@ -193,6 +194,47 @@ export default function DiscountApprovalsPage() {
     }
   };
 
+  const bulk = useBulkSelection();
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkProgress, setBulkProgress] = useState('');
+  const eligibleIds = approvals.filter(a => a.status === 'pending' && canApprove(a)).map(a => a.id);
+
+  const bulkApprove = async () => {
+    const ids = eligibleIds.filter(id => bulk.selected.has(id));
+    if (ids.length === 0) return;
+    if (!window.confirm(`Approve ${ids.length} selected discount request(s)? This applies each discount to its opportunity.`)) return;
+    setBulkBusy(true); setError('');
+    const result = await runBulk(
+      ids,
+      async (id) => {
+        const res = await fetch(`/api/discount-approvals/${id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({
+            status: 'approved',
+            approverRole: 'ceo',
+            approvedBy: user?.id || 1,
+            approvedAt: new Date().toISOString(),
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.success) throw new Error(data.error || 'Failed to approve');
+      },
+      (done, total) => setBulkProgress(`${done}/${total} processed…`),
+    );
+    setBulkBusy(false); setBulkProgress(''); bulk.clear();
+    if (result.failed.length) {
+      setError(`Approved ${result.ok} of ${ids.length}. Not approved: ${result.failed.map(f => `#${f.id} (${f.error})`).join('; ')}`);
+    } else {
+      setSuccess(`${result.ok} discount(s) approved successfully`);
+      setTimeout(() => setSuccess(''), 4000);
+    }
+    await fetchApprovals();
+  };
+
   const pct = (d: DiscountApproval) =>
     d.originalAmount > 0
       ? ((d.discountAmount / d.originalAmount) * 100).toFixed(1)
@@ -341,6 +383,15 @@ export default function DiscountApprovalsPage() {
             direction={discountSortDirection}
             onSort={toggleDiscountSort}
           />
+          <BulkApproveBar
+            eligibleIds={eligibleIds}
+            selected={bulk.selected}
+            onSetAll={bulk.setAll}
+            onClear={bulk.clear}
+            onApprove={bulkApprove}
+            busy={bulkBusy}
+            progress={bulkProgress}
+          />
           <RecordList isEmpty={approvals.length === 0} emptyIcon={DollarSign} emptyTitle="No discount approvals found">
             {sortedApprovals.map(a => {
               const isExpanded = expandedId === a.id;
@@ -348,6 +399,9 @@ export default function DiscountApprovalsPage() {
               return (
                 <RecordCard
                   key={a.id}
+                  selectControl={isPending && canApprove(a)
+                    ? <RowCheckbox checked={bulk.selected.has(a.id)} onChange={() => bulk.toggle(a.id)} label={`Select discount ${a.id}`} />
+                    : undefined}
                   avatar={<DollarSign className="h-4 w-4" />}
                   avatarColorClass="from-blue-600 to-cyan-400"
                   title={<span className="min-w-0 break-words text-base font-bold text-gray-950">{a.fname} {a.lname}</span>}

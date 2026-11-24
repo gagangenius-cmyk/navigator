@@ -10,6 +10,7 @@ import {
   ExternalLink, AlertCircle, ShieldCheck
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { BulkApproveBar, RowCheckbox, runBulk, useBulkSelection } from '@/components/shared/BulkApprove';
 import { isBranchManagerOrCeo } from '@/lib/roleChecks';
 
 interface ComplianceApproval {
@@ -167,6 +168,46 @@ export default function ComplianceApprovalsPage() {
     }
   };
 
+  const bulk = useBulkSelection();
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkProgress, setBulkProgress] = useState('');
+
+  const bulkApprove = async () => {
+    const ids = approvals
+      .filter(a => (a.status === 'pending' || a.status === 'under_review') && bulk.selected.has(a.id))
+      .map(a => a.id);
+    if (ids.length === 0) return;
+    if (!window.confirm(`Approve compliance for ${ids.length} selected submission(s)?`)) return;
+    setBulkBusy(true); setError('');
+    const result = await runBulk(
+      ids,
+      async (id) => {
+        const res = await fetch(`/api/opportunity-compliance-approvals?id=${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            status: 'approved',
+            reviewedBy: reviewerName || 'Compliance Officer',
+            reviewerRole: 'compliance_officer',
+            reviewNotes: null,
+            reviewedAt: new Date().toISOString(),
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.success) throw new Error(data.error || 'Failed to approve');
+      },
+      (done, total) => setBulkProgress(`${done}/${total} processed…`),
+    );
+    setBulkBusy(false); setBulkProgress(''); bulk.clear();
+    if (result.failed.length) {
+      setError(`Approved ${result.ok} of ${ids.length}. Not approved: ${result.failed.map(f => `#${f.id} (${f.error})`).join('; ')}`);
+    } else {
+      setSuccess(`${result.ok} compliance approval(s) approved`);
+      setTimeout(() => setSuccess(''), 4000);
+    }
+    await fetchApprovals();
+  };
+
   const summary = {
     total:        approvals.length,
     pending:      approvals.filter(a => a.status === 'pending').length,
@@ -288,6 +329,17 @@ export default function ComplianceApprovalsPage() {
             direction={approvalSortDirection}
             onSort={toggleApprovalSort}
           />
+          {canReview && (
+            <BulkApproveBar
+              eligibleIds={sortedApprovals.filter(a => a.status === 'pending' || a.status === 'under_review').map(a => a.id)}
+              selected={bulk.selected}
+              onSetAll={bulk.setAll}
+              onClear={bulk.clear}
+              onApprove={bulkApprove}
+              busy={bulkBusy}
+              progress={bulkProgress}
+            />
+          )}
           <RecordList isEmpty={filtered.length === 0} emptyIcon={ShieldCheck} emptyTitle="No compliance approvals found" emptyDescription="Compliance submissions appear here after counselors submit signed agreements">
             {sortedApprovals.map(a => {
               const isExpanded = expandedId === a.id;
@@ -295,6 +347,9 @@ export default function ComplianceApprovalsPage() {
               return (
                 <RecordCard
                   key={a.id}
+                  selectControl={isPending && canReview
+                    ? <RowCheckbox checked={bulk.selected.has(a.id)} onChange={() => bulk.toggle(a.id)} label={`Select submission ${a.id}`} />
+                    : undefined}
                   avatar={STATUS_ICONS[a.status]}
                   avatarColorClass="from-blue-600 to-cyan-400"
                   title={<span className="min-w-0 break-words text-base font-bold text-gray-950">{a.clientName?.trim() || `Lead #${a.leadId}`}</span>}
