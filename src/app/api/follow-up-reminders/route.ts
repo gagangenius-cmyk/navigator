@@ -358,6 +358,19 @@ export async function PUT(request: NextRequest) {
     });
     await syncLeadFollowup(existing.lead_id);
 
+    // Completing/rescheduling a follow-up is the actual client call - log it so
+    // it shows in Today's Activity.
+    if (existing.lead_id && (action === 'complete' || action === 'reschedule')) {
+      await logLeadRemark({
+        leadId: Number(existing.lead_id),
+        action: action === 'complete' ? 'followup_completed' : 'followup_rescheduled',
+        remark: action === 'complete'
+          ? `Follow-up completed${notes ? `: ${notes}` : ''}`
+          : `Follow-up rescheduled to ${String(rescheduledAt)}${notes ? `: ${notes}` : ''}`,
+        actorId: Number(currentUser.id),
+      });
+    }
+
     return NextResponse.json({
       success: true,
       reminder

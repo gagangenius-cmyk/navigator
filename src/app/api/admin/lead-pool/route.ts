@@ -175,8 +175,9 @@ export async function GET(request: NextRequest) {
         ORDER BY e.name ASC LIMIT 300`,
         { replacements: cRep, type: QueryTypes.SELECT }
       );
+      // Everyone except the CEO - Team Leaders, Area Managers etc. can receive transfers too.
       counsellors = counsellorCandidates
-        .filter((row) => isCounsellor({ roleName: row.roleName, type: row.roleType }))
+        .filter((row) => String(row.roleName || '').trim().toLowerCase() !== 'ceo')
         .map(({ id, name, branch, branchName }) => ({ id, name, branch, branchName }));
     }
 

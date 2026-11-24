@@ -4,7 +4,7 @@ import { HRService, type HRLeaveType } from '@/services/hr-service';
 import { sequelize } from '@/lib/sequelize';
 import { requireAuth, isAuthError } from '@/lib/apiAuth';
 import { getActiveLeaveTypeNames } from '@/lib/leaveTypes';
-import { isBranchManagerOrCeo, isCeo } from '@/lib/roleChecks';
+import { isBranchManagerOrCeo, isCeo, canViewCompanyWideWork } from '@/lib/roleChecks';
 import { hasAnyHrPermission, isOwnEmployeeId } from '@/lib/hrAccess';
 
 const reviewStatuses = ['Approved', 'Rejected', 'Cancelled'] as const;
@@ -20,12 +20,18 @@ const readString = (body: Record<string, unknown>, key: string) => (
 );
 
 export async function GET(request: NextRequest) {
-  const auth = requireAuth(request, ['hr.view', 'hr.self']);
+  const auth = requireAuth(request, ['hr.view', 'hr.self', 'hr.team.attendance_leave']);
   if (isAuthError(auth)) return auth;
   try {
     const { searchParams } = new URL(request.url);
     // hr.self-only callers are pinned to their own records, never a query-string id.
-    const canSeeOthers = hasAnyHrPermission(auth, ['hr.view']);
+    // Team Leaders / Area Managers / Branch Managers review their team's leave, so
+    // they see the team's requests (company-wide for TL/AM/DoS/CEO, own branch for BM).
+    const hasHrWide = hasAnyHrPermission(auth, ['hr.view']);
+    const companyWideReviewer = !hasHrWide && canViewCompanyWideWork(auth);
+    const branchReviewer = !hasHrWide && !companyWideReviewer
+      && (hasAnyHrPermission(auth, ['hr.team.attendance_leave']) || isBranchManagerOrCeo(auth));
+    const canSeeOthers = hasHrWide || companyWideReviewer || branchReviewer;
     const employeeId = canSeeOthers ? (searchParams.get('employee_id') || undefined) : String(auth.id);
     const year = Number.parseInt(searchParams.get('year') || String(new Date().getFullYear()), 10);
     const requests = await HRService.listLeaveManagementRequests({
@@ -33,6 +39,7 @@ export async function GET(request: NextRequest) {
       status: searchParams.get('status') || undefined,
       year,
       limit: Number.parseInt(searchParams.get('limit') || '100', 10),
+      branch: branchReviewer ? Number(auth.branch || 0) : undefined,
     });
     const balances = await HRService.getLeaveBalances(employeeId, year);
 
@@ -87,8 +94,13 @@ export async function POST(request: NextRequest) {
 }
 
 export async function PUT(request: NextRequest) {
-  const auth = requireAuth(request, ['hr.update', 'hr.team.attendance_leave']);
+  const auth = requireAuth(request);
   if (isAuthError(auth)) return auth;
+  // Team Leaders / Area Managers may review leave even if their role row lacks
+  // hr.team.attendance_leave.
+  if (!hasAnyHrPermission(auth, ['hr.update', 'hr.team.attendance_leave']) && !canViewCompanyWideWork(auth)) {
+    return NextResponse.json({ error: 'You do not have permission to perform this action' }, { status: 403 });
+  }
   try {
     const body = await request.json() as Record<string, unknown>;
     const leaveId = readString(body, 'leave_id');

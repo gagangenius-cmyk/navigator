@@ -627,6 +627,16 @@ export async function PUT(
           priority: 'medium',
           status: 'pending',
         });
+        // Without this entry a follow-up scheduled from the lead edit form never
+        // appeared in Today's Activity (it reads crm_remarks).
+        await logLeadRemark({
+          leadId: Number(id),
+          action: 'followup_added',
+          remark: `Follow-up added for ${followUpReminder.date}: ${incomingNotes || 'Prospect follow-up scheduled'}`,
+          newValue: followUpReminder.date,
+          actorId: auth.id,
+          actorRole: auth.roleName || auth.type,
+        });
       }
     }
 

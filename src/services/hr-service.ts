@@ -2594,6 +2594,7 @@ export class HRService {
     status?: string;
     year?: number;
     limit?: number;
+    branch?: number;
   } = {}) {
     await this.ensureLeaveManagementTables();
     const conditions: string[] = [];
@@ -2610,6 +2611,11 @@ export class HRService {
     if (options.status) {
       conditions.push('l.status = :status');
       replacements.status = options.status;
+    }
+
+    if (options.branch !== undefined) {
+      conditions.push('e.branch = :branch');
+      replacements.branch = options.branch;
     }
 
     conditions.push('YEAR(l.start_date) = :year');
@@ -2876,8 +2882,17 @@ export class HRService {
     );
 
     await this.syncLeaveBalance(input.employee_id, input.leave_type, new Date(input.start_date).getFullYear());
+    // Team Leaders / Area Managers review leave too, so they must be told as well.
+    const teamLeaders = await sequelize.query<{ id: number }>(
+      `SELECT e.id FROM crm_employee e
+       LEFT JOIN crm_role r ON r.id = e.role
+       WHERE e.status = 1 AND (LOWER(COALESCE(r.name, '')) LIKE '%team leader%' OR LOWER(COALESCE(r.name, '')) LIKE '%area manager%')
+         AND CAST(e.id AS CHAR) COLLATE utf8mb4_general_ci <> :employeeId`,
+      { replacements: { employeeId: String(input.employee_id) }, type: QueryTypes.SELECT }
+    ).catch(() => [] as Array<{ id: number }>);
     await this.notifyLeaveUsers({
-      userIds: [managerId],
+      userIds: [managerId, ...teamLeaders.map((t) => t.id)],
+      link: '/admin/hr/leave-management',
       title: 'Leave request pending manager review',
       message: `${recipients.employee?.name || `Employee ${input.employee_id}`} applied for ${input.leave_type} from ${input.start_date} to ${input.end_date}.`,
       priority: medicalCertificateRequired ? 'high' : 'medium',

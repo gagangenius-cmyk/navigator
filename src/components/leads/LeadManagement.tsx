@@ -373,9 +373,9 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
         // same role-check used everywhere else in this file.
         const employees: Array<{ id: number; name: string; dmRole?: { name?: string; type?: string } | null }> = data.employees || [];
         setCounselorFilterOptions(
-          employees
-            .filter((e) => isCounsellor({ roleName: e.dmRole?.name, type: e.dmRole?.type }))
-            .map((e) => ({ id: e.id, name: e.name }))
+          // Everyone except the CEO (excludeCeo above) - Team Leaders, Area
+          // Managers etc. own leads too and must be filterable.
+          employees.map((e) => ({ id: e.id, name: e.name }))
         );
       } catch (err) {
         console.error('Error loading counselor filter options:', err);
