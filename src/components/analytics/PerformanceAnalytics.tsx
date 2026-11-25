@@ -8,6 +8,7 @@ import {
   AlertCircle, ArrowUpRight, ArrowDownRight, Minus,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import LeadStatusPopup from '@/components/dashboard/LeadStatusPopup';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -156,6 +157,8 @@ export default function PerformanceAnalytics() {
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
   const [activeTab, setActiveTab] = useState<'counselors' | 'branches'>('counselors');
+  // Clicking a status number opens the list of leads behind it.
+  const [statusPopup, setStatusPopup] = useState<string | null>(null);
 
   const load = useCallback(async (r: string) => {
     setLoading(true);
@@ -361,6 +364,7 @@ export default function PerformanceAnalytics() {
         {/* Lead status breakdown */}
         <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
           <SectionHeader icon={Target} title="Status Breakdown" />
+          {statusPopup && <LeadStatusPopup status={statusPopup} onClose={() => setStatusPopup(null)} />}
           {leadsByStatus.length === 0 ? (
             <div className="h-32 flex items-center justify-center text-gray-400 text-sm">No data</div>
           ) : (
@@ -372,7 +376,11 @@ export default function PerformanceAnalytics() {
                   <div key={i} className="space-y-1">
                     <div className="flex justify-between items-center text-sm">
                       <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${colorClass}`}>{s.status}</span>
-                      <span className="text-gray-700 font-medium">{fmt(s.count)}</span>
+                      {s.status !== 'Unknown' && s.count > 0 ? (
+                        <button type="button" onClick={() => setStatusPopup(s.status)} title="Click to see these leads" className="text-gray-700 font-medium underline decoration-dotted underline-offset-2 hover:text-blue-700">{fmt(s.count)}</button>
+                      ) : (
+                        <span className="text-gray-700 font-medium">{fmt(s.count)}</span>
+                      )}
                     </div>
                     <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
                       <div

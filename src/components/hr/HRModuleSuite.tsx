@@ -133,7 +133,8 @@ type LeaveType =
   | 'Hajj Leave'
   | 'Bereavement Leave'
   | 'Unpaid Leave'
-  | 'Compensatory Leave';
+  | 'Compensatory Leave'
+  | 'Early Leave';
 
 type LeaveEntitlement = {
   type: LeaveType;

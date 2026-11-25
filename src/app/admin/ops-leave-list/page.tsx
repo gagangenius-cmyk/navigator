@@ -45,7 +45,7 @@ interface LeaveRequest {
   review_notes: string | null;
 }
 
-const LEAVE_TYPES = ['Annual Leave', 'Sick Leave', 'Emergency Leave', 'Maternity Leave', 'Paternity Leave', 'Hajj Leave', 'Bereavement Leave', 'Unpaid Leave', 'Compensatory Leave'];
+const LEAVE_TYPES = ['Annual Leave', 'Sick Leave', 'Emergency Leave', 'Maternity Leave', 'Paternity Leave', 'Hajj Leave', 'Bereavement Leave', 'Unpaid Leave', 'Compensatory Leave', 'Early Leave'];
 
 const OpsLeaveList: React.FC = () => {
   const [requests, setRequests] = useState<LeaveRequest[]>([]);

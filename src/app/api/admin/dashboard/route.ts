@@ -17,7 +17,9 @@ const n = (v: unknown) => Number(v || 0);
 // Determine the role category from the user's type string
 function roleCategory(type: string) {
   const t = type.toLowerCase().replace(/[\s-]+/g, '_');
-  if (['super_admin', 'admin', 'administrator', 'director', 'dos', 'director_of_sales', 'founder'].includes(t)) return 'admin';
+  // Team Leader / Area Manager see company-wide leads and data (same tier as canViewAllBranches), so their
+  // dashboard is the global one, not the own-leads-only counselor view they used to fall into.
+  if (['super_admin', 'admin', 'administrator', 'director', 'dos', 'director_of_sales', 'founder', 'team_leader', 'area_manager'].includes(t)) return 'admin';
   if (['branch_manager', 'bm'].includes(t)) return 'branch_manager';
   if (['hr'].includes(t)) return 'hr';
   if (['pro'].includes(t)) return 'pro';

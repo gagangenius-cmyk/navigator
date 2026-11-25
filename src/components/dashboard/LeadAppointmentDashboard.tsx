@@ -20,6 +20,7 @@ import {
 } from 'chart.js';
 import { Line, Bar, Pie, Doughnut } from 'react-chartjs-2';
 import { useAuth } from '@/contexts/AuthContext';
+import LeadStatusPopup from '@/components/dashboard/LeadStatusPopup';
 
 // Register Chart.js components ONCE
 ChartJS.register(
@@ -142,6 +143,8 @@ function formatFollowUpWhen(value: unknown): string {
 
 export default function AdminDashboard() {
   const { user, currencyCode } = useAuth();
+  // Clicking a lead-status number opens the list of leads behind it.
+  const [statusPopup, setStatusPopup] = useState<{ status: string; priority?: string } | null>(null);
   const [stats, setStats] = useState<DashboardStats>({
     totalLeads: 0,
     totalEmployees: 0,
@@ -669,8 +672,14 @@ export default function AdminDashboard() {
                 P4: 'bg-blue-50 text-blue-700',
                 Other: 'bg-gray-100 text-gray-600',
               };
+              const clickable = tier !== 'Other' && count > 0;
               return (
-                <div key={tier} className={`rounded-lg p-4 text-center ${tierColors[tier]}`} title={tier === 'Other' ? 'Prospect leads using an older, non P1-P4 priority value' : undefined}>
+                <div
+                  key={tier}
+                  className={`rounded-lg p-4 text-center ${tierColors[tier]} ${clickable ? 'cursor-pointer transition-shadow hover:shadow-md' : ''}`}
+                  title={tier === 'Other' ? 'Prospect leads using an older, non P1-P4 priority value' : clickable ? 'Click to see these leads' : undefined}
+                  onClick={clickable ? () => setStatusPopup({ status: 'Hot', priority: tier }) : undefined}
+                >
                   <p className="text-xs font-semibold uppercase tracking-wide">{tier}</p>
                   <p className="mt-1 text-2xl font-bold">{count.toLocaleString()}</p>
                 </div>
@@ -678,6 +687,40 @@ export default function AdminDashboard() {
             })}
           </div>
         </motion.section>
+
+        {/* Leads by status - each number opens the leads behind it */}
+        {((stats as any).statusBreakdown || []).length > 0 && (
+          <motion.section
+            initial={{ opacity: 0, y: 14 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.35 }}
+            className="mb-8 rounded-xl bg-white p-6 shadow-lg"
+          >
+            <h3 className="mb-4 text-lg font-semibold text-gray-900">Leads by Status</h3>
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-4 lg:grid-cols-6">
+              {((stats as any).statusBreakdown as Array<{ name: string; value: number }>).map((item) => {
+                const clickable = item.name !== 'Unknown' && item.value > 0;
+                return (
+                  <button
+                    key={item.name}
+                    type="button"
+                    disabled={!clickable}
+                    onClick={() => setStatusPopup({ status: item.name })}
+                    title={clickable ? 'Click to see these leads' : undefined}
+                    className={`rounded-lg bg-gray-50 p-4 text-center ${clickable ? 'cursor-pointer transition-shadow hover:bg-blue-50 hover:shadow-md' : 'cursor-default'}`}
+                  >
+                    <p className="truncate text-xs font-semibold uppercase tracking-wide text-gray-600">{item.name}</p>
+                    <p className="mt-1 text-2xl font-bold text-gray-900">{Number(item.value).toLocaleString()}</p>
+                  </button>
+                );
+              })}
+            </div>
+          </motion.section>
+        )}
+
+        {statusPopup && (
+          <LeadStatusPopup status={statusPopup.status} priority={statusPopup.priority} onClose={() => setStatusPopup(null)} />
+        )}
 
         {/* Leaderboards */}
         <div className="mb-8 grid grid-cols-1 gap-8 lg:grid-cols-2">

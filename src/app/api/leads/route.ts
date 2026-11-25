@@ -360,9 +360,13 @@ export async function GET(request: NextRequest) {
         whereConditions.push('(l.Counsilor = ? OR l.assignTo = ?)')
         replacements.push(currentUser.id, currentUser.id)
       }
-    } else if (opportunityView === 'today-activity') {
-      whereConditions.push(TODAY_ACTIVITY_SQL)
-      replacements.push(todayStartUtc, todayEndUtc)
+    } else if (opportunityView === 'today-activity' || opportunityView === 'all') {
+      // 'all' = every lead the caller may see regardless of opportunity/client state - the drill-down
+      // behind the dashboard/analytics status numbers, which count crm_forum_leads rows directly.
+      if (opportunityView === 'today-activity') {
+        whereConditions.push(TODAY_ACTIVITY_SQL)
+        replacements.push(todayStartUtc, todayEndUtc)
+      }
       if (isBranchManager) {
         whereConditions.push('l.branch = ?')
         replacements.push(currentUser.branch)
@@ -1012,13 +1016,22 @@ export async function POST(request: NextRequest) {
     const explicitFollowUp = splitFollowUp(data.followup || data.prospectFollowUp)
     if (explicitFollowUp.date && explicitFollowUp.time) {
       try {
+        const prospectReminderMessage = String(data.notes || data.lead_remark || 'Prospect follow-up scheduled')
         await CrmcFollowUpReminders.create({
           lead_id: insertId,
           user_id: Number(leadData.assignTo || currentUser.id),
           reminder_date: parseCrmDateTime(`${explicitFollowUp.date}T${explicitFollowUp.time}`),
-          message: String(data.notes || data.lead_remark || 'Prospect follow-up scheduled'),
+          message: prospectReminderMessage,
           priority: 'medium',
           status: 'pending',
+        })
+        // Every follow-up is logged like POST /api/follow-up-reminders does, so it counts in Today's Activity.
+        await logLeadRemark({
+          leadId: insertId,
+          action: 'followup_added',
+          remark: `Follow-up added for ${explicitFollowUp.date}: ${prospectReminderMessage}`,
+          newValue: explicitFollowUp.date,
+          actorId: currentUser.id,
         })
       } catch (error) {
         // The lead itself is already saved; don't fail creation over its reminder.

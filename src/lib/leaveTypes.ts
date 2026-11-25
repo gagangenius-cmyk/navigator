@@ -14,7 +14,14 @@ export const DEFAULT_LEAVE_TYPES = [
   'Unpaid Leave',
   'Compensatory Leave',
   'Emergency Leave',
+  'Early Leave',
 ];
+
+// Types added to the policy after databases were first seeded. A database that already has rows never
+// re-runs the seed above, so these are inserted by name if missing (once per server process). Types an
+// admin disables keep their row, so they are not re-added or re-enabled.
+const ADDED_LATER_LEAVE_TYPES = ['Early Leave'];
+let addedLaterEnsured = false;
 
 /**
  * Single source of truth for "which leave types exist" - reads crm_leave_type
@@ -34,6 +41,15 @@ export async function getActiveLeaveTypeNames(): Promise<string[]> {
     for (const name of DEFAULT_LEAVE_TYPES) {
       await sequelize.query('INSERT INTO crm_leave_type (name, status) VALUES (:name, 1)', { replacements: { name } });
     }
+    addedLaterEnsured = true;
+  } else if (!addedLaterEnsured) {
+    for (const name of ADDED_LATER_LEAVE_TYPES) {
+      const existing = await CrmLeaveType.count({ where: { name } });
+      if (existing === 0) {
+        await sequelize.query('INSERT INTO crm_leave_type (name, status) VALUES (:name, 1)', { replacements: { name } });
+      }
+    }
+    addedLaterEnsured = true;
   }
   const rows = await CrmLeaveType.findAll({
     where: { status: 1 },

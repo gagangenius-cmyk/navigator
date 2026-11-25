@@ -384,7 +384,7 @@ export async function GET(request: NextRequest) {
     const userBranch = auth.branch ?? 0;
     const userId     = auth.id ?? 0;
 
-    const isAdmin = userRole === 1 || ['super_admin','admin','administrator','director','dos','director_of_sales','founder'].includes(userType);
+    const isAdmin = userRole === 1 || ['super_admin','admin','administrator','director','dos','director_of_sales','founder','team_leader','area_manager'].includes(userType);
     const isBM    = !isAdmin && ['branch_manager','bm'].includes(userType);
     const isCounselor = !isAdmin && !isBM;
 

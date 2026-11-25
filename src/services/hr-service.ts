@@ -71,7 +71,8 @@ export type HRLeaveType =
   | 'Bereavement Leave'
   | 'Unpaid Leave'
   | 'Compensatory Leave'
-  | 'Emergency Leave';
+  | 'Emergency Leave'
+  | 'Early Leave';
 type HRLeaveStatus = 'Pending' | 'Approved' | 'Rejected' | 'Cancelled';
 type HRManagerLeaveStatus = 'Pending' | 'Approved' | 'Rejected';
 type HRLeaveWorkflowStatus = 'Manager Review' | 'HR Confirmation' | 'Completed' | 'Cancelled';
@@ -308,6 +309,7 @@ const leaveEntitlements: Array<{
   { type: 'Unpaid Leave', entitlementDays: 0, category: 'Unpaid', notes: 'Manager discretion; salary deducted pro-rata.' },
   { type: 'Compensatory Leave', entitlementDays: 0, category: 'Earned', notes: 'Earned against overtime worked and linked to attendance OT records.' },
   { type: 'Emergency Leave', entitlementDays: 5, category: 'Paid', notes: 'Short-notice emergency leave, manager discretion; capped at 5 days per year.' },
+  { type: 'Early Leave', entitlementDays: 0, category: 'Paid', notes: 'Leaving work early on a working day; needs manager approval, no fixed yearly balance.' },
 ];
 const leaveTypeNames = leaveEntitlements.map((item) => item.type);
 
@@ -1189,7 +1191,7 @@ export class HRService {
         leave_id CHAR(36) PRIMARY KEY,
         employee_id CHAR(36) NOT NULL,
         manager_id CHAR(36) NULL,
-        leave_type ENUM('Annual Leave', 'Sick Leave', 'Maternity Leave', 'Paternity Leave', 'Hajj Leave', 'Bereavement Leave', 'Unpaid Leave', 'Compensatory Leave', 'Emergency Leave') NOT NULL,
+        leave_type ENUM('Annual Leave', 'Sick Leave', 'Maternity Leave', 'Paternity Leave', 'Hajj Leave', 'Bereavement Leave', 'Unpaid Leave', 'Compensatory Leave', 'Emergency Leave', 'Early Leave') NOT NULL,
         start_date DATE NOT NULL,
         end_date DATE NOT NULL,
         days_requested DECIMAL(6,2) NOT NULL,
@@ -1223,7 +1225,7 @@ export class HRService {
     await sequelize.query(`
       ALTER TABLE crm_hr_leave_requests MODIFY COLUMN leave_type ENUM(
         'Annual Leave', 'Sick Leave', 'Maternity Leave', 'Paternity Leave', 'Hajj Leave',
-        'Bereavement Leave', 'Unpaid Leave', 'Compensatory Leave', 'Emergency Leave'
+        'Bereavement Leave', 'Unpaid Leave', 'Compensatory Leave', 'Emergency Leave', 'Early Leave'
       ) NOT NULL
     `);
 
@@ -2693,7 +2695,7 @@ export class HRService {
           remaining_days
         FROM crm_hr_leave_balances
         WHERE employee_id = :employeeId AND year = :year
-        ORDER BY FIELD(leave_type, 'Annual Leave', 'Sick Leave', 'Emergency Leave', 'Maternity Leave', 'Paternity Leave', 'Hajj Leave', 'Bereavement Leave', 'Unpaid Leave', 'Compensatory Leave')
+        ORDER BY FIELD(leave_type, 'Annual Leave', 'Sick Leave', 'Emergency Leave', 'Maternity Leave', 'Paternity Leave', 'Hajj Leave', 'Bereavement Leave', 'Unpaid Leave', 'Compensatory Leave', 'Early Leave')
       `,
       { replacements: { employeeId, year }, type: QueryTypes.SELECT }
     );

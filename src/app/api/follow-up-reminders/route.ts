@@ -90,6 +90,15 @@ export async function GET(request: NextRequest) {
       }
     }
     if (priority) { conditions.push('r.priority = :priority'); replacements.priority = priority; }
+    // Same lead filters as the Leads page: the lead's own status and branch.
+    const leadStatus = searchParams.get('leadStatus');
+    const leadBranch = searchParams.get('branch');
+    if (leadStatus === 'Other') {
+      conditions.push("l.status NOT IN (SELECT name FROM crm_lead_status WHERE is_enabled = 1) AND l.status <> 'New'");
+    } else if (leadStatus) {
+      conditions.push('l.status = :leadStatus'); replacements.leadStatus = leadStatus;
+    }
+    if (leadBranch && Number.isFinite(Number(leadBranch))) { conditions.push('l.branch = :leadBranch'); replacements.leadBranch = Number(leadBranch); }
     if (startDate && endDate) {
       conditions.push('r.reminder_date BETWEEN :startDate AND :endDate');
       replacements.startDate = startDate;

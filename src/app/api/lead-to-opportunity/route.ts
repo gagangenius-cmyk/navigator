@@ -833,6 +833,15 @@ export async function POST(request: NextRequest) {
         lead.id,
         transaction
       ));
+      // Same transaction so the activity entry rolls back with the follow-up; this is what puts it in Today's Activity.
+      await logLeadRemark({
+        leadId: lead.id,
+        action: 'followup_added',
+        remark: `Follow-up added for ${String(followUp.reminder_date).slice(0, 10)}: ${followUp.message || ''}`,
+        newValue: String(followUp.reminder_date).slice(0, 10),
+        actorId: createdBy,
+        transaction,
+      });
       followUpSummary = {
         id: followUpId,
         leadId: lead.id,

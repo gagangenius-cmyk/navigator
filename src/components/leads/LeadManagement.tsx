@@ -362,7 +362,8 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
       try {
         // BM only sees counselors in their own branch; CEO sees everyone -
         // same branch-scoping convention used for lead reassignment (loadCounselors, below).
-        const params = new URLSearchParams({ status: '1', limit: '200', excludeCeo: '1' });
+        // The CEO is included: leads can be transferred to (and filtered by) the CEO too.
+        const params = new URLSearchParams({ status: '1', limit: '500' });
         if (!isCeoOrDirectorOfSales(user) && user?.branch) params.set('branch', String(user.branch));
         const res = await fetch(`/api/employees?${params.toString()}`);
         if (!res.ok) return;

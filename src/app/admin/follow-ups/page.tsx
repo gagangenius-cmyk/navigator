@@ -66,6 +66,14 @@ export default function FollowUpsPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [priorityFilter, setPriorityFilter] = useState('');
+  // Same filters as the Leads page: lead status, branch and counselor, plus the Leads "Today's Activity" count.
+  const [leadStatusFilter, setLeadStatusFilter] = useState('');
+  const [branchFilter, setBranchFilter] = useState('');
+  const [counselorFilter, setCounselorFilter] = useState('');
+  const [leadStatusOptions, setLeadStatusOptions] = useState<Array<{ value: string; label: string }>>([]);
+  const [branchOptions, setBranchOptions] = useState<Array<{ value: string; label: string }>>([]);
+  const [counselorOptions, setCounselorOptions] = useState<Array<{ id: number; name: string }>>([]);
+  const [todayActivityCount, setTodayActivityCount] = useState<number | null>(null);
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [actionLoading, setActionLoading] = useState<number | null>(null);
@@ -88,6 +96,9 @@ export default function FollowUpsPage() {
       if (debouncedSearchTerm) params.set('search', debouncedSearchTerm);
       if (statusFilter) params.set('status', statusFilter);
       if (priorityFilter) params.set('priority', priorityFilter);
+      if (leadStatusFilter) params.set('leadStatus', leadStatusFilter);
+      if (branchFilter) params.set('branch', branchFilter);
+      if (counselorFilter) params.set('employeeId', counselorFilter);
       if (dateFrom) params.set('startDate', dateFrom);
       if (dateTo) params.set('endDate', `${dateTo} 23:59:59`);
       const res = await fetch(`/api/follow-up-reminders?${params}`);
@@ -101,9 +112,29 @@ export default function FollowUpsPage() {
     } finally {
       setLoading(false);
     }
-  }, [pagination.page, pagination.limit, debouncedSearchTerm, statusFilter, priorityFilter, dateFrom, dateTo]);
+  }, [pagination.page, pagination.limit, debouncedSearchTerm, statusFilter, priorityFilter, leadStatusFilter, branchFilter, counselorFilter, dateFrom, dateTo]);
 
   useEffect(() => { fetchFollowUps(); }, [fetchFollowUps]);
+
+  // Filter options come from the same endpoints the Leads page uses; the counselor list is only
+  // available to managers (a counselor only ever sees their own follow-ups anyway).
+  useEffect(() => {
+    fetch('/api/lead-filter-options').then((r) => (r.ok ? r.json() : null)).then((d) => {
+      if (!d) return;
+      setLeadStatusOptions(d.statuses || []);
+      setBranchOptions(d.branches || []);
+    }).catch(() => {});
+    fetch('/api/employees?status=1&limit=500').then((r) => (r.ok ? r.json() : null)).then((d) => {
+      if (d?.employees) setCounselorOptions(d.employees.map((e: { id: number; name: string }) => ({ id: e.id, name: e.name })));
+    }).catch(() => {});
+  }, []);
+
+  // Identical to the count on the Leads page's "Today's Activity" tab (same endpoint, same Dubai-day rule).
+  useEffect(() => {
+    fetch('/api/leads?opportunityView=today-activity&limit=1&page=1').then((r) => (r.ok ? r.json() : null)).then((d) => {
+      if (d?.pagination) setTodayActivityCount(Number(d.pagination.total || 0));
+    }).catch(() => {});
+  }, [followUps]);
 
   const handleAction = async (reminderId: number, action: 'complete' | 'cancel', rescheduledAt?: string) => {
     try {
@@ -198,6 +229,15 @@ export default function FollowUpsPage() {
         ))}
       </div>
 
+      {/* Same number as the Leads page's "Today's Activity" tab (follow-ups added/completed/rescheduled today are part of it). */}
+      <Link href="/admin/leads" className="flex items-center justify-between rounded-lg bg-teal-50 px-4 py-3 hover:bg-teal-100" title="Leads with a remark, follow-up or appointment logged today">
+        <div>
+          <p className="text-xs font-medium text-gray-500">Today&apos;s Activity (leads)</p>
+          <p className="text-2xl font-bold text-gray-900">{todayActivityCount === null ? '…' : todayActivityCount.toLocaleString()}</p>
+        </div>
+        <span className="text-xs font-medium text-teal-700">Open Leads → Today&apos;s Activity</span>
+      </Link>
+
       {error && (
         <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">{error}</div>
       )}
@@ -237,6 +277,32 @@ export default function FollowUpsPage() {
             <option value="medium">Medium</option>
             <option value="low">Low</option>
           </SearchableSelect>
+          <SearchableSelect
+            value={leadStatusFilter}
+            onChange={e => { setLeadStatusFilter(e.target.value); setPagination((prev) => ({ ...prev, page: 1 })); }}
+            className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="">Lead Status: All</option>
+            {leadStatusOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </SearchableSelect>
+          <SearchableSelect
+            value={branchFilter}
+            onChange={e => { setBranchFilter(e.target.value); setPagination((prev) => ({ ...prev, page: 1 })); }}
+            className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="">Branch: All</option>
+            {branchOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </SearchableSelect>
+          {counselorOptions.length > 0 && (
+            <SearchableSelect
+              value={counselorFilter}
+              onChange={e => { setCounselorFilter(e.target.value); setPagination((prev) => ({ ...prev, page: 1 })); }}
+              className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">Counselor: All</option>
+              {counselorOptions.map((o) => <option key={o.id} value={String(o.id)}>{o.name}</option>)}
+            </SearchableSelect>
+          )}
           <div className="flex items-center gap-2">
             <Filter className="w-4 h-4 text-gray-400" />
             <input
