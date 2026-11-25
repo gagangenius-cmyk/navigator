@@ -6,7 +6,7 @@ import { dubaiToday } from '@/lib/dubaiDate';
 
 interface DailyWorkData {
   range: { from: string; to: string; days: number };
-  totals: { leadsWorked: number; statusChanges: number; remarks: number; followUps: number; appointments: number; whatsapp: number };
+  totals: { leadsWorked: number; statusChanges: number; remarks: number; followUps: number; appointments: number; whatsapp: number; followUpsHandled?: number; appointmentsHandled?: number };
   byStatus: Array<{ status: string; leads: number; changes: number }>;
   moves: Array<{ move: string; count: number }>;
   daily: Array<{ date: string; leadsWorked: number; statusChanges: number; remarks: number; followUps: number; appointments: number }>;
@@ -141,6 +141,8 @@ export default function DailyLeadWork({ employeeId, detailed = false }: { employ
             <Tile label="Remarks" value={data.totals.remarks} />
             <Tile label="Follow-ups set" value={data.totals.followUps} />
             <Tile label="Appointments booked" value={data.totals.appointments} />
+            <Tile label="Follow-ups done / moved" value={data.totals.followUpsHandled || 0} />
+            <Tile label="Appointments updated" value={data.totals.appointmentsHandled || 0} />
             <Tile label="WhatsApp sent" value={data.totals.whatsapp} />
           </div>
 

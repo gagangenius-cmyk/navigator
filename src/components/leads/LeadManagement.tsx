@@ -157,6 +157,10 @@ function getPageWindow(current: number, total: number): Array<number | '...'> {
   return range;
 }
 
+// DNP = did not pick. Statuses are free text in crm_lead_status, so match the spellings the CRM uses.
+const isDnpLead = (lead: { status?: string | null }) =>
+  ['dnp', 'not_answered', 'not answered'].includes(String(lead.status || '').trim().toLowerCase());
+
 export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, showActions = true }: LeadManagementProps) {
   const router = useRouter();
   const { token, isLoading: authLoading, currencyCode } = useAuth();
@@ -2667,6 +2671,7 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
                   <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Assigned Date</th>
                   <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Updated</th>
                   <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Follow-up</th>
+                  {activeTab === 'leads' && <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">DNP Followup</th>}
                   <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Appointment</th>
                   <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Campaign</th>
                   <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Remarks</th>
@@ -2779,8 +2784,14 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
                     </td>
                     <td className="px-4 py-2.5 whitespace-nowrap text-sm text-gray-600">
                       {/* followup is NOT NULL in the DB so every lead carries a date; followupstat 0 = a follow-up is actually pending, 1 = none. */}
-                      {(Number(lead.followupstat) === 0 ? formatScheduled(lead.followup, lead.folowuptime) : '') || <span className="text-gray-400">—</span>}
+                      {(Number(lead.followupstat) === 0 && !isDnpLead(lead) ? formatScheduled(lead.followup, lead.folowuptime) : '') || <span className="text-gray-400">—</span>}
                     </td>
+                    {activeTab === 'leads' && (
+                      <td className="px-4 py-2.5 whitespace-nowrap text-sm text-gray-600">
+                        {/* A DNP (did not pick) lead's follow-up gets its own column: that's the call-back date the counselor keeps moving while the status stays DNP. */}
+                        {(isDnpLead(lead) && Number(lead.followupstat) === 0 ? formatScheduled(lead.followup, lead.folowuptime) : '') || <span className="text-gray-400">—</span>}
+                      </td>
+                    )}
                     <td className="px-4 py-2.5 whitespace-nowrap text-sm text-gray-600">
                       {formatScheduled(lead.appointment) || <span className="text-gray-400">—</span>}
                     </td>

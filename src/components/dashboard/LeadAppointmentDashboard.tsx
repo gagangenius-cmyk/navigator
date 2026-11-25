@@ -21,6 +21,7 @@ import {
 import { Line, Bar, Pie, Doughnut } from 'react-chartjs-2';
 import { useAuth } from '@/contexts/AuthContext';
 import LeadStatusPopup from '@/components/dashboard/LeadStatusPopup';
+import CounselorLeadsPopup from '@/components/dashboard/CounselorLeadsPopup';
 
 // Register Chart.js components ONCE
 ChartJS.register(
@@ -57,7 +58,7 @@ interface DashboardStats {
   totalPaidAmount?: number;
   totalBalance?: number;
   branchPerformance?: Array<{ branch: string; leads: number; conversion: string }>;
-  topEmployees?: Array<{ name: string; leads: number; conversion: string }>;
+  topEmployees?: Array<{ id?: number | null; name: string; leads: number; conversion: string }>;
   monthTrend?: {
     thisMonthLeads: number;
     lastMonthLeads: number;
@@ -145,6 +146,8 @@ export default function AdminDashboard() {
   const { user, currencyCode } = useAuth();
   // Clicking a lead-status number opens the list of leads behind it.
   const [statusPopup, setStatusPopup] = useState<{ status: string; priority?: string } | null>(null);
+  // Clicking a counsellor opens that counsellor's lead data.
+  const [counselorPopup, setCounselorPopup] = useState<{ id: number; name: string } | null>(null);
   const [stats, setStats] = useState<DashboardStats>({
     totalLeads: 0,
     totalEmployees: 0,
@@ -722,6 +725,10 @@ export default function AdminDashboard() {
           <LeadStatusPopup status={statusPopup.status} priority={statusPopup.priority} onClose={() => setStatusPopup(null)} />
         )}
 
+        {counselorPopup && (
+          <CounselorLeadsPopup employeeId={counselorPopup.id} name={counselorPopup.name} onClose={() => setCounselorPopup(null)} />
+        )}
+
         {/* Leaderboards */}
         <div className="mb-8 grid grid-cols-1 gap-8 lg:grid-cols-2">
           <motion.section
@@ -758,13 +765,18 @@ export default function AdminDashboard() {
             className="rounded-xl bg-white p-6 shadow-lg"
           >
             <h3 className="mb-4 text-lg font-semibold text-gray-900">Top Counsellors</h3>
-            <div className="space-y-2">
+            <div className="max-h-96 space-y-2 overflow-y-auto">
               {(!stats.topEmployees || stats.topEmployees.length === 0) ? (
                 <div className="rounded-lg border border-dashed border-gray-300 p-4 text-sm text-gray-500">
                   No counsellor data available.
                 </div>
               ) : stats.topEmployees.map((e, i) => (
-                <div key={`${e.name}-${i}`} className="flex items-center justify-between border-b border-gray-100 py-2 last:border-0">
+                <div
+                  key={`${e.id ?? e.name}-${i}`}
+                  className={`flex items-center justify-between border-b border-gray-100 py-2 last:border-0 ${e.id ? 'cursor-pointer rounded-lg px-2 -mx-2 transition-colors hover:bg-blue-50' : ''}`}
+                  title={e.id ? "Click to see this counsellor's lead data" : undefined}
+                  onClick={e.id ? () => setCounselorPopup({ id: Number(e.id), name: e.name }) : undefined}
+                >
                   <div className="flex items-center gap-3 min-w-0">
                     <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--cmg-blue-soft)] text-xs font-semibold text-[var(--cmg-blue)]">{i + 1}</span>
                     <p className="truncate text-sm font-medium text-gray-900">{e.name}</p>

@@ -393,6 +393,7 @@ async function computeDashboardData(
   // ── Top Employees ──────────────────────────────────────────────────────────
   const topEmployees = await sequelize.query<any>(`
     SELECT
+      e.id AS id,
       COALESCE(e.name, 'Unassigned') AS name,
       COUNT(l.id) AS leads,
       SUM(CASE WHEN LOWER(COALESCE(l.status, '')) IN ('converted','retained','client','enrolled')
@@ -400,9 +401,9 @@ async function computeDashboardData(
     FROM crm_forum_leads l
     LEFT JOIN crm_employee e ON l.assignTo = e.id
     ${leadWhere}
-    GROUP BY COALESCE(e.name, 'Unassigned')
+    GROUP BY e.id, COALESCE(e.name, 'Unassigned')
     ORDER BY leads DESC
-    LIMIT 8
+    LIMIT 30
   `, { replacements: leadReplacements, type: QueryTypes.SELECT });
 
   // ── Monthly Trend ──────────────────────────────────────────────────────────
@@ -507,6 +508,7 @@ async function computeDashboardData(
       conversion: n(item.leads) > 0 ? `${((n(item.converted) / n(item.leads)) * 100).toFixed(1)}%` : '0%',
     })),
     topEmployees: topEmployees.map((item: any) => ({
+      id: item.id ? Number(item.id) : null,
       name: item.name,
       leads: n(item.leads),
       conversion: n(item.leads) > 0 ? `${((n(item.converted) / n(item.leads)) * 100).toFixed(1)}%` : '0%',

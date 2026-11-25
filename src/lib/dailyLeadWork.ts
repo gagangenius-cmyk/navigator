@@ -1,12 +1,14 @@
 import { QueryTypes } from 'sequelize';
 import { sequelize } from '@/lib/sequelize';
 import { dubaiDayOfUtc, dubaiDayRangeUtc } from '@/lib/dubaiDate';
+import { LEAD_WORK_ACTIONS } from '@/lib/leadRemarks';
 
 // "What did this person do on their leads" - built from the lead activity log (crm_remarks), which every status
 // change / remark / follow-up / appointment writes to. A day is a Dubai calendar day (the log stores UTC).
 // Shared by the dashboard widget (GET /api/admin/dashboard/daily-work) and the Excel/CSV export.
 
-export const WORK_ACTIONS = ['status_changed', 'remark_added', 'remark_edited', 'followup_added', 'appointment_booked', 'whatsapp_sent'];
+// One shared list (lib/leadRemarks.ts) so every lead activity a counselor does lands in their report.
+export const WORK_ACTIONS: string[] = LEAD_WORK_ACTIONS;
 export const ALLOWED_DAYS = [1, 7, 14, 30];
 const ROW_LIMIT = 20000;
 
@@ -33,12 +35,14 @@ export interface StatusChangeRow {
   from: string;
   to: string;
   currentStatus: string;
+  // Set when the lead's status did NOT change but the counselor updated its follow-up (e.g. a DNP lead).
+  via?: 'follow-up';
 }
 
 export interface DailyWork {
   employeeId: number;
   range: { from: string; to: string; days: number };
-  totals: { leadsWorked: number; statusChanges: number; remarks: number; followUps: number; appointments: number; whatsapp: number };
+  totals: { leadsWorked: number; statusChanges: number; remarks: number; followUps: number; appointments: number; whatsapp: number; followUpsHandled: number; appointmentsHandled: number };
   byStatus: Array<{ status: string; leads: number; changes: number }>;
   moves: Array<{ move: string; count: number }>;
   daily: Array<{ date: string; leadsWorked: number; statusChanges: number; remarks: number; followUps: number; appointments: number }>;
@@ -62,7 +66,7 @@ export async function buildDailyWork(employeeId: number, endDate: string, days: 
     { replacements: { employeeId, actions: WORK_ACTIONS, startUtc, endUtc }, type: QueryTypes.SELECT },
   );
 
-  const totals = { leadsWorked: new Set<number>(), statusChanges: 0, remarks: 0, followUps: 0, appointments: 0, whatsapp: 0 };
+  const totals = { leadsWorked: new Set<number>(), statusChanges: 0, remarks: 0, followUps: 0, appointments: 0, whatsapp: 0, followUpsHandled: 0, appointmentsHandled: 0 };
   const byStatus = new Map<string, { leads: Set<number>; changes: number }>();
   const moves = new Map<string, number>();
   const daily = new Map(dates.map((d) => [d, { leads: new Set<number>(), statusChanges: 0, remarks: 0, followUps: 0, appointments: 0 }]));
@@ -113,10 +117,60 @@ export async function buildDailyWork(employeeId: number, endDate: string, days: 
       case 'whatsapp_sent':
         totals.whatsapp += 1;
         break;
+      // Completing / rescheduling / cancelling an existing follow-up or appointment is work on the lead too.
+      case 'followup_completed':
+      case 'followup_rescheduled':
+      case 'followup_cancelled':
+        totals.followUpsHandled += 1;
+        break;
+      case 'appointment_done':
+      case 'appointment_not_done':
+      case 'appointment_rescheduled':
+      case 'appointment_cancelled':
+        totals.appointmentsHandled += 1;
+        break;
       default:
         break;
     }
   }
+
+  // A counselor working a DNP lead re-schedules its follow-up and leaves the status alone. That still counts as the
+  // lead's status being updated for the day: any follow-up activity on a lead with no real status change the same
+  // Dubai day is added as a status update (current status -> same status, via 'follow-up').
+  const FOLLOW_UP_TOUCH = new Set(['followup_added', 'followup_completed', 'followup_rescheduled', 'followup_cancelled']);
+  const changedThatDay = new Set<string>();
+  rows.forEach((r) => { if (r.action === 'status_changed') changedThatDay.add(`${dubaiDayOfUtc(r.created_at)}:${r.lead_id}`); });
+  const touchedThatDay = new Set<string>();
+  for (const row of rows) {
+    if (!FOLLOW_UP_TOUCH.has(row.action)) continue;
+    const dayKey = dubaiDayOfUtc(row.created_at);
+    const key = `${dayKey}:${row.lead_id}`;
+    if (changedThatDay.has(key) || touchedThatDay.has(key)) continue;
+    touchedThatDay.add(key);
+    const status = (row.currentStatus || '').trim() || '(no status)';
+    const day = daily.get(dayKey);
+    totals.statusChanges += 1;
+    if (day) day.statusChanges += 1;
+    const bucket = byStatus.get(status) || { leads: new Set<number>(), changes: 0 };
+    bucket.leads.add(row.lead_id);
+    bucket.changes += 1;
+    byStatus.set(status, bucket);
+    const move = `${status} → ${status} (follow-up updated)`;
+    moves.set(move, (moves.get(move) || 0) + 1);
+    const stamp = new Date(new Date(`${String(row.created_at).replace(' ', 'T')}Z`).getTime() + 4 * 3600_000).toISOString();
+    statusChanges.push({
+      date: dayKey,
+      time: stamp.slice(11, 16),
+      leadId: row.lead_id,
+      leadName: `${row.fname || ''} ${row.lname || ''}`.trim() || `Lead #${row.lead_id}`,
+      phone: row.mobile || row.phone || '',
+      from: status,
+      to: status,
+      currentStatus: row.currentStatus || '',
+      via: 'follow-up',
+    });
+  }
+  statusChanges.sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
 
   const snapshotRows = await sequelize.query<{ status: string; count: number }>(
     `SELECT COALESCE(NULLIF(TRIM(l.status), ''), '(no status)') AS status, COUNT(*) AS count

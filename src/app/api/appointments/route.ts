@@ -75,12 +75,9 @@ export async function GET(request: NextRequest) {
       replacements.date = date
     }
 
-    if (status) {
-      const statusCondition = getAppointmentStatusCondition(status)
-      if (statusCondition) {
-        conditions.push(statusCondition)
-      }
-    }
+    // The tab buttons' counts are taken over every filter EXCEPT the status tab (below), so each tab keeps showing its
+    // own count while another tab is open.
+    const statusCondition = status ? getAppointmentStatusCondition(status) : ''
 
     if (search) {
       conditions.push(`(
@@ -91,7 +88,8 @@ export async function GET(request: NextRequest) {
       replacements.search = `%${search}%`
     }
 
-    const whereSql = conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''
+    const baseWhereSql = conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''
+    const whereSql = statusCondition ? `${baseWhereSql ? `${baseWhereSql} AND` : 'WHERE'} ${statusCondition}` : baseWhereSql
 
     const appointments = await sequelize.query(`
       SELECT
@@ -141,15 +139,39 @@ export async function GET(request: NextRequest) {
       LIMIT :limit OFFSET :skip
     `, { replacements, type: QueryTypes.SELECT })
 
+    // Same joins as the list query: the search filter reads the lead / counselor / assigner names.
+    const countJoins = `
+      LEFT JOIN crm_forum_leads l ON l.id = a.leadid
+      LEFT JOIN crm_employee e ON e.id = a.counsilorid
+      LEFT JOIN crm_employee assigner ON assigner.id = a.assigned_by`
     const countRows = await sequelize.query<{ total: number }>(`
       SELECT COUNT(*) AS total
       FROM appointments a
+      ${countJoins}
       ${whereSql}
     `, { replacements, type: QueryTypes.SELECT })
     const total = Number(countRows[0]?.total || 0)
 
+    const tabs = ['scheduled', 'completed', 'cancelled', 'rescheduled', 'pending'] as const
+    const [summaryRow] = await sequelize.query<Record<string, number | null>>(`
+      SELECT COUNT(*) AS total,
+        ${tabs.map((tab) => `SUM(CASE WHEN ${getAppointmentStatusCondition(tab)} THEN 1 ELSE 0 END) AS ${tab}`).join(',\n        ')}
+      FROM appointments a
+      ${countJoins}
+      ${baseWhereSql}
+    `, { replacements, type: QueryTypes.SELECT })
+    const summary = {
+      total: Number(summaryRow?.total || 0),
+      scheduled: Number(summaryRow?.scheduled || 0),
+      completed: Number(summaryRow?.completed || 0),
+      cancelled: Number(summaryRow?.cancelled || 0),
+      rescheduled: Number(summaryRow?.rescheduled || 0),
+      pending: Number(summaryRow?.pending || 0),
+    }
+
     return NextResponse.json({
       appointments,
+      summary,
       pagination: {
         page,
         limit,
@@ -230,7 +252,10 @@ export async function POST(request: NextRequest) {
         action: 'appointment_booked',
         remark: `Appointment booked for ${appointmentDate} at ${appointmentTime}`,
         newValue: data.date || null,
-        actorId: counselorId,
+        // Whoever booked it gets the credit (a counselor booking for a colleague / a cross-branch handoff must not
+        // be credited to the person the appointment was handed to).
+        actorId: Number(currentUser.id) || counselorId,
+        actorRole: currentUser.roleName || currentUser.type,
       });
     }
 

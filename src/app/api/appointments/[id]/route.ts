@@ -3,6 +3,7 @@ import { Appointments } from '@/models'
 import { verifyToken } from '@/lib/auth'
 import { isCeo, isBranchManagerOrCeo, isFoeOrBranchManagerOrCeo, isFoe } from '@/lib/roleChecks'
 import { ensureAppointmentRemarksColumn } from '@/lib/ensureAppointmentRemarksColumn'
+import { logLeadRemark, type LeadRemarkAction } from '@/lib/leadRemarks'
 
 const getCurrentUser = (request: NextRequest) => {
   const token = request.cookies.get('auth-token')?.value
@@ -145,7 +146,53 @@ export async function PUT(
       return NextResponse.json({ error: 'You do not have permission to update this appointment' }, { status: 403 })
     }
 
+    const before = {
+      date: String((appointment as any).date || '').slice(0, 10),
+      time: String((appointment as any).appointtime || '').slice(0, 5),
+      done: Number((appointment as any).done || 0),
+      notDone: Number((appointment as any).not_done || 0),
+      booked: Number((appointment as any).booked || 0),
+      meetingStatus: String((appointment as any).meeting_status || ''),
+    }
+
     await appointment.update(normalizeAppointmentPayload(data))
+
+    // Marking a meeting done / not done / rescheduled / cancelled is real work on the lead - without a crm_remarks
+    // entry it never reached Today's Activity or the counselor's report.
+    const leadIdForLog = Number((appointment as any).leadid || 0)
+    if (leadIdForLog) {
+      const after = {
+        date: String((appointment as any).date || '').slice(0, 10),
+        time: String((appointment as any).appointtime || '').slice(0, 5),
+        done: Number((appointment as any).done || 0),
+        notDone: Number((appointment as any).not_done || 0),
+        meetingStatus: String((appointment as any).meeting_status || ''),
+      }
+      let action: LeadRemarkAction | null = null
+      let remark = ''
+      if (!before.done && after.done) {
+        action = 'appointment_done'
+        remark = `Appointment on ${after.date} marked as done`
+      } else if (!before.notDone && after.notDone) {
+        const noShow = after.meetingStatus === 'no_show'
+        action = noShow ? 'appointment_not_done' : 'appointment_cancelled'
+        remark = noShow ? `Appointment on ${after.date} marked as no-show` : `Appointment on ${after.date} cancelled`
+      } else if (before.date !== after.date || before.time !== after.time) {
+        action = 'appointment_rescheduled'
+        remark = `Appointment rescheduled from ${before.date} ${before.time} to ${after.date} ${after.time}`
+      }
+      if (action) {
+        await logLeadRemark({
+          leadId: leadIdForLog,
+          action,
+          remark,
+          previousValue: before.date || null,
+          newValue: after.date || null,
+          actorId: Number(currentUser.id),
+          actorRole: currentUser.roleName || currentUser.type,
+        })
+      }
+    }
 
     // Reload with associations
     const updatedAppointment = await Appointments.findByPk(id, {

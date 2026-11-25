@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { assertLeadAccess } from '@/lib/leadAccess';
-import { parseCrmDateTime } from '@/lib/dubaiDate';
+import { parseCrmDateTime, dubaiToday } from '@/lib/dubaiDate';
 import { syncLeadFollowup } from '@/lib/leadSchedule';
 import { NextRequest, NextResponse } from 'next/server';
 import { CrmcFollowUpReminders, CrmcNotifications } from '@/models';
@@ -48,7 +48,6 @@ export async function GET(request: NextRequest) {
     const leadId = searchParams.get('leadId');
     const status = searchParams.get('status');
     const type = searchParams.get('type');
-    const priority = searchParams.get('priority');
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
     const search = searchParams.get('search')?.trim();
@@ -73,23 +72,8 @@ export async function GET(request: NextRequest) {
 
     if (employeeId) { conditions.push('r.user_id = :employeeId'); replacements.employeeId = Number(employeeId); }
     if (leadId) { conditions.push('r.lead_id = :leadId'); replacements.leadId = Number(leadId); }
-    if (status) {
-      // A rescheduled reminder still has a real future due date and must
-      // keep counting as open/actionable here too - otherwise it both hides
-      // its own action buttons (see isPending in follow-ups/page.tsx) and
-      // silently disappears from "Overdue"/"Upcoming" filtering and the
-      // summary cards below, even though it's exactly the kind of item they
-      // exist to surface.
-      if (status === 'overdue') {
-        conditions.push("r.status IN ('pending', 'rescheduled') AND r.reminder_date < NOW()");
-      } else if (status === 'upcoming') {
-        conditions.push("r.status IN ('pending', 'rescheduled') AND r.reminder_date >= NOW()");
-      } else {
-        conditions.push('r.status = :status');
-        replacements.status = status;
-      }
-    }
-    if (priority) { conditions.push('r.priority = :priority'); replacements.priority = priority; }
+    // `status` (the page's tab buttons) is applied further down, AFTER the summary counts are taken, so every tab
+    // keeps showing its own count while another tab is open.
     // Same lead filters as the Leads page: the lead's own status and branch.
     const leadStatus = searchParams.get('leadStatus');
     const leadBranch = searchParams.get('branch');
@@ -150,9 +134,21 @@ export async function GET(request: NextRequest) {
       return isOpen(r) && date >= now && date <= nextWeek;
     });
 
-    const total = reminders.length;
+    // The tab/status filter. A rescheduled reminder still has a real due date and stays open/actionable, so it counts
+    // under pending / overdue / upcoming exactly like the summary cards above count it.
+    const matchesStatus = (r: { status: string; reminder_date: string }) => {
+      if (!status) return true;
+      const date = new Date(r.reminder_date);
+      if (status === 'pending') return isOpen(r);
+      if (status === 'overdue') return isOpen(r) && date < now;
+      if (status === 'upcoming') return isOpen(r) && date >= now && date <= nextWeek;
+      return r.status === status;
+    };
+    const filtered = (reminders as any[]).filter(matchesStatus);
+
+    const total = filtered.length;
     const offset = (page - 1) * limit;
-    const pagedReminders = (reminders as any[]).slice(offset, offset + limit);
+    const pagedReminders = filtered.slice(offset, offset + limit);
 
     return NextResponse.json({
       reminders: pagedReminders,
@@ -172,6 +168,20 @@ export async function GET(request: NextRequest) {
       { error: 'Failed to fetch follow-up reminders' },
       { status: 500 }
     );
+  }
+}
+
+// A follow-up saved/updated is an update to the lead: bump its Last Updated stamp so the Leads list shows it.
+async function touchLeadUpdated(leadId: number | null | undefined) {
+  const id = Number(leadId);
+  if (!id) return;
+  try {
+    await sequelize.query('UPDATE crm_forum_leads SET last_updated = ?, last_updtd_time = ? WHERE id = ?', {
+      replacements: [dubaiToday(), new Date().toTimeString().split(' ')[0], id],
+      type: QueryTypes.UPDATE,
+    });
+  } catch (error) {
+    console.error('Failed to stamp lead last-updated:', error);
   }
 }
 
@@ -260,12 +270,16 @@ export async function POST(request: NextRequest) {
       updated_at: new Date()
     });
 
+    await touchLeadUpdated(parseInt(leadId));
     await logLeadRemark({
       leadId: parseInt(leadId),
       action: 'followup_added',
       remark: `Follow-up added for ${followUpDate.toLocaleDateString()}: ${reminderMessage}`,
       newValue: followUpDate.toISOString().split('T')[0],
-      actorId: parseInt(assignedUserId),
+      // The person who actually set the follow-up gets the credit in their report/Today's Activity (a manager
+      // scheduling one for a counselor is the actor, not the counselor).
+      actorId: Number(currentUser.id) || parseInt(assignedUserId),
+      actorRole: currentUser.roleName || currentUser.type,
     });
 
     return NextResponse.json({
@@ -369,14 +383,19 @@ export async function PUT(request: NextRequest) {
 
     // Completing/rescheduling a follow-up is the actual client call - log it so
     // it shows in Today's Activity.
-    if (existing.lead_id && (action === 'complete' || action === 'reschedule')) {
+    if (existing.lead_id) {
+      await touchLeadUpdated(existing.lead_id);
       await logLeadRemark({
         leadId: Number(existing.lead_id),
-        action: action === 'complete' ? 'followup_completed' : 'followup_rescheduled',
+        action: action === 'complete' ? 'followup_completed' : action === 'reschedule' ? 'followup_rescheduled' : 'followup_cancelled',
         remark: action === 'complete'
           ? `Follow-up completed${notes ? `: ${notes}` : ''}`
-          : `Follow-up rescheduled to ${String(rescheduledAt)}${notes ? `: ${notes}` : ''}`,
+          : action === 'reschedule'
+            ? `Follow-up rescheduled to ${String(rescheduledAt)}${notes ? `: ${notes}` : ''}`
+            : `Follow-up cancelled${notes ? `: ${notes}` : ''}`,
+        newValue: action === 'reschedule' ? String(rescheduledAt).slice(0, 10) : null,
         actorId: Number(currentUser.id),
+        actorRole: currentUser.roleName || currentUser.type,
       });
     }
 

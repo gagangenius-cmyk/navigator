@@ -12,6 +12,8 @@ import {
   ChevronDown, ChevronUp, Eye, ExternalLink, ChevronLeft, ChevronRight
 } from 'lucide-react';
 import { useDebounce } from '@/hooks/useDebounce';
+import { useAuth } from '@/contexts/AuthContext';
+import { canViewCompanyWideWork } from '@/lib/roleChecks';
 
 interface FollowUp {
   id: number;
@@ -59,13 +61,15 @@ const STATUS_COLORS: Record<string, string> = {
 
 export default function FollowUpsPage() {
   const router = useRouter();
+  const { user } = useAuth();
+  // Team Leader / CEO / Director of Sales (and Area Manager) can filter by any counselor.
+  const canFilterByCounselor = canViewCompanyWideWork(user as never);
   const [followUps, setFollowUps] = useState<FollowUp[]>([]);
   const [summary, setSummary] = useState<Summary>({ total: 0, overdue: 0, upcoming: 0, completed: 0, pending: 0 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
-  const [priorityFilter, setPriorityFilter] = useState('');
   // Same filters as the Leads page: lead status, branch and counselor, plus the Leads "Today's Activity" count.
   const [leadStatusFilter, setLeadStatusFilter] = useState('');
   const [branchFilter, setBranchFilter] = useState('');
@@ -95,7 +99,6 @@ export default function FollowUpsPage() {
       });
       if (debouncedSearchTerm) params.set('search', debouncedSearchTerm);
       if (statusFilter) params.set('status', statusFilter);
-      if (priorityFilter) params.set('priority', priorityFilter);
       if (leadStatusFilter) params.set('leadStatus', leadStatusFilter);
       if (branchFilter) params.set('branch', branchFilter);
       if (counselorFilter) params.set('employeeId', counselorFilter);
@@ -112,7 +115,7 @@ export default function FollowUpsPage() {
     } finally {
       setLoading(false);
     }
-  }, [pagination.page, pagination.limit, debouncedSearchTerm, statusFilter, priorityFilter, leadStatusFilter, branchFilter, counselorFilter, dateFrom, dateTo]);
+  }, [pagination.page, pagination.limit, debouncedSearchTerm, statusFilter, leadStatusFilter, branchFilter, counselorFilter, dateFrom, dateTo]);
 
   useEffect(() => { fetchFollowUps(); }, [fetchFollowUps]);
 
@@ -213,20 +216,29 @@ export default function FollowUpsPage() {
       {/* Summary Cards */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         {[
-          { label: 'Total', value: summary.total, icon: <Calendar className="w-5 h-5 text-blue-600" />, bg: 'bg-blue-50' },
-          { label: 'Pending', value: summary.pending, icon: <Clock className="w-5 h-5 text-yellow-600" />, bg: 'bg-yellow-50' },
-          { label: 'Overdue', value: summary.overdue, icon: <AlertCircle className="w-5 h-5 text-red-600" />, bg: 'bg-red-50' },
-          { label: 'Upcoming', value: summary.upcoming, icon: <RefreshCw className="w-5 h-5 text-purple-600" />, bg: 'bg-purple-50' },
-          { label: 'Completed', value: summary.completed, icon: <CheckCircle className="w-5 h-5 text-green-600" />, bg: 'bg-green-50' },
-        ].map(({ label, value, icon, bg }) => (
-          <div key={label} className={`${bg} rounded-lg p-4 flex items-center space-x-3`}>
-            <div>{icon}</div>
-            <div>
-              <p className="text-xs text-gray-500 font-medium">{label}</p>
-              <p className="text-2xl font-bold text-gray-900">{value}</p>
-            </div>
-          </div>
-        ))}
+          { label: 'Total', tab: '', value: summary.total, icon: <Calendar className="w-5 h-5 text-blue-600" />, bg: 'bg-blue-50' },
+          { label: 'Pending', tab: 'pending', value: summary.pending, icon: <Clock className="w-5 h-5 text-yellow-600" />, bg: 'bg-yellow-50' },
+          { label: 'Overdue', tab: 'overdue', value: summary.overdue, icon: <AlertCircle className="w-5 h-5 text-red-600" />, bg: 'bg-red-50' },
+          { label: 'Upcoming', tab: 'upcoming', value: summary.upcoming, icon: <RefreshCw className="w-5 h-5 text-purple-600" />, bg: 'bg-purple-50' },
+          { label: 'Completed', tab: 'completed', value: summary.completed, icon: <CheckCircle className="w-5 h-5 text-green-600" />, bg: 'bg-green-50' },
+        ].map(({ label, tab, value, icon, bg }) => {
+          const active = statusFilter === tab;
+          return (
+            <button
+              key={label}
+              type="button"
+              aria-pressed={active}
+              onClick={() => { setStatusFilter(tab); setPagination((prev) => ({ ...prev, page: 1 })); }}
+              className={`${bg} rounded-lg p-4 flex items-center space-x-3 text-left transition-shadow hover:shadow-md ${active ? 'ring-2 ring-blue-600 shadow-md' : ''}`}
+            >
+              <div>{icon}</div>
+              <div>
+                <p className="text-xs text-gray-500 font-medium">{label}</p>
+                <p className="text-2xl font-bold text-gray-900">{value}</p>
+              </div>
+            </button>
+          );
+        })}
       </div>
 
       {/* Same number as the Leads page's "Today's Activity" tab (follow-ups added/completed/rescheduled today are part of it). */}
@@ -263,19 +275,10 @@ export default function FollowUpsPage() {
             <option value="">All Status</option>
             <option value="pending">Pending</option>
             <option value="overdue">Overdue</option>
+            <option value="upcoming">Upcoming</option>
             <option value="completed">Completed</option>
             <option value="cancelled">Cancelled</option>
             <option value="rescheduled">Rescheduled</option>
-          </SearchableSelect>
-          <SearchableSelect
-            value={priorityFilter}
-            onChange={e => { setPriorityFilter(e.target.value); setPagination((prev) => ({ ...prev, page: 1 })); }}
-            className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="">All Priority</option>
-            <option value="high">High</option>
-            <option value="medium">Medium</option>
-            <option value="low">Low</option>
           </SearchableSelect>
           <SearchableSelect
             value={leadStatusFilter}
@@ -293,7 +296,7 @@ export default function FollowUpsPage() {
             <option value="">Branch: All</option>
             {branchOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </SearchableSelect>
-          {counselorOptions.length > 0 && (
+          {(canFilterByCounselor || counselorOptions.length > 0) && (
             <SearchableSelect
               value={counselorFilter}
               onChange={e => { setCounselorFilter(e.target.value); setPagination((prev) => ({ ...prev, page: 1 })); }}

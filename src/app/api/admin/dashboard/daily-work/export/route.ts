@@ -119,6 +119,8 @@ export async function GET(request: NextRequest) {
       { item: 'Remarks', value: data.totals.remarks },
       { item: 'Follow-ups set', value: data.totals.followUps },
       { item: 'Appointments booked', value: data.totals.appointments },
+      { item: 'Follow-ups done / rescheduled', value: data.totals.followUpsHandled },
+      { item: 'Appointments done / rescheduled / updated', value: data.totals.appointmentsHandled },
       { item: 'WhatsApp sent', value: data.totals.whatsapp },
       { item: 'Leads assigned right now', value: data.snapshotTotal },
     ]);

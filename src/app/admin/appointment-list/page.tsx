@@ -8,6 +8,8 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { useDebounce } from '@/hooks/useDebounce'
+import { useAuth } from '@/contexts/AuthContext'
+import { canViewCompanyWideWork } from '@/lib/roleChecks'
 import {
   Calendar,
   Clock,
@@ -52,18 +54,31 @@ export default function AppointmentListPage() {
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [crossBranchOnly, setCrossBranchOnly] = useState(false)
+  const { user } = useAuth()
+  // Team Leader / CEO / Director of Sales (and Area Manager) can filter by any counselor.
+  const canFilterByCounselor = canViewCompanyWideWork(user as never)
+  const [counselorFilter, setCounselorFilter] = useState('')
+  const [counselorOptions, setCounselorOptions] = useState<Array<{ id: number; name: string }>>([])
   const [expandedId, setExpandedId] = useState<number | null>(null)
   const [editingRemark, setEditingRemark] = useState(false)
   const [remarkDraft, setRemarkDraft] = useState('')
   const [savingRemark, setSavingRemark] = useState(false)
   const [pagination, setPagination] = useState({ page: 1, limit: 20, total: 0, pages: 0 })
+  const [summary, setSummary] = useState({ total: 0, scheduled: 0, completed: 0, cancelled: 0, rescheduled: 0, pending: 0 })
   const debouncedSearchTerm = useDebounce(searchTerm, 350)
 
   useEffect(() => {
     setLoading(true)
     fetchAppointments()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pagination.page, pagination.limit, debouncedSearchTerm, statusFilter, crossBranchOnly])
+  }, [pagination.page, pagination.limit, debouncedSearchTerm, statusFilter, crossBranchOnly, counselorFilter, dateFrom, dateTo])
+
+  useEffect(() => {
+    if (!canFilterByCounselor) return
+    fetch('/api/employees?status=1&limit=500').then((r) => (r.ok ? r.json() : null)).then((d) => {
+      if (d?.employees) setCounselorOptions(d.employees.map((e: { id: number; name: string }) => ({ id: e.id, name: e.name })))
+    }).catch(() => {})
+  }, [canFilterByCounselor])
 
   const fetchAppointments = async () => {
     try {
@@ -74,6 +89,9 @@ export default function AppointmentListPage() {
       if (debouncedSearchTerm) params.set('search', debouncedSearchTerm)
       if (statusFilter) params.set('status', statusFilter)
       if (crossBranchOnly) params.set('crossBranchOnly', '1')
+      if (counselorFilter) params.set('counselorId', counselorFilter)
+      if (dateFrom) params.set('dateFrom', dateFrom)
+      if (dateTo) params.set('dateTo', dateTo)
 
       const response = await fetch(`/api/appointments?${params}`)
       if (response.ok) {
@@ -103,6 +121,7 @@ export default function AppointmentListPage() {
           }
         })
         setAppointments(mapped)
+        if (data.summary) setSummary(data.summary)
         setPagination((prev) => ({ ...prev, total: data.pagination?.total ?? 0, pages: data.pagination?.pages ?? 0 }))
       }
     } catch (error) {
@@ -180,13 +199,8 @@ export default function AppointmentListPage() {
     }
   }
 
-  // search/status/crossBranchOnly are now applied server-side (see
-  // fetchAppointments) — only the date range stays client-side over the
-  // fetched page, since the backend only supports an exact-date match today.
-  const filteredAppointments = appointments.filter(appointment => {
-    const matchesDate = (!dateFrom || appointment.date >= dateFrom) && (!dateTo || appointment.date <= dateTo)
-    return matchesDate
-  })
+  // search/status/counselor/date range/crossBranchOnly are all applied server-side (see fetchAppointments).
+  const filteredAppointments = appointments
 
   const { sorted: sortedAppointments, sortKey: appointmentSortKey, sortDirection: appointmentSortDirection, toggleSort: toggleAppointmentSort } = useSortableData(
     filteredAppointments,
@@ -225,6 +239,35 @@ export default function AppointmentListPage() {
           </Button>
         </div>
 
+        {/* Status tabs: each button shows its count and filters the list below to that status */}
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-6">
+          {([
+            { label: 'Total', tab: '', value: summary.total, icon: <Calendar className="h-5 w-5 text-blue-600" />, bg: 'bg-blue-50' },
+            { label: 'Scheduled', tab: 'scheduled', value: summary.scheduled, icon: <Clock className="h-5 w-5 text-indigo-600" />, bg: 'bg-indigo-50' },
+            { label: 'Completed', tab: 'completed', value: summary.completed, icon: <CheckCircle className="h-5 w-5 text-green-600" />, bg: 'bg-green-50' },
+            { label: 'Cancelled', tab: 'cancelled', value: summary.cancelled, icon: <XCircle className="h-5 w-5 text-red-600" />, bg: 'bg-red-50' },
+            { label: 'Rescheduled', tab: 'rescheduled', value: summary.rescheduled, icon: <Calendar className="h-5 w-5 text-yellow-600" />, bg: 'bg-yellow-50' },
+            { label: 'Pending', tab: 'pending', value: summary.pending, icon: <AlertCircle className="h-5 w-5 text-purple-600" />, bg: 'bg-purple-50' },
+          ]).map(({ label, tab, value, icon, bg }) => {
+            const active = statusFilter === tab
+            return (
+              <button
+                key={label}
+                type="button"
+                aria-pressed={active}
+                onClick={() => { setStatusFilter(tab); setPagination((prev) => ({ ...prev, page: 1 })) }}
+                className={`${bg} flex items-center space-x-3 rounded-lg p-4 text-left transition-shadow hover:shadow-md ${active ? 'ring-2 ring-blue-600 shadow-md' : ''}`}
+              >
+                <div>{icon}</div>
+                <div>
+                  <p className="text-xs font-medium text-gray-500">{label}</p>
+                  <p className="text-2xl font-bold text-gray-900">{value}</p>
+                </div>
+              </button>
+            )
+          })}
+        </div>
+
         {/* Filters */}
         <Card>
           <CardContent className="p-4">
@@ -252,11 +295,21 @@ export default function AppointmentListPage() {
                 <option value="rescheduled">Rescheduled</option>
                 <option value="pending">Pending</option>
               </SearchableSelect>
+              {(canFilterByCounselor || counselorOptions.length > 0) && (
+                <SearchableSelect
+                  value={counselorFilter}
+                  onChange={(e) => { setCounselorFilter(e.target.value); setPagination((prev) => ({ ...prev, page: 1 })) }}
+                  className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="">Counselor: All</option>
+                  {counselorOptions.map((o) => <option key={o.id} value={String(o.id)}>{o.name}</option>)}
+                </SearchableSelect>
+              )}
               <div className="flex items-center gap-2">
                 <input
                   type="date"
                   value={dateFrom}
-                  onChange={(e) => setDateFrom(e.target.value)}
+                  onChange={(e) => { setDateFrom(e.target.value); setPagination((prev) => ({ ...prev, page: 1 })) }}
                   max={dateTo || undefined}
                   aria-label="Date from"
                   className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
@@ -265,14 +318,14 @@ export default function AppointmentListPage() {
                 <input
                   type="date"
                   value={dateTo}
-                  onChange={(e) => setDateTo(e.target.value)}
+                  onChange={(e) => { setDateTo(e.target.value); setPagination((prev) => ({ ...prev, page: 1 })) }}
                   min={dateFrom || undefined}
                   aria-label="Date to"
                   className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
                 />
                 {(dateFrom || dateTo) && (
                   <button
-                    onClick={() => { setDateFrom(''); setDateTo('') }}
+                    onClick={() => { setDateFrom(''); setDateTo(''); setPagination((prev) => ({ ...prev, page: 1 })) }}
                     className="text-xs text-blue-600 hover:underline"
                   >
                     Clear

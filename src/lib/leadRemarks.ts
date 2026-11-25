@@ -14,12 +14,38 @@ export type LeadRemarkAction =
   | 'remark_edited'
   | 'appointment_booked'
   | 'followup_added'
+  | 'followup_completed'
+  | 'followup_rescheduled'
+  | 'followup_cancelled'
+  | 'appointment_done'
+  | 'appointment_not_done'
+  | 'appointment_rescheduled'
+  | 'appointment_cancelled'
   | 'whatsapp_sent'
   | 'email_sent'
   | 'duplicate_detected'
   | 'operations_case_transfer'
   | 'operations_case_status_changed'
   | 'operations_task_reassigned';
+
+// THE list of crm_remarks actions that count as a counselor "working" a lead. Today's Activity (leads list tile +
+// filter), the daily work report / export and the FTD-MTD daily sheet all read this one list, so a new kind of lead
+// activity only has to be added here (and logged through logLeadRemark) to appear everywhere.
+export const LEAD_WORK_ACTIONS: LeadRemarkAction[] = [
+  'status_changed',
+  'remark_added',
+  'remark_edited',
+  'followup_added',
+  'followup_completed',
+  'followup_rescheduled',
+  'followup_cancelled',
+  'appointment_booked',
+  'appointment_done',
+  'appointment_not_done',
+  'appointment_rescheduled',
+  'appointment_cancelled',
+  'whatsapp_sent',
+];
 
 interface LogLeadRemarkInput {
   leadId: number;

@@ -11,7 +11,7 @@ import { isCeo, isFoeOrBranchManagerOrCeo, isBranchManagerOrCeo, isCounsellor } 
 import { checkForDuplicate, findExistingLead, recordDuplicateLeadAttempt, normalizePhone, checkForFuzzyDuplicate, getContractSummary } from '@/lib/duplicateLeadCheck'
 import { resolveLeadReferenceId, resolveLeadReferences } from '@/lib/leadReferenceResolver'
 import { resolveBranchReference } from '@/lib/branchResolver'
-import { recordLeadAssignment, logLeadRemark } from '@/lib/leadRemarks'
+import { recordLeadAssignment, logLeadRemark, LEAD_WORK_ACTIONS } from '@/lib/leadRemarks'
 import { ensureClientActualNameColumn } from '@/lib/ensureClientActualNameColumn'
 import { ensureMetaCampaignNameColumn } from '@/lib/ensureMetaCampaignNameColumn'
 import { buildDefaultLeadData, insertLeadRecord } from '@/lib/leadDefaults'
@@ -272,7 +272,7 @@ export async function GET(request: NextRequest) {
     const toSqlUtc = (ms: number) => new Date(ms).toISOString().slice(0, 19).replace('T', ' ')
     const todayStartUtc = toSqlUtc(dayStartUtcMs)
     const todayEndUtc = toSqlUtc(dayStartUtcMs + 24 * 60 * 60 * 1000)
-    const TODAY_ACTIVITY_SQL = `EXISTS (SELECT 1 FROM crm_remarks cr WHERE cr.lead_id = l.id AND cr.action IN ('remark_added', 'remark_edited', 'followup_added', 'followup_completed', 'followup_rescheduled', 'appointment_booked', 'whatsapp_sent', 'status_changed') AND cr.created_at >= ? AND cr.created_at < ?)`
+    const TODAY_ACTIVITY_SQL = `EXISTS (SELECT 1 FROM crm_remarks cr WHERE cr.lead_id = l.id AND cr.action IN (${LEAD_WORK_ACTIONS.map((a) => `'${a}'`).join(', ')}) AND cr.created_at >= ? AND cr.created_at < ?)`
 
     if (isMyLeadsView) {
       if (!isBranchManagerOrCeo(currentUser)) {
