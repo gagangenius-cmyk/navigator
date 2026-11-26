@@ -99,7 +99,7 @@ interface ReportData {
 }
 
 const generateLiveReportData = async (request: ReportRequest, auth: any): Promise<ReportData> => {
-  const startDate = request.config.startDate || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+  const startDate = request.config.startDate || dubaiToday(-30);
   const endDate = request.config.endDate || dubaiToday();
   let counselorIds = request.config.counselors || [];
   const replacements: any[] = [startDate, endDate];
@@ -206,7 +206,7 @@ const generateLiveReportData = async (request: ReportRequest, auth: any): Promis
     .map((item: any, index: number) => ({ ...item, rank: index + 1 }));
 
   const activities = leads.slice(0, 200).map((lead: any) => ({
-    date: new Date(lead.created || lead.regdate).toLocaleDateString(),
+    date: new Date(lead.created || lead.regdate).toLocaleDateString('en-US', { timeZone: 'Asia/Dubai' }),
     counselorId: Number(lead.assignTo || 0),
     counselorName: lead.counselorName || 'Unassigned',
     action: isConverted(lead) ? 'lead_converted' : 'lead_updated',
@@ -218,7 +218,7 @@ const generateLiveReportData = async (request: ReportRequest, auth: any): Promis
   }));
 
   const revenue = leads.filter((lead: any) => Number(lead.payTotal || 0) > 0).map((lead: any) => ({
-    date: new Date(lead.created || lead.regdate).toLocaleDateString(),
+    date: new Date(lead.created || lead.regdate).toLocaleDateString('en-US', { timeZone: 'Asia/Dubai' }),
     counselorId: Number(lead.assignTo || 0),
     counselorName: lead.counselorName || 'Unassigned',
     amount: Number(lead.payTotal || 0),
@@ -435,7 +435,7 @@ export async function GET(request: NextRequest) {
             name: 'Preview Report',
             description: 'Preview report',
             period: 'weekly',
-            startDate: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+            startDate: dubaiToday(-7),
             endDate: dubaiToday(),
             counselors: [],
             includeCharts: true,

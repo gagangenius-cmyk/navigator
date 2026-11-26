@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { CheckCircle, XCircle, RotateCcw, FileText, Clock } from 'lucide-react';
+import { formatDubaiDateTime } from '@/lib/dubaiDate';
 
 interface ClientDocument {
   document_id: string;
@@ -114,7 +115,7 @@ export default function ClientDocumentsPanel({ leadId, opportunityId }: ClientDo
                   <p className="mt-1 text-xs text-gray-400 flex items-center gap-1"><Clock size={12} /> Not uploaded yet</p>
                 )}
                 {doc.review_note && <p className="mt-1 text-xs text-gray-500">Note: {doc.review_note}</p>}
-                {doc.reviewed_at && <p className="mt-0.5 text-[11px] text-gray-400">Reviewed {new Date(doc.reviewed_at).toLocaleString()}</p>}
+                {doc.reviewed_at && <p className="mt-0.5 text-[11px] text-gray-400">Reviewed {formatDubaiDateTime(doc.reviewed_at)}</p>}
               </div>
               <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${statusClass(doc.status)}`}>{doc.status}</span>
             </div>

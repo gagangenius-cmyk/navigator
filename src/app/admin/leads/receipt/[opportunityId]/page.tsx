@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, Loader2, Printer, AlertCircle } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { getLeadBranchDetails, buildReceiptHtml } from '@/lib/receiptTemplate';
+import { formatDubaiDate } from '@/lib/dubaiDate';
 
 interface PaymentRecord {
   id: number;
@@ -149,7 +150,7 @@ export default function ReceiptPage() {
             >
               {payments.map((p) => (
                 <option key={p.id} value={p.id}>
-                  {p.receiptNumber || p.paymentNumber} — {new Date(p.paymentDate).toLocaleDateString('en-GB')}
+                  {p.receiptNumber || p.paymentNumber} — {formatDubaiDate(p.paymentDate, {}, 'en-GB')}
                 </option>
               ))}
             </select>

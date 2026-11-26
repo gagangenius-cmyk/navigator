@@ -65,7 +65,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       `UPDATE crm_crm_entry_milestones
        SET status = COALESCE(:status, status),
            notes = COALESCE(:notes, notes),
-           completed_date = CASE WHEN :status = 'completed' THEN COALESCE(completed_date, CURDATE()) ELSE completed_date END,
+           completed_date = CASE WHEN :status = 'completed' THEN COALESCE(completed_date, DATE(UTC_TIMESTAMP() + INTERVAL 4 HOUR)) ELSE completed_date END,
            updated_at = NOW()
        WHERE id = :milestoneId AND entry_id = :entryId`,
       { replacements: { milestoneId, entryId, status: body.status ?? null, notes: body.notes ?? null } },

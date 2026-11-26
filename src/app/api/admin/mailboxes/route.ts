@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
     await ensureMailboxTables();
     const rows = await sequelize.query<MailboxRow & { employee_name: string | null; sent_today: number; unread: number }>(
       `SELECT m.*, e.name AS employee_name,
-              (SELECT COUNT(*) FROM crm_mailbox_messages x WHERE x.mailbox_id = m.id AND x.direction = 'out' AND x.status = 'ok' AND x.created_at >= CURDATE()) AS sent_today,
+              (SELECT COUNT(*) FROM crm_mailbox_messages x WHERE x.mailbox_id = m.id AND x.direction = 'out' AND x.status = 'ok' AND x.created_at >= (DATE(UTC_TIMESTAMP() + INTERVAL 4 HOUR) - INTERVAL 4 HOUR)) AS sent_today,
               (SELECT COUNT(*) FROM crm_mailbox_messages x WHERE x.mailbox_id = m.id AND x.direction = 'in' AND x.is_read = 0) AS unread
        FROM crm_employee_mailboxes m
        LEFT JOIN crm_employee e ON e.id = m.employee_id

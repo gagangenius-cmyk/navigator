@@ -1,6 +1,6 @@
 'use client';
 
-import { localToday } from '@/lib/dubaiDate';
+import { localToday, formatDubaiDate } from '@/lib/dubaiDate';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -255,7 +255,7 @@ function AddPaymentContent() {
                 <tr key={h.id} className="border-t border-gray-100">
                   <td className="px-4 py-2">{i + 1}</td>
                   <td className="px-4 py-2">{h.receiptNumber || h.paymentNumber}</td>
-                  <td className="px-4 py-2">{h.paymentDate ? new Date(h.paymentDate).toLocaleDateString() : '—'}</td>
+                  <td className="px-4 py-2">{h.paymentDate ? formatDubaiDate(h.paymentDate) : '—'}</td>
                   <td className="px-4 py-2 font-medium">{currencyCode} {Number(h.paidAmount || 0).toLocaleString()}</td>
                   <td className="px-4 py-2 capitalize">{h.accountantStatus === 'verified' ? 'Approved' : 'Pending approval'}</td>
                 </tr>

@@ -2,6 +2,7 @@
 
 import { History } from 'lucide-react';
 import { useImmigrationTools } from './ImmigrationToolsContext';
+import { formatDubaiDateTime } from '@/lib/dubaiDate';
 
 const toolLabels: Record<string, string> = {
   eligibility_snapshot: 'Eligibility Snapshot',
@@ -14,10 +15,7 @@ const toolLabels: Record<string, string> = {
   english_competency: 'IELTS/PTE Score',
 };
 
-const formatDate = (value: string) => {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleString(undefined, { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-};
+const formatDate = (value: string) => formatDubaiDateTime(value, { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) || value;
 
 export default function HistoryPanel() {
   const { selectedLead, history, historyLoading } = useImmigrationTools();

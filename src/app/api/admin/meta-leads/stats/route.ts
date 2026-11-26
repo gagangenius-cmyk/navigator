@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
   await ensureDB();
 
   const today = dubaiToday();
-  const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0];
+  const weekAgo = dubaiToday(-7);
 
   const [[todayStats], [weekStats], [deliveryStats], recentLeads, recentFailures] =
     await Promise.all([

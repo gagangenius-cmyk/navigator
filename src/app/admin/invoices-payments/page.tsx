@@ -12,6 +12,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { printReceipt as printReceiptDocument } from '@/lib/receiptTemplate';
 import { useSortableData } from '@/components/ui/sortable-th';
 import { RecordCard, RecordList, SortButtonRow } from '@/components/shared/ResponsiveRecordList';
+import { formatDubaiDate } from '@/lib/dubaiDate';
 
 interface Invoice {
   id: number; receipt: string; company: string; purpose: string;
@@ -147,7 +148,7 @@ export default function InvoicesPaymentsPage() {
       </table>
       <div class="row">
         <div class="col"><div class="label">Payment Method</div><div class="value">${escapeHtml(inv.paymentMethod || 'N/A')}</div></div>
-        <div class="col"><div class="label">Payment Date</div><div class="value">${inv.paymentDate ? new Date(inv.paymentDate).toLocaleDateString() : 'N/A'}</div></div>
+        <div class="col"><div class="label">Payment Date</div><div class="value">${inv.paymentDate ? formatDubaiDate(inv.paymentDate) : 'N/A'}</div></div>
         <div class="col"><div class="label">Counselor</div><div class="value">${escapeHtml(inv.counselorName || 'N/A')}</div></div>
       </div>
       ${inv.proofOfPaymentUrl ? `<div style="margin-top:20px;padding:10px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px"><strong>Proof of Payment:</strong> ${escapeHtml(inv.proofOfPaymentUrl.split('/').pop())}</div>` : ''}
@@ -576,7 +577,7 @@ export default function InvoicesPaymentsPage() {
                 <div><span className="text-xs text-gray-500">Total Amount</span><p className="text-sm font-medium">{fmt(viewInvoice.totPayAmt)}</p></div>
                 <div><span className="text-xs text-gray-500">Balance Due</span><p className={`text-sm font-medium ${viewInvoice.payBalance > 0 ? 'text-red-600' : 'text-green-600'}`}>{fmt(viewInvoice.payBalance)}</p></div>
                 <div><span className="text-xs text-gray-500">Payment Method</span><p className="text-sm capitalize">{viewInvoice.paymentMethod || '—'}</p></div>
-                <div><span className="text-xs text-gray-500">Date</span><p className="text-sm">{viewInvoice.paymentDate ? new Date(viewInvoice.paymentDate).toLocaleDateString() : '—'}</p></div>
+                <div><span className="text-xs text-gray-500">Date</span><p className="text-sm">{viewInvoice.paymentDate ? formatDubaiDate(viewInvoice.paymentDate) : '—'}</p></div>
               </div>
               {viewInvoice.proofOfPaymentUrl && (
                 <div className="bg-green-50 border border-green-200 rounded-lg p-4">
@@ -613,7 +614,7 @@ export default function InvoicesPaymentsPage() {
                 <div><span className="text-xs text-gray-500">Remaining Balance</span><p className={`text-sm font-medium ${viewPayment.remainingBalance > 0 ? 'text-red-600' : 'text-green-600'}`}>{fmt(viewPayment.remainingBalance)}</p></div>
                 <div><span className="text-xs text-gray-500">Payment Method</span><p className="text-sm capitalize">{viewPayment.paymentMethod || '—'}</p></div>
                 <div><span className="text-xs text-gray-500">Transaction ID</span><p className="text-sm">{viewPayment.transactionId || '—'}</p></div>
-                <div><span className="text-xs text-gray-500">Date</span><p className="text-sm">{viewPayment.paymentDate ? new Date(viewPayment.paymentDate).toLocaleDateString() : '—'}</p></div>
+                <div><span className="text-xs text-gray-500">Date</span><p className="text-sm">{viewPayment.paymentDate ? formatDubaiDate(viewPayment.paymentDate) : '—'}</p></div>
                 <div><span className="text-xs text-gray-500">Counselor</span><p className="text-sm">{viewPayment.counselorName || '—'}</p></div>
                 <div><span className="text-xs text-gray-500">Status</span>
                   <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full mt-1 ${viewPayment.status === 'completed' || viewPayment.status === 'paid' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>{viewPayment.status}</span>

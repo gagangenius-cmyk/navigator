@@ -9,6 +9,7 @@ import {
   Search, RefreshCw, CheckCircle, XCircle, Clock,
   ChevronLeft, ChevronRight, Eye, FileText, ExternalLink
 } from 'lucide-react';
+import { formatDubaiDate } from '@/lib/dubaiDate';
 
 interface Payment {
   id: number;
@@ -373,7 +374,7 @@ export default function PaymentVerificationPage() {
                 {selected.paymentDate && (
                   <div className="flex justify-between">
                     <span className="text-gray-500">Payment Date</span>
-                    <span className="text-gray-700">{new Date(selected.paymentDate).toLocaleDateString()}</span>
+                    <span className="text-gray-700">{formatDubaiDate(selected.paymentDate)}</span>
                   </div>
                 )}
               </div>

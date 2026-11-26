@@ -1,5 +1,5 @@
 import { syncLeadFollowup } from '@/lib/leadSchedule';
-import { dubaiToday } from '@/lib/dubaiDate';
+import { dubaiToday, dubaiTime } from '@/lib/dubaiDate';
 import { NextRequest, NextResponse } from 'next/server';
 import { sequelize } from '@/lib/sequelize';
 import { resolveLeadAutoAssignment } from '@/lib/leadAutoAssignment';
@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
     }
     const duplicateCheck = await checkForDuplicate({ phone: data.phone, email: data.email });
     const now = new Date();
-    const timeNow = now.toTimeString().split(' ')[0];
+    const timeNow = dubaiTime(now);
 
     // Simple lead creation with minimal required fields. The remaining
     // columns below are NOT NULL with no DB default, so they must all be

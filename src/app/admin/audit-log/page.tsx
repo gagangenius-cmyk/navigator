@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { ListChecks, Search, ChevronLeft, ChevronRight, Info } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { formatDubaiDateTime } from '@/lib/dubaiDate';
 
 interface AuditEntry {
   id: number;
@@ -26,10 +27,7 @@ const ENTITY_TYPE_LABELS: Record<string, string> = {
   compliance_approval: 'Compliance Approval',
 };
 
-const formatDateTime = (value: string) => {
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString();
-};
+const formatDateTime = (value: string) => formatDubaiDateTime(value) || value;
 
 export default function AuditLogPage() {
   const { token } = useAuth();

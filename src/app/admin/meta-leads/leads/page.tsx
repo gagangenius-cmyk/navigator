@@ -6,6 +6,7 @@ import { useSortableData } from '@/components/ui/sortable-th';
 import { RecordCard, RecordList, SortButtonRow } from '@/components/shared/ResponsiveRecordList';
 import { useDebounce } from '@/hooks/useDebounce';
 import { Search, RefreshCw, X, ChevronLeft, ChevronRight, UserRound } from 'lucide-react';
+import { formatDubaiDateTime } from '@/lib/dubaiDate';
 
 interface Lead {
   id: number;
@@ -209,7 +210,7 @@ export default function MetaLeadsPage() {
               metaItems={[{ icon: Search, text: `${lead.email || '—'} · ${lead.phone || '—'}`, key: 'contact' }]}
               stats={[
                 { label: 'Campaign', value: lead.campaign_name || '—' },
-                { label: 'Received', value: new Date(lead.created_at).toLocaleString() },
+                { label: 'Received', value: formatDubaiDateTime(lead.created_at) },
                 { label: 'Retries', value: lead.retry_count || 0 },
               ]}
               actions={[
@@ -264,7 +265,7 @@ export default function MetaLeadsPage() {
                     ['Campaign', detail.lead.campaign_name],
                     ['Form', detail.lead.form_name],
                     ['Meta Lead ID', detail.lead.meta_lead_id],
-                    ['Received', detail.lead.created_at ? new Date(detail.lead.created_at).toLocaleString() : ''],
+                    ['Received', detail.lead.created_at ? formatDubaiDateTime(detail.lead.created_at) : ''],
                   ].map(([label, value]) => value ? (
                     <div key={label} className="flex gap-2 text-sm">
                       <span className="w-28 shrink-0 text-gray-500">{label}</span>
@@ -315,7 +316,7 @@ export default function MetaLeadsPage() {
                           </div>
                           {d.last_error && <p className="mt-1 text-xs text-red-600">{d.last_error}</p>}
                           <p className="mt-1 text-xs text-gray-400">
-                            {d.delivered_at ? `Delivered: ${new Date(d.delivered_at).toLocaleString()}` : `Updated: ${new Date(d.updated_at).toLocaleString()}`}
+                            {d.delivered_at ? `Delivered: ${formatDubaiDateTime(d.delivered_at)}` : `Updated: ${formatDubaiDateTime(d.updated_at)}`}
                             {d.next_retry_at && ` · Next retry: ${new Date(d.next_retry_at).toLocaleString()}`}
                           </p>
                         </div>

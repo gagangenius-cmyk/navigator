@@ -699,8 +699,8 @@ The {{companyName}} Team
       phone: recipient.phone || '',
       country: recipient.country || '',
       language: recipient.language || 'en',
-      currentDate: new Date().toLocaleDateString(),
-      currentTime: new Date().toLocaleTimeString(),
+      currentDate: new Date().toLocaleDateString('en-US', { timeZone: 'Asia/Dubai' }),
+      currentTime: new Date().toLocaleTimeString('en-US', { timeZone: 'Asia/Dubai' }),
       unsubscribeLink: `${process.env.APP_URL || ''}/unsubscribe?email=${recipient.email}`,
       preferencesLink: `${process.env.APP_URL || ''}/preferences?email=${recipient.email}`,
       // Campaign-specific variables

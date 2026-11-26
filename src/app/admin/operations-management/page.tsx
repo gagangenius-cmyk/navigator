@@ -10,6 +10,7 @@ import ConversationHistoryModal from '@/components/shared/ConversationHistoryMod
 import CaseTransferModal from '@/components/admin/CaseTransferModal';
 import { useAuth } from '@/contexts/AuthContext';
 import { deriveProductTypeFromLabel } from '@/lib/clientPortalProducts';
+import { formatDubaiDate } from '@/lib/dubaiDate';
 
 interface DmcForumLeadsContract {
   id: number;
@@ -1206,7 +1207,7 @@ export default function OperationsManagement() {
                     <div><strong>Amount:</strong> {selectedContract.currency} {selectedContract.amount.toLocaleString()}</div>
                     <div><strong>Status:</strong> {selectedContract.status}</div>
                     <div><strong>Agreement Date:</strong> {new Date(selectedContract.agreement_date).toLocaleDateString()}</div>
-                    <div><strong>Created:</strong> {new Date(selectedContract.created_at).toLocaleDateString()}</div>
+                    <div><strong>Created:</strong> {formatDubaiDate(selectedContract.created_at)}</div>
                   </div>
                 </div>
               </div>

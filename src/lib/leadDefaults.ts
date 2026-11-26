@@ -1,4 +1,4 @@
-import { dubaiToday } from '@/lib/dubaiDate';
+import { dubaiToday, dubaiTime, dubaiDay } from '@/lib/dubaiDate';
 import { splitFollowUp } from '@/lib/dubaiDate';
 import { QueryTypes, Transaction } from 'sequelize';
 import { sequelize } from './sequelize';
@@ -63,15 +63,15 @@ export function buildDefaultLeadData(input: BuildLeadDataInput) {
     // filled with "now" as a placeholder and followupstat = 1 ("nothing pending") so a
     // brand-new lead doesn't read as having a pending follow-up that was never scheduled.
     followup: explicitFollowUp.date || new Date(),
-    folowuptime: data.folowuptime || data.followupTime || explicitFollowUp.time || new Date().toTimeString().split(' ')[0],
+    folowuptime: data.folowuptime || data.followupTime || explicitFollowUp.time || dubaiTime(),
     followupstat: data.followupstat ?? (explicitFollowUp.date ? 0 : 1),
     enquiry: data.enquiry || 'New lead enquiry',
     convet: data.convet || 'New',
     priority: data.priority || 'Medium',
-    regdate: new Date(),
+    regdate: dubaiDay(),
     regtime: new Date(),
     last_updated: dubaiToday(),
-    last_updtd_time: new Date().toTimeString().split(' ')[0],
+    last_updtd_time: dubaiTime(),
     stepComplete: data.stepComplete || 1,
     payType: data.payType || null,
     // New leads enter unassigned; a FOE/Branch Manager/CEO assigns them
@@ -98,7 +98,7 @@ export function buildDefaultLeadData(input: BuildLeadDataInput) {
     // already owns; recordLeadAssignment clears it to 'New' the moment the
     // lead actually gets assigned.
     status: data.status || (assignment?.assignedEmployeeId ? 'New' : 'untouched'),
-    status_date: new Date(),
+    status_date: dubaiDay(),
     notf: data.notf || 0,
     type: data.type || 'lead',
     password: data.password || null,
@@ -106,7 +106,7 @@ export function buildDefaultLeadData(input: BuildLeadDataInput) {
     i_p: data.i_p || '',
     escalation: data.escalation || 0,
     transfer_date: data.transfer_date || null,
-    transfer_time: data.transfer_time || new Date().toTimeString().split(' ')[0],
+    transfer_time: data.transfer_time || dubaiTime(),
     transfered: data.transfered || 0,
     transfered_by: data.transfered_by || 1,
     otp_status: data.otp_status || 0,

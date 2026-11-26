@@ -34,12 +34,13 @@ export async function runStaleLeadRecycleSweep(limitPerRule = 100): Promise<Stal
          AND l.assignTo IS NOT NULL
          AND COALESCE(l.status, '') NOT IN ('Converted', 'Closed', 'Lost', 'client', 'retained')
          AND l.transfer_date IS NOT NULL
-         AND TIMESTAMPDIFF(HOUR, TIMESTAMP(l.transfer_date, COALESCE(l.transfer_time, '00:00:00')), NOW()) >= :hours
+         AND TIMESTAMPDIFF(HOUR, TIMESTAMP(l.transfer_date, COALESCE(l.transfer_time, '00:00:00')), (UTC_TIMESTAMP() + INTERVAL 4 HOUR)) >= :hours
          AND NOT EXISTS (
            SELECT 1 FROM crm_remarks r
-           WHERE r.leadId = l.id
+           WHERE r.lead_id = l.id
              AND r.action <> 'lead_assigned'
-             AND r.createdAt > TIMESTAMP(l.transfer_date, COALESCE(l.transfer_time, '00:00:00'))
+             -- crm_remarks.created_at is UTC; transfer_date/transfer_time are UAE wall clock.
+             AND r.created_at + INTERVAL 4 HOUR > TIMESTAMP(l.transfer_date, COALESCE(l.transfer_time, '00:00:00'))
          )
        ORDER BY l.transfer_date ASC
        LIMIT :limit`,

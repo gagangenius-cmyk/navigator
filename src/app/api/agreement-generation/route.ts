@@ -252,7 +252,7 @@ export async function GET(request: NextRequest) {
 }
 
 function generateAgreementContent(opportunity: any, agreementData: any, agreementNumber: string): string {
-  const currentDate = new Date().toLocaleDateString();
+  const currentDate = new Date().toLocaleDateString('en-US', { timeZone: 'Asia/Dubai' });
 
   // Every CRM product now uses the branch's own signed master agreement
   // (the 4 Gulf branches' bilingual "unified terms" contract, or Hyderabad's

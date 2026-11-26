@@ -455,7 +455,7 @@ export function buildReceiptHtml(r: ReceiptFields): string {
   const receiptTotal = paidAmount + adminFeeAmount + adminFeeVatAmount;
 
   const fileNo = r.agreementNumber || (r.opportunityId !== undefined && r.opportunityId !== null && r.opportunityId !== '' ? String(r.opportunityId) : 'N/A');
-  const dateStr = new Date(r.paymentDate || new Date()).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '-');
+  const dateStr = new Date(r.paymentDate || new Date()).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Asia/Dubai' }).replace(/\//g, '-');
   const purpose = r.serviceName || 'Professional Migration & Visa Consulting Services';
   const accountLabel = /kuwait/i.test(cfg.countryLabel) ? 'Kuwait Account'
     : /qatar/i.test(cfg.countryLabel) ? 'Qatar Account'

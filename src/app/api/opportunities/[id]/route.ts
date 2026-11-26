@@ -1,4 +1,4 @@
-import { dubaiToday } from '@/lib/dubaiDate';
+import { dubaiToday, dubaiTime } from '@/lib/dubaiDate';
 import { NextRequest, NextResponse } from 'next/server';
 import { sequelize } from '@/lib/sequelize';
 import { verifyToken } from '@/lib/auth';
@@ -266,7 +266,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
           dubaiToday(),
           body.status === 'won' ? 'Successfully converted and retained client' : 'Opportunity lost',
           dubaiToday(),
-          new Date().toTimeString().split(' ')[0],
+          dubaiTime(),
           opportunityId
         ]
       });
@@ -394,7 +394,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
       `, {
         replacements: [
           dubaiToday(),
-          new Date().toTimeString().split(' ')[0],
+          dubaiTime(),
           opportunity.leadId
         ],
         transaction,

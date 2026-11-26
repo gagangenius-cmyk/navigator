@@ -1,4 +1,4 @@
-import { dubaiToday } from '@/lib/dubaiDate';
+import { dubaiToday, dubaiTime, dubaiDay } from '@/lib/dubaiDate';
 import { NextRequest, NextResponse } from 'next/server';
 import { Op } from 'sequelize';
 import { models } from '@/models';
@@ -20,13 +20,13 @@ export async function POST(request: NextRequest) {
     const lead = await models.CrmcForumLeads.create({
       ...leadData,
       created: new Date(),
-      regdate: new Date(),
+      regdate: dubaiDay() as unknown as Date,
       regtime: new Date(),
       last_updated: dubaiToday(),
-      last_updtd_time: new Date().toTimeString().split(' ')[0],
+      last_updtd_time: dubaiTime(),
       stepComplete: autoGenerateOpportunity ? 2 : 1,
       exist: 0,
-      status_date: new Date()
+      status_date: dubaiDay() as unknown as Date
     });
 
     // Reload with associations
@@ -80,7 +80,7 @@ export async function POST(request: NextRequest) {
         status: 'opportunity_created',
         convet: 'Opportunity',
         stepComplete: autoGenerateReceipt ? 3 : 2,
-        status_date: new Date()
+        status_date: dubaiDay() as unknown as Date
       });
 
       // Create opportunity activity
@@ -136,7 +136,7 @@ export async function POST(request: NextRequest) {
         payBalance: newPayBalance,
         status: newPayBalance <= 0 ? 'fully_paid' : 'partially_paid',
         stepComplete: autoGenerateAgreement ? 4 : 3,
-        status_date: new Date()
+        status_date: dubaiDay() as unknown as Date
       });
 
       // Create payment activity
@@ -189,7 +189,7 @@ export async function POST(request: NextRequest) {
         status: 'agreement_generated',
         convet: 'Agreement',
         stepComplete: 4,
-        status_date: new Date()
+        status_date: dubaiDay() as unknown as Date
       });
 
       // Create agreement activity

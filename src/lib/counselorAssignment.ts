@@ -1,4 +1,5 @@
 import { CounselorLogger } from './counselorLogger';
+import { dubaiTime } from '@/lib/dubaiDate';
 
 export interface Counselor {
   id: string;
@@ -141,8 +142,8 @@ export class CounselorAssignmentSystem {
   // Get counselors available for auto-assignment
   private getAvailableCounselors(): Counselor[] {
     const now = new Date();
-    const currentDay = now.toLocaleDateString('en-US', { weekday: 'long' });
-    const currentTime = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
+    const currentDay = now.toLocaleDateString('en-US', { weekday: 'long', timeZone: 'Asia/Dubai' });
+    const currentTime = dubaiTime(now).slice(0, 5);
 
     return this.counselors.filter(counselor => {
       // Check if auto-assign is enabled

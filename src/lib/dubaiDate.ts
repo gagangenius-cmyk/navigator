@@ -9,15 +9,42 @@ export function dubaiToday(offsetDays = 0): string {
   return new Date(Date.now() + DUBAI_OFFSET_MS + offsetDays * 86400000).toISOString().slice(0, 10);
 }
 
-/**
- * YYYY-MM-DD for the browser user's own calendar day. Use this in client
- * components for form defaults: new Date().toISOString() is the UTC day, which
- * is yesterday for anyone ahead of UTC in the early hours.
- */
+/** Form-default "today". The whole CRM runs on UAE time, whatever timezone the viewer's device is set to. */
 export function localToday(): string {
-  const d = new Date();
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  return dubaiToday();
+}
+
+export const CRM_TIME_ZONE = 'Asia/Dubai';
+
+/** YYYY-MM-DD of an instant, in UAE time. For DATE columns paired with a TIME column. */
+export function dubaiDay(at: Date = new Date()): string {
+  return new Date(at.getTime() + DUBAI_OFFSET_MS).toISOString().slice(0, 10);
+}
+
+/** HH:MM:SS of an instant, in UAE time. For TIME columns (last_updtd_time, transfer_time, remark time ...). */
+export function dubaiTime(at: Date = new Date()): string {
+  return new Date(at.getTime() + DUBAI_OFFSET_MS).toISOString().slice(11, 19);
+}
+
+/** 'YYYY-MM-DD HH:MM:SS' UAE wall clock, comparable with stored follow-up / appointment date-times. */
+export function dubaiNow(at: Date = new Date()): string {
+  return `${dubaiDay(at)} ${dubaiTime(at)}`;
+}
+
+// SQL equivalents. The database server runs on UTC, so NOW()/CURDATE() are 4 hours behind the UAE.
+export const SQL_DUBAI_NOW = '(UTC_TIMESTAMP() + INTERVAL 4 HOUR)';
+export const SQL_DUBAI_TODAY = 'DATE(UTC_TIMESTAMP() + INTERVAL 4 HOUR)';
+
+// Display helpers for stored INSTANTS (created_at, completed_at ... saved in UTC): shown in UAE time on any device.
+// Do NOT use them for follow-up/appointment date-times, which are already stored as UAE wall clock.
+export function formatDubaiDate(value: string | Date | null | undefined, options: Intl.DateTimeFormatOptions = {}, locale = 'en-GB'): string {
+  const date = parseUtcTimestamp(value);
+  return Number.isNaN(date.getTime()) ? '' : date.toLocaleDateString(locale, { timeZone: CRM_TIME_ZONE, ...options });
+}
+
+export function formatDubaiDateTime(value: string | Date | null | undefined, options: Intl.DateTimeFormatOptions = {}, locale = 'en-GB'): string {
+  const date = parseUtcTimestamp(value);
+  return Number.isNaN(date.getTime()) ? '' : date.toLocaleString(locale, { timeZone: CRM_TIME_ZONE, ...options });
 }
 
 /**

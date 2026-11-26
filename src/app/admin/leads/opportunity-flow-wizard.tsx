@@ -1,6 +1,6 @@
 'use client';
 
-import { localToday } from '@/lib/dubaiDate';
+import { localToday, formatDubaiDateTime } from '@/lib/dubaiDate';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -21,6 +21,7 @@ import {
   Target, TrendingUp, Users, Briefcase, Flag, MessageSquare, FileCheck,
   Receipt, FolderOpen, PenTool, Lock, RefreshCw, KeyRound, Sparkles, Loader2
 } from 'lucide-react';
+import { activityLabel } from '@/lib/activityLabels';
 
 interface OpportunityFlowWizardProps {
   leadId: number;
@@ -2375,7 +2376,7 @@ function ProspectStage({ lead, data, setData, onLeadUpdated, onSaveProspect, onN
               <p className="mt-1 text-sm text-gray-900">{data.serviceRequired || 'Set "Service interest" in the Counselor workspace above.'}</p>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Remarks (crm_remarks)</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Activity log</label>
               <div className="space-y-2 rounded-lg border border-gray-300 p-3">
                 {loadingRemarks && <p className="text-sm text-gray-400">Loading remarks…</p>}
                 {!loadingRemarks && remarksLog.length === 0 && (
@@ -2385,8 +2386,9 @@ function ProspectStage({ lead, data, setData, onLeadUpdated, onSaveProspect, onN
                   <div key={entry.id} className="rounded border border-gray-100 bg-gray-50 p-2">
                     <div className="flex items-center justify-between text-xs text-gray-500">
                       <span className="font-medium text-gray-700">{entry.actorName || 'System'}</span>
-                      <span>{new Date(entry.created_at).toLocaleString()}</span>
+                      <span>{formatDubaiDateTime(entry.created_at)}</span>
                     </div>
+                    <p className="mt-1 text-xs font-medium text-purple-700">{activityLabel(entry.action)}</p>
                     <p className="mt-1 text-sm text-gray-900">{entry.remark}</p>
                   </div>
                 ))}

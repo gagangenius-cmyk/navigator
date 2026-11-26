@@ -4,7 +4,7 @@ import { QueryTypes } from 'sequelize';
 import { verifyToken } from '@/lib/auth';
 import { isCeo } from '@/lib/roleChecks';
 import { notifyMetaLeadQuality } from '@/lib/meta/lead-quality-feedback';
-import { recordLeadAssignment, logLeadRemark } from '@/lib/leadRemarks';
+import { recordLeadAssignment, logLeadRemark, addLeadRemark } from '@/lib/leadRemarks';
 import { assertLeadAccess } from '@/lib/leadAccess';
 import { logAudit } from '@/lib/auditLog';
 
@@ -138,13 +138,7 @@ export async function PUT(
     }
     const newRemark = typeof updates.lead_remark === 'string' ? updates.lead_remark.trim() : '';
     if (newRemark && newRemark !== String(existing.lead_remark || '').trim()) {
-      await logLeadRemark({
-        leadId: id,
-        action: 'remark_added',
-        remark: newRemark,
-        actorId: currentUser.id,
-        actorRole,
-      });
+      await addLeadRemark({ leadId: id, text: newRemark, actorId: currentUser.id, actorRole });
     }
 
     // assignTo is an allowed quick-edit field, but this path never stamped the

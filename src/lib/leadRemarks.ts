@@ -1,3 +1,4 @@
+import { dubaiDay, dubaiTime, SQL_DUBAI_NOW } from './dubaiDate';
 import { enqueueTransferNotice } from './leadTransferNotices';
 import { Transaction, QueryTypes } from 'sequelize';
 import { CrmRemarks } from '@/models/CrmRemarks';
@@ -83,6 +84,59 @@ export async function logLeadRemark({
   }
 }
 
+interface AddLeadRemarkInput {
+  leadId: number;
+  text: unknown;
+  actorId?: number | null;
+  actorRole?: string | null;
+  transaction?: Transaction;
+}
+
+// Placeholders the forms send when nobody typed anything - not remarks.
+const AUTO_TEXTS = new Set(['lead follow-up', 'prospect follow-up scheduled']);
+
+/**
+ * THE central place for anything a person types about a lead - the remark popup, status updates, follow-ups
+ * (add / complete / reschedule / cancel), appointments and the lead forms all call this. Each remark is stored in the
+ * lead's remark history (crm_forum_leads_remarks), becomes the lead's latest remark, and appears in the activity log
+ * as "Lead Remark" ('remark_added').
+ *
+ * One popup can send the same text to two or three endpoints (remark + follow-up + appointment), so an identical
+ * remark on the same lead within a minute is recorded once. Never throws: it must not fail the action it came with.
+ * Returns false when nothing new was recorded.
+ */
+export async function addLeadRemark({ leadId, text, actorId = null, actorRole = null, transaction }: AddLeadRemarkInput): Promise<boolean> {
+  const remark = typeof text === 'string' ? text.trim() : '';
+  const id = Number(leadId);
+  if (!id || !remark || AUTO_TEXTS.has(remark.toLowerCase())) return false;
+  try {
+    const now = new Date();
+    const date = dubaiDay(now);
+    const time = dubaiTime(now);
+    const [recent] = await sequelize.query<{ id: number }>(
+      `SELECT id FROM crm_forum_leads_remarks
+       WHERE \`lead\` = :id AND remark = :remark AND TIMESTAMP(\`date\`, created) >= (${SQL_DUBAI_NOW} - INTERVAL 60 SECOND)
+       LIMIT 1`,
+      { replacements: { id, remark }, type: QueryTypes.SELECT, transaction },
+    );
+    if (recent) return false;
+
+    await sequelize.query(
+      'INSERT INTO crm_forum_leads_remarks (`lead`, `date`, remark, emp, created, `status`) VALUES (:id, :date, :remark, :emp, :time, 1)',
+      { replacements: { id, date, remark, emp: actorId ?? 0, time }, type: QueryTypes.INSERT, transaction },
+    );
+    await sequelize.query(
+      'UPDATE crm_forum_leads SET lead_remark = :remark, last_updated = :date, last_updtd_time = :time WHERE id = :id',
+      { replacements: { id, remark, date, time }, type: QueryTypes.UPDATE, transaction },
+    );
+    await logLeadRemark({ leadId: id, action: 'remark_added', remark, actorId, actorRole, transaction });
+    return true;
+  } catch (error) {
+    console.error('Failed to record lead remark:', error);
+    return false;
+  }
+}
+
 interface RecordLeadAssignmentInput {
   leadId: number;
   oldAssignTo: number | null;
@@ -151,7 +205,7 @@ export async function recordLeadAssignment({
            ${clearsUntouched ? ", status = IF(status = 'untouched', 'New', status)" : ''}
        WHERE id = ?`,
       {
-        replacements: [now, now.toTimeString().split(' ')[0], actorId ?? 1, ruleId ?? null, leadId],
+        replacements: [dubaiDay(now), dubaiTime(now), actorId ?? 1, ruleId ?? null, leadId],
         transaction,
       }
     );

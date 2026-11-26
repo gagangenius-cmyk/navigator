@@ -44,7 +44,7 @@ export async function resolveContextForLeads(leadIds: number[]): Promise<Map<num
     `SELECT a.leadid, a.date, a.appointtime, e.name AS counselorName, e.mobile AS counselorPhone
      FROM appointments a
      LEFT JOIN crm_employee e ON e.id = a.counsilorid
-     WHERE a.leadid IN (:leadIds) AND a.date >= CURDATE() AND COALESCE(a.done, 0) = 0 AND COALESCE(a.not_done, 0) = 0
+     WHERE a.leadid IN (:leadIds) AND a.date >= DATE(UTC_TIMESTAMP() + INTERVAL 4 HOUR) AND COALESCE(a.done, 0) = 0 AND COALESCE(a.not_done, 0) = 0
      ORDER BY a.date ASC, a.appointtime ASC`,
     { replacements: { leadIds }, type: QueryTypes.SELECT },
   ).catch(() => [] as any[]);

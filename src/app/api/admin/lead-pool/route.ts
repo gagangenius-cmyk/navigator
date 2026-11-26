@@ -288,8 +288,8 @@ export async function POST(request: NextRequest) {
     // everywhere else in the app reads. pool_entered_at is cleared too, since
     // these leads are no longer sitting in the pool.
     const updateSql = selectAll
-      ? `UPDATE crm_forum_leads l SET l.assignTo = :cid, l.Counsilor = :cid, l.transfer_date = NOW(), l.transfer_time = CURTIME(), l.transfered = 1, l.transfered_by = :actorId, l.pool_entered_at = NULL ${whereClause}`
-      : `UPDATE crm_forum_leads SET assignTo = :cid, Counsilor = :cid, transfer_date = NOW(), transfer_time = CURTIME(), transfered = 1, transfered_by = :actorId, pool_entered_at = NULL ${whereClause}`;
+      ? `UPDATE crm_forum_leads l SET l.assignTo = :cid, l.Counsilor = :cid, l.transfer_date = DATE(UTC_TIMESTAMP() + INTERVAL 4 HOUR), l.transfer_time = TIME(UTC_TIMESTAMP() + INTERVAL 4 HOUR), l.transfered = 1, l.transfered_by = :actorId, l.pool_entered_at = NULL ${whereClause}`
+      : `UPDATE crm_forum_leads SET assignTo = :cid, Counsilor = :cid, transfer_date = DATE(UTC_TIMESTAMP() + INTERVAL 4 HOUR), transfer_time = TIME(UTC_TIMESTAMP() + INTERVAL 4 HOUR), transfered = 1, transfered_by = :actorId, pool_entered_at = NULL ${whereClause}`;
 
     // Snapshot each affected lead's *current* assignTo before the UPDATE
     // below overwrites it — needed to log a real "assigned from X to Y" per

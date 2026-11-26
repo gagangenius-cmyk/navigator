@@ -297,7 +297,7 @@ export async function sendFromMailbox(mb: MailboxRow, input: {
   const source = input.source || 'manual';
   if (source === 'manual') {
     const [{ sentToday }] = await sequelize.query<{ sentToday: number }>(
-      "SELECT COUNT(*) AS sentToday FROM crm_mailbox_messages WHERE mailbox_id = :id AND direction = 'out' AND status = 'ok' AND source = 'manual' AND created_at >= CURDATE()",
+      "SELECT COUNT(*) AS sentToday FROM crm_mailbox_messages WHERE mailbox_id = :id AND direction = 'out' AND status = 'ok' AND source = 'manual' AND created_at >= (DATE(UTC_TIMESTAMP() + INTERVAL 4 HOUR) - INTERVAL 4 HOUR)",
       { replacements: { id: mb.id }, type: QueryTypes.SELECT },
     );
     if (Number(sentToday) >= mb.daily_limit) throw new Error(`Daily send limit of ${mb.daily_limit} reached for this mailbox`);
@@ -463,7 +463,7 @@ export async function purgeOldTrash(days = Number(process.env.MAIL_TRASH_RETENTI
 // their own inbox nor be blocked by their normal sending.
 export async function broadcastSentToday(mailboxId: number) {
   const [row] = await sequelize.query<{ n: number }>(
-    "SELECT COUNT(*) AS n FROM crm_mailbox_messages WHERE mailbox_id = :mailboxId AND direction = 'out' AND status = 'ok' AND source = 'broadcast' AND created_at >= CURDATE()",
+    "SELECT COUNT(*) AS n FROM crm_mailbox_messages WHERE mailbox_id = :mailboxId AND direction = 'out' AND status = 'ok' AND source = 'broadcast' AND created_at >= (DATE(UTC_TIMESTAMP() + INTERVAL 4 HOUR) - INTERVAL 4 HOUR)",
     { replacements: { mailboxId }, type: QueryTypes.SELECT },
   );
   return Number(row?.n || 0);

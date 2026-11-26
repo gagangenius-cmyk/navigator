@@ -13,6 +13,7 @@ import {
   AlertCircle, Search, RefreshCw, ChevronDown, ChevronUp, Filter, ChevronLeft, ChevronRight
 } from 'lucide-react';
 import { useDebounce } from '@/hooks/useDebounce';
+import { formatDubaiDate } from '@/lib/dubaiDate';
 
 interface DiscountApproval {
   id: number;
@@ -424,7 +425,7 @@ export default function DiscountApprovalsPage() {
                     { label: 'Discount', value: `${pct(a)}%` },
                     { label: 'Original', value: <span className="line-through">{a.currency} {a.originalAmount?.toLocaleString()}</span> },
                     { label: 'Final Amount', value: <span className="font-bold text-green-700">{a.currency} {a.discountedAmount?.toLocaleString()}</span>, sub: `-${a.currency} ${a.discountAmount?.toLocaleString()}` },
-                    { label: 'Date', value: new Date(a.createdAt).toLocaleDateString(), sub: a.approvedEmployeeName ? `by ${a.approvedEmployeeName}` : undefined },
+                    { label: 'Date', value: formatDubaiDate(a.createdAt), sub: a.approvedEmployeeName ? `by ${a.approvedEmployeeName}` : undefined },
                   ]}
                   extra={isExpanded ? (
                     <div className="mt-3 rounded-lg bg-blue-50 p-3 text-sm">

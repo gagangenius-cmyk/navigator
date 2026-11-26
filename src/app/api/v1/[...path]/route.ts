@@ -188,7 +188,7 @@ async function handleGet({ user, path, searchParams }: HandlerContext) {
           SUM(overtime_hours) AS overtimeHours
         FROM crm_hr_attendance_records
         WHERE employee_id = :employeeId
-          AND DATE_FORMAT(date, '%Y-%m') = COALESCE(:month, DATE_FORMAT(CURRENT_DATE(), '%Y-%m'))
+          AND DATE_FORMAT(date, '%Y-%m') = COALESCE(:month, DATE_FORMAT(DATE(UTC_TIMESTAMP() + INTERVAL 4 HOUR), '%Y-%m'))
         GROUP BY employee_id
       `,
       { replacements: { employeeId: path[3], month: searchParams.get('month') }, type: QueryTypes.SELECT }

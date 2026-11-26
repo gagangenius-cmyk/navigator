@@ -12,13 +12,14 @@ import { renderAgreementForBranch } from '@/lib/renderAgreementForBranch';
 import { formatDocumentNumber } from '@/lib/documentNumbering';
 import { notifyCeo, notifyRole } from '@/lib/notify';
 import { logAudit } from '@/lib/auditLog';
-import { logLeadRemark } from '@/lib/leadRemarks';
+import { logLeadRemark, addLeadRemark } from '@/lib/leadRemarks';
 import { deriveProductTypeFromLabel } from '@/lib/clientPortalProducts';
 import { getAdminFeeAmount } from '@/lib/receiptTemplate';
 import { ensurePayHistoryAdminFeeColumns } from '@/lib/ensurePayHistoryAdminFeeColumns';
 import { ensureFeePremiumColumns } from '@/lib/ensureFeePremiumColumns';
 import { ensureClientActualNameColumn } from '@/lib/ensureClientActualNameColumn';
 import crypto from 'crypto';
+import { dubaiTime, dubaiDay } from '@/lib/dubaiDate';
 
 const LEAD_FLOW_ATTRIBUTES = [
   'id',
@@ -612,7 +613,7 @@ export async function POST(request: NextRequest) {
             leadId: lead.id,
             amount: paidAmount,
             receiptNumber,
-            payDate: paymentData.paymentDate || now,
+            payDate: paymentData.paymentDate || dubaiDay(now),
             payMethod: paymentData.paymentMethod || 'cash',
             payoption: paymentData.paymentStructure || 'full',
             payNextDate: paymentData.dueDate || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
@@ -674,7 +675,7 @@ export async function POST(request: NextRequest) {
     // id omitted below - see the opportunity creation above for why (crm_opportunity_agreements.id is AUTO_INCREMENT).
     const agreementContent = agreementData.content || renderAgreementForBranch(branchCurrency.branchAbbrv, {
       agreementNumber,
-      agreementDate: now.toLocaleDateString(),
+      agreementDate: now.toLocaleDateString('en-US', { timeZone: 'Asia/Dubai' }),
       agreementExpiry: agreementData.endDate ? new Date(agreementData.endDate).toLocaleDateString() : new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toLocaleDateString(),
       clientName,
       clientEmail: lead.email || '',
@@ -914,19 +915,17 @@ export async function POST(request: NextRequest) {
       };
     }
 
+    // Every note typed in this step is a lead remark. Same transaction, so they roll back with the conversion;
+    // a text repeated across the follow-up / appointment / remark boxes is recorded once.
+    for (const text of [followUpData.notes, appointmentData.notes]) {
+      if (normalizeRemark(text) !== remarkText) {
+        await addLeadRemark({ leadId: lead.id, text, actorId: createdBy, transaction });
+      }
+    }
     let leadRemarkSummary = null;
     if (remarkText) {
-      const leadRemark = await createLeadRemark(lead.id, remarkText, createdBy, now, transaction);
-      // Same transaction so the activity entry rolls back with the remark.
-      await logLeadRemark({
-        leadId: lead.id,
-        action: 'remark_added',
-        remark: remarkText,
-        actorId: createdBy,
-        transaction,
-      });
+      await addLeadRemark({ leadId: lead.id, text: remarkText, actorId: createdBy, transaction });
       leadRemarkSummary = {
-        id: leadRemark.id,
         leadId: lead.id,
         remark: remarkText,
         employeeId: createdBy
@@ -1020,8 +1019,8 @@ export async function POST(request: NextRequest) {
       convet: 'Opportunity',
       opportunity_status: opportunity.status,
       conversion_date: now,
-      last_updated: now.toISOString().split('T')[0],
-      last_updtd_time: now.toTimeString().split(' ')[0],
+      last_updated: dubaiDay(now),
+      last_updtd_time: dubaiTime(now),
       stepComplete: 2,
       paidYet: paidAmount,
       payBalance: remainingBalance,
@@ -1030,7 +1029,7 @@ export async function POST(request: NextRequest) {
       // reminder/appointment rows by their model hooks (lib/leadSchedule.ts). This
       // used to write followupstat = 1 ("done") right after creating a pending
       // reminder, so the lead showed nothing pending while its reminder was open.
-      status_date: now,
+      status_date: dubaiDay(now),
       // demandAmt tracks the outstanding balance; dueDate/demdRemark only
       // overwrite when the Payment stage actually sent a balance-due-date or
       // remark, otherwise leave whatever was already on the lead untouched.
@@ -1104,7 +1103,7 @@ export async function POST(request: NextRequest) {
       payBalance: remainingBalance,
       status: isClient ? 'completed' : 'active',
       statusDate: now,
-      agreeDate: now,
+      agreeDate: dubaiDay(now) as unknown as Date,
       feeAgreeDate: now,
       counselorId: lead.assignTo || null,
       createdBy,
@@ -1414,7 +1413,7 @@ function normalizeRemark(value: unknown): string {
 }
 
 function formatTime(date: Date): string {
-  return date.toTimeString().split(' ')[0];
+  return dubaiTime(date);
 }
 
 function getErrorMessage(error: unknown): string {
@@ -1505,38 +1504,6 @@ async function getTableColumns(table: string, transaction?: Transaction): Promis
       ? rows.map((row) => String((row as { Field?: string }).Field || ''))
       : []
   );
-}
-
-async function createLeadRemark(
-  leadId: number,
-  remark: string,
-  employeeId: number,
-  date: Date,
-  transaction: Transaction
-): Promise<{ id: number }> {
-  const columns = await getTableColumns('crm_forum_leads_remarks', transaction);
-
-  const insertColumns = ['lead', 'date', 'remark', 'emp', 'created'];
-  const placeholders = ['?', '?', '?', '?', '?'];
-  const replacements: unknown[] = [leadId, date, remark, employeeId, formatTime(date)];
-
-  if (columns.has('status')) {
-    insertColumns.push('status');
-    placeholders.push('?');
-    replacements.push(1);
-  }
-
-  await sequelize.query(
-    `INSERT INTO crm_forum_leads_remarks (${insertColumns.map((column) => `\`${column}\``).join(', ')}) VALUES (${placeholders.join(', ')})`,
-    { replacements, transaction }
-  );
-
-  const [rows] = await sequelize.query(
-    'SELECT id FROM crm_forum_leads_remarks WHERE `lead` = ? AND remark = ? AND emp = ? ORDER BY id DESC LIMIT 1',
-    { replacements: [leadId, remark, employeeId], transaction }
-  );
-  const record = Array.isArray(rows) ? rows[0] as { id?: number | string } | undefined : undefined;
-  return { id: Number(record?.id || 0) };
 }
 
 async function findNextId(table: string, transaction: Transaction): Promise<number> {

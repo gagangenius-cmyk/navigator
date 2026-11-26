@@ -7,6 +7,7 @@ import { logLeadRemark } from '@/lib/leadRemarks';
 import { checkRateLimit, recordFailedAttempt } from '@/lib/rateLimiter';
 import { captureError } from '@/lib/errorTracking';
 import { assertLeadAccess } from '@/lib/leadAccess';
+import { dubaiTime, dubaiDay } from '@/lib/dubaiDate';
 
 let dbReady = false;
 const ensureDB = async () => { if (!dbReady) { await connectDB(); dbReady = true; } };
@@ -81,10 +82,10 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
       {
         replacements: {
           leadId,
-          date: now.toISOString().split('T')[0],
+          date: dubaiDay(now),
           remark: `WhatsApp sent: ${message}`,
           empId: auth.id,
-          time: now.toTimeString().split(' ')[0],
+          time: dubaiTime(now),
         },
       }
     );

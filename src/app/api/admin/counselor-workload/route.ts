@@ -12,16 +12,16 @@ import { isCeo, isFoeOrCeo, isCounsellor, canViewCompanyWideWork } from '@/lib/r
 const DAILY_CAPACITY = 20;
 const CAPACITY_MULTIPLIER: Record<string, number> = { today: 1, yesterday: 1, week: 7, month: 30, all: 30 };
 
-const LEAD_DATE_COL = 'COALESCE(l.created, l.regdate)';
+const LEAD_DATE_COL = 'COALESCE(l.created + INTERVAL 4 HOUR, l.regdate)';
 
 // Fixed, whitelisted SQL fragments only - `period` never reaches the query
 // string directly, so this can't be used for injection regardless of input.
 function periodCondition(period: string): string {
   switch (period) {
-    case 'today': return `DATE(${LEAD_DATE_COL}) = CURDATE()`;
-    case 'yesterday': return `DATE(${LEAD_DATE_COL}) = CURDATE() - INTERVAL 1 DAY`;
-    case 'week': return `YEARWEEK(${LEAD_DATE_COL}, 1) = YEARWEEK(CURDATE(), 1)`;
-    case 'month': return `YEAR(${LEAD_DATE_COL}) = YEAR(CURDATE()) AND MONTH(${LEAD_DATE_COL}) = MONTH(CURDATE())`;
+    case 'today': return `DATE(${LEAD_DATE_COL}) = DATE(UTC_TIMESTAMP() + INTERVAL 4 HOUR)`;
+    case 'yesterday': return `DATE(${LEAD_DATE_COL}) = DATE(UTC_TIMESTAMP() + INTERVAL 4 HOUR) - INTERVAL 1 DAY`;
+    case 'week': return `YEARWEEK(${LEAD_DATE_COL}, 1) = YEARWEEK(DATE(UTC_TIMESTAMP() + INTERVAL 4 HOUR), 1)`;
+    case 'month': return `YEAR(${LEAD_DATE_COL}) = YEAR(DATE(UTC_TIMESTAMP() + INTERVAL 4 HOUR)) AND MONTH(${LEAD_DATE_COL}) = MONTH(DATE(UTC_TIMESTAMP() + INTERVAL 4 HOUR))`;
     default: return '1=1';
   }
 }

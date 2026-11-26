@@ -75,7 +75,7 @@ export async function GET(request: NextRequest) {
         l.phone
       FROM crm_follow_up_reminders r
       LEFT JOIN crm_forum_leads l ON r.lead_id = l.id
-      WHERE r.user_id = :userId AND r.status IN ('pending', 'rescheduled') AND r.reminder_date >= NOW()
+      WHERE r.user_id = :userId AND r.status IN ('pending', 'rescheduled') AND r.reminder_date >= (UTC_TIMESTAMP() + INTERVAL 4 HOUR)
       ORDER BY r.reminder_date ASC
       LIMIT 5
     `, { replacements: { userId: Number(userId) }, type: QueryTypes.SELECT });
@@ -100,7 +100,7 @@ export async function GET(request: NextRequest) {
       WHERE a.counsilorid = :userId
         AND COALESCE(a.done, 0) = 0
         AND COALESCE(a.not_done, 0) = 0
-        AND STR_TO_DATE(CONCAT(a.date, ' ', TIME_FORMAT(a.appointtime, '%H:%i:%s')), '%Y-%m-%d %H:%i:%s') >= NOW()
+        AND STR_TO_DATE(CONCAT(a.date, ' ', TIME_FORMAT(a.appointtime, '%H:%i:%s')), '%Y-%m-%d %H:%i:%s') >= (UTC_TIMESTAMP() + INTERVAL 4 HOUR)
       ORDER BY scheduledAt ASC
       LIMIT 5
     `, { replacements: { userId: Number(userId) }, type: QueryTypes.SELECT });
@@ -276,7 +276,7 @@ async function createThirtyMinuteReminderNotifications(userId: number) {
     LEFT JOIN crm_forum_leads l ON r.lead_id = l.id
     WHERE r.user_id = :userId
       AND r.status IN ('pending', 'rescheduled')
-      AND r.reminder_date BETWEEN NOW() AND DATE_ADD(NOW(), INTERVAL 30 MINUTE)
+      AND r.reminder_date BETWEEN (UTC_TIMESTAMP() + INTERVAL 4 HOUR) AND DATE_ADD((UTC_TIMESTAMP() + INTERVAL 4 HOUR), INTERVAL 30 MINUTE)
       AND NOT EXISTS (
         SELECT 1
         FROM crm_notifications n
@@ -311,7 +311,7 @@ async function createThirtyMinuteReminderNotifications(userId: number) {
       AND COALESCE(a.done, 0) = 0
       AND COALESCE(a.not_done, 0) = 0
       AND STR_TO_DATE(CONCAT(a.date, ' ', TIME_FORMAT(a.appointtime, '%H:%i:%s')), '%Y-%m-%d %H:%i:%s')
-        BETWEEN NOW() AND DATE_ADD(NOW(), INTERVAL 30 MINUTE)
+        BETWEEN (UTC_TIMESTAMP() + INTERVAL 4 HOUR) AND DATE_ADD((UTC_TIMESTAMP() + INTERVAL 4 HOUR), INTERVAL 30 MINUTE)
       AND NOT EXISTS (
         SELECT 1
         FROM crm_notifications n

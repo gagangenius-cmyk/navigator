@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Activity, RefreshCw, CheckCircle2, XCircle, Clock, Loader2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { formatDubaiDateTime } from '@/lib/dubaiDate';
 
 interface QueuedJob {
   id: number;
@@ -31,10 +32,7 @@ const STATUS_STYLES: Record<string, string> = {
   completed: 'bg-green-100 text-green-700',
 };
 
-const formatDateTime = (value: string) => {
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString();
-};
+const formatDateTime = (value: string) => formatDubaiDateTime(value) || value;
 
 export default function SystemJobsPage() {
   const { token } = useAuth();

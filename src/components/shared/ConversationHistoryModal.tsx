@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { X, MessageSquare, User, RefreshCw } from 'lucide-react';
+import { formatDubaiDateTime } from '@/lib/dubaiDate';
 
 interface HandoverNote {
   id: number;
@@ -78,7 +79,7 @@ export default function ConversationHistoryModal({ leadId, clientName, onClose }
                       {note.counselorName || 'Unknown counselor'}
                     </div>
                     <span className="text-xs text-gray-500">
-                      {new Date(note.created_at).toLocaleString('en-US', { month: 'short', day: '2-digit', year: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                      {formatDubaiDateTime(note.created_at, { month: 'short', day: '2-digit', year: 'numeric', hour: 'numeric', minute: '2-digit' }, 'en-US')}
                     </span>
                   </div>
                   <p className="whitespace-pre-wrap text-sm text-gray-700">{note.conversation_summary}</p>

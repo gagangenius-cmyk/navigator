@@ -1,4 +1,4 @@
-import { dubaiToday } from '@/lib/dubaiDate';
+import { dubaiToday, dubaiTime } from '@/lib/dubaiDate';
 import { NextRequest, NextResponse } from 'next/server';
 import { sequelize } from '@/lib/sequelize';
 import { verifyToken } from '@/lib/auth';
@@ -112,9 +112,9 @@ export async function POST(request: NextRequest) {
         body.convet || template.convet,
         body.priority || template.priority,
         dubaiToday(), // regdate
-        new Date().toTimeString().split(' ')[0], // regtime
+        dubaiTime(), // regtime
         dubaiToday(), // last_updated
-        new Date().toTimeString().split(' ')[0], // last_updtd_time
+        dubaiTime(), // last_updtd_time
         template.stepComplete,
         template.assignTo,
         template.case_officer,

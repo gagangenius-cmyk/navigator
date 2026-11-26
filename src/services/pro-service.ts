@@ -318,12 +318,12 @@ export class PROService {
           expiry_date AS expiryDate,
           CASE
             WHEN status IN ('Renewal In Progress', 'Cancelled') THEN status
-            WHEN expiry_date < CURRENT_DATE() THEN 'Expired'
-            WHEN expiry_date <= DATE_ADD(CURRENT_DATE(), INTERVAL 30 DAY) THEN 'Critical'
-            WHEN expiry_date <= DATE_ADD(CURRENT_DATE(), INTERVAL 90 DAY) THEN 'Expiring Soon'
+            WHEN expiry_date < DATE(UTC_TIMESTAMP() + INTERVAL 4 HOUR) THEN 'Expired'
+            WHEN expiry_date <= DATE_ADD(DATE(UTC_TIMESTAMP() + INTERVAL 4 HOUR), INTERVAL 30 DAY) THEN 'Critical'
+            WHEN expiry_date <= DATE_ADD(DATE(UTC_TIMESTAMP() + INTERVAL 4 HOUR), INTERVAL 90 DAY) THEN 'Expiring Soon'
             ELSE 'Valid'
           END AS status,
-          DATEDIFF(expiry_date, CURRENT_DATE()) AS daysLeft
+          DATEDIFF(expiry_date, DATE(UTC_TIMESTAMP() + INTERVAL 4 HOUR)) AS daysLeft
         FROM crm_pro_documents
         ORDER BY expiry_date ASC
         LIMIT 20
@@ -335,9 +335,9 @@ export class PROService {
       `
         SELECT
           COUNT(*) AS total,
-          SUM(CASE WHEN expiry_date BETWEEN CURRENT_DATE() AND DATE_ADD(CURRENT_DATE(), INTERVAL 30 DAY) THEN 1 ELSE 0 END) AS due30,
-          SUM(CASE WHEN expiry_date BETWEEN CURRENT_DATE() AND DATE_ADD(CURRENT_DATE(), INTERVAL 90 DAY) THEN 1 ELSE 0 END) AS due90,
-          SUM(CASE WHEN expiry_date < CURRENT_DATE() THEN 1 ELSE 0 END) AS expired
+          SUM(CASE WHEN expiry_date BETWEEN DATE(UTC_TIMESTAMP() + INTERVAL 4 HOUR) AND DATE_ADD(DATE(UTC_TIMESTAMP() + INTERVAL 4 HOUR), INTERVAL 30 DAY) THEN 1 ELSE 0 END) AS due30,
+          SUM(CASE WHEN expiry_date BETWEEN DATE(UTC_TIMESTAMP() + INTERVAL 4 HOUR) AND DATE_ADD(DATE(UTC_TIMESTAMP() + INTERVAL 4 HOUR), INTERVAL 90 DAY) THEN 1 ELSE 0 END) AS due90,
+          SUM(CASE WHEN expiry_date < DATE(UTC_TIMESTAMP() + INTERVAL 4 HOUR) THEN 1 ELSE 0 END) AS expired
         FROM crm_pro_documents
       `,
       { type: QueryTypes.SELECT }
@@ -396,8 +396,8 @@ export class PROService {
       `
         SELECT id, title, category, owner, due_date AS dueDate, priority, status
         FROM crm_pro_tasks
-        WHERE due_date >= DATE_FORMAT(CURRENT_DATE(), '%Y-%m-01')
-          AND due_date < DATE_ADD(DATE_FORMAT(CURRENT_DATE(), '%Y-%m-01'), INTERVAL 1 MONTH)
+        WHERE due_date >= DATE_FORMAT(DATE(UTC_TIMESTAMP() + INTERVAL 4 HOUR), '%Y-%m-01')
+          AND due_date < DATE_ADD(DATE_FORMAT(DATE(UTC_TIMESTAMP() + INTERVAL 4 HOUR), '%Y-%m-01'), INTERVAL 1 MONTH)
         ORDER BY due_date ASC, FIELD(priority, 'High', 'Medium', 'Low')
       `,
       { type: QueryTypes.SELECT }
@@ -412,8 +412,8 @@ export class PROService {
           SUM(CASE WHEN status = 'Completed' THEN 1 ELSE 0 END) AS completedTasks,
           SUM(CASE WHEN priority = 'High' THEN 1 ELSE 0 END) AS highPriority
         FROM crm_pro_tasks
-        WHERE due_date >= DATE_FORMAT(CURRENT_DATE(), '%Y-%m-01')
-          AND due_date < DATE_ADD(DATE_FORMAT(CURRENT_DATE(), '%Y-%m-01'), INTERVAL 1 MONTH)
+        WHERE due_date >= DATE_FORMAT(DATE(UTC_TIMESTAMP() + INTERVAL 4 HOUR), '%Y-%m-01')
+          AND due_date < DATE_ADD(DATE_FORMAT(DATE(UTC_TIMESTAMP() + INTERVAL 4 HOUR), '%Y-%m-01'), INTERVAL 1 MONTH)
       `,
       { type: QueryTypes.SELECT }
     );
@@ -472,9 +472,9 @@ export class PROService {
           reminder_days AS reminderDays,
           CASE
             WHEN status IN ('Renewal In Progress', 'Cancelled') THEN status
-            WHEN expiry_date < CURRENT_DATE() THEN 'Expired'
-            WHEN expiry_date <= DATE_ADD(CURRENT_DATE(), INTERVAL 30 DAY) THEN 'Critical'
-            WHEN expiry_date <= DATE_ADD(CURRENT_DATE(), INTERVAL 90 DAY) THEN 'Expiring Soon'
+            WHEN expiry_date < DATE(UTC_TIMESTAMP() + INTERVAL 4 HOUR) THEN 'Expired'
+            WHEN expiry_date <= DATE_ADD(DATE(UTC_TIMESTAMP() + INTERVAL 4 HOUR), INTERVAL 30 DAY) THEN 'Critical'
+            WHEN expiry_date <= DATE_ADD(DATE(UTC_TIMESTAMP() + INTERVAL 4 HOUR), INTERVAL 90 DAY) THEN 'Expiring Soon'
             ELSE 'Valid'
           END AS status,
           doc_file_url AS docFileUrl,
@@ -781,8 +781,8 @@ export class PROService {
           COALESCE(p.visa_expiry_date, e.visaExp) AS visaExpiryDate,
           COALESCE(p.visa_status, CASE
             WHEN e.visaExp IS NULL THEN 'Under Processing'
-            WHEN e.visaExp < CURRENT_DATE() THEN 'Expired'
-            WHEN e.visaExp <= DATE_ADD(CURRENT_DATE(), INTERVAL 60 DAY) THEN 'Expiring'
+            WHEN e.visaExp < DATE(UTC_TIMESTAMP() + INTERVAL 4 HOUR) THEN 'Expired'
+            WHEN e.visaExp <= DATE_ADD(DATE(UTC_TIMESTAMP() + INTERVAL 4 HOUR), INTERVAL 60 DAY) THEN 'Expiring'
             ELSE 'Active'
           END) AS visaStatus,
           COALESCE(p.labour_card_no, '') AS labourCardNo,
@@ -794,9 +794,9 @@ export class PROService {
           p.insurance_expiry AS insuranceExpiry,
           p.entry_permit_no AS entryPermitNo,
           p.status_change_log AS statusChangeLog,
-          DATEDIFF(COALESCE(p.visa_expiry_date, e.visaExp), CURRENT_DATE()) AS visaDaysLeft,
-          DATEDIFF(COALESCE(p.labour_card_expiry, e.labexp), CURRENT_DATE()) AS labourDaysLeft,
-          DATEDIFF(p.insurance_expiry, CURRENT_DATE()) AS insuranceDaysLeft
+          DATEDIFF(COALESCE(p.visa_expiry_date, e.visaExp), DATE(UTC_TIMESTAMP() + INTERVAL 4 HOUR)) AS visaDaysLeft,
+          DATEDIFF(COALESCE(p.labour_card_expiry, e.labexp), DATE(UTC_TIMESTAMP() + INTERVAL 4 HOUR)) AS labourDaysLeft,
+          DATEDIFF(p.insurance_expiry, DATE(UTC_TIMESTAMP() + INTERVAL 4 HOUR)) AS insuranceDaysLeft
         FROM crm_employee e
         LEFT JOIN crm_pro_employee_immigration p ON CAST(p.employee_id AS CHAR) COLLATE utf8mb4_general_ci = CAST(e.id AS CHAR) COLLATE utf8mb4_general_ci
         ${where}
@@ -1181,7 +1181,7 @@ export class PROService {
           i.network_code AS networkCode,
           i.card_url AS cardUrl,
           i.status,
-          DATEDIFF(i.policy_expiry, CURRENT_DATE()) AS daysLeft
+          DATEDIFF(i.policy_expiry, DATE(UTC_TIMESTAMP() + INTERVAL 4 HOUR)) AS daysLeft
         FROM crm_pro_insurance_records i
         LEFT JOIN crm_employee e ON CAST(e.id AS CHAR) COLLATE utf8mb4_general_ci = i.employee_id
         ${where}
@@ -1374,8 +1374,8 @@ export class PROService {
           documents,
           notes,
           status,
-          DATEDIFF(registration_expiry, CURRENT_DATE()) AS registrationDaysLeft,
-          DATEDIFF(licence_expiry, CURRENT_DATE()) AS licenceDaysLeft
+          DATEDIFF(registration_expiry, DATE(UTC_TIMESTAMP() + INTERVAL 4 HOUR)) AS registrationDaysLeft,
+          DATEDIFF(licence_expiry, DATE(UTC_TIMESTAMP() + INTERVAL 4 HOUR)) AS licenceDaysLeft
         FROM crm_pro_gcc_branch_documents
         ${where}
         ORDER BY LEAST(registration_expiry, licence_expiry) ASC
@@ -1557,10 +1557,10 @@ export class PROService {
           bank_signatories AS bankSignatories,
           documents,
           access_level AS accessLevel,
-          DATEDIFF(passport_expiry, CURRENT_DATE()) AS passportDaysLeft,
-          DATEDIFF(emirates_id_expiry, CURRENT_DATE()) AS emiratesIdDaysLeft,
-          DATEDIFF(visa_expiry, CURRENT_DATE()) AS visaDaysLeft,
-          DATEDIFF(poa_expiry, CURRENT_DATE()) AS poaDaysLeft
+          DATEDIFF(passport_expiry, DATE(UTC_TIMESTAMP() + INTERVAL 4 HOUR)) AS passportDaysLeft,
+          DATEDIFF(emirates_id_expiry, DATE(UTC_TIMESTAMP() + INTERVAL 4 HOUR)) AS emiratesIdDaysLeft,
+          DATEDIFF(visa_expiry, DATE(UTC_TIMESTAMP() + INTERVAL 4 HOUR)) AS visaDaysLeft,
+          DATEDIFF(poa_expiry, DATE(UTC_TIMESTAMP() + INTERVAL 4 HOUR)) AS poaDaysLeft
         FROM crm_pro_owner_documents
         WHERE ${conditions.join(' AND ')}
         ORDER BY passport_expiry ASC

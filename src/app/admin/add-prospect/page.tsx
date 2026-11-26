@@ -33,6 +33,7 @@ import {
   FileUp,
   Database
 } from 'lucide-react'
+import { formatDubaiDate } from '@/lib/dubaiDate';
 
 interface Prospect {
   id: number
@@ -496,9 +497,9 @@ export default function AddProspectPage() {
                 <div className="border-t pt-4">
                   <div className="flex items-center justify-between">
                     <div className="text-sm text-gray-500">
-                      <span className="font-medium">Created:</span> {new Date(prospect.createdAt).toLocaleDateString()}
+                      <span className="font-medium">Created:</span> {formatDubaiDate(prospect.createdAt)}
                       <span className="mx-2">•</span>
-                      <span className="font-medium">Updated:</span> {new Date(prospect.updatedAt).toLocaleDateString()}
+                      <span className="font-medium">Updated:</span> {formatDubaiDate(prospect.updatedAt)}
                       <span className="mx-2">•</span>
                       <span className="font-medium">Documents:</span> {prospect.documents.length}
                       <span className="mx-2">•</span>

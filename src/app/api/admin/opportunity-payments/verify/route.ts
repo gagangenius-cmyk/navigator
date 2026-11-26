@@ -208,8 +208,8 @@ export async function PUT(request: NextRequest) {
                   CONCAT('Service Agreement - ', :clientName),
                   'generated',
                   :clientName, :totalAmount, :currency,
-                  CURDATE(),
-                  DATE_ADD(CURDATE(), INTERVAL 1 YEAR),
+                  DATE(UTC_TIMESTAMP() + INTERVAL 4 HOUR),
+                  DATE_ADD(DATE(UTC_TIMESTAMP() + INTERVAL 4 HOUR), INTERVAL 1 YEAR),
                   :createdBy, :createdBy, NOW(), NOW(), NOW())`,
               {
                 replacements: {

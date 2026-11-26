@@ -151,10 +151,10 @@ export class UAEComplianceService {
             employer_code AS employerCode,
             status,
             DATE_ADD(LAST_DAY(payroll_month), INTERVAL 10 DAY) AS deadlineDate,
-            DATEDIFF(DATE_ADD(LAST_DAY(payroll_month), INTERVAL 10 DAY), CURRENT_DATE()) AS daysLeft
+            DATEDIFF(DATE_ADD(LAST_DAY(payroll_month), INTERVAL 10 DAY), DATE(UTC_TIMESTAMP() + INTERVAL 4 HOUR)) AS daysLeft
           FROM crm_pro_wps_records
           WHERE status NOT IN ('Submitted', 'Confirmed')
-            AND DATEDIFF(DATE_ADD(LAST_DAY(payroll_month), INTERVAL 10 DAY), CURRENT_DATE()) <= 7
+            AND DATEDIFF(DATE_ADD(LAST_DAY(payroll_month), INTERVAL 10 DAY), DATE(UTC_TIMESTAMP() + INTERVAL 4 HOUR)) <= 7
           ORDER BY deadlineDate ASC
         `,
         { type: QueryTypes.SELECT }
@@ -189,10 +189,10 @@ export class UAEComplianceService {
             pro_emp_id AS proEmpId,
             employee_id AS employeeId,
             medical_fitness AS medicalFitness,
-            DATEDIFF(medical_fitness, CURRENT_DATE()) AS daysLeft
+            DATEDIFF(medical_fitness, DATE(UTC_TIMESTAMP() + INTERVAL 4 HOUR)) AS daysLeft
           FROM crm_pro_employee_immigration
           WHERE medical_fitness IS NOT NULL
-            AND DATEDIFF(medical_fitness, CURRENT_DATE()) <= 60
+            AND DATEDIFF(medical_fitness, DATE(UTC_TIMESTAMP() + INTERVAL 4 HOUR)) <= 60
           ORDER BY medical_fitness ASC
         `,
         { type: QueryTypes.SELECT }
@@ -207,11 +207,11 @@ export class UAEComplianceService {
       ),
       sequelize.query(
         `
-          SELECT id, name, EID, visaExp AS emiratesIdExpiry, DATEDIFF(visaExp, CURRENT_DATE()) AS daysLeft
+          SELECT id, name, EID, visaExp AS emiratesIdExpiry, DATEDIFF(visaExp, DATE(UTC_TIMESTAMP() + INTERVAL 4 HOUR)) AS daysLeft
           FROM crm_employee
           WHERE status = 1
             AND visaExp IS NOT NULL
-            AND DATEDIFF(visaExp, CURRENT_DATE()) <= 60
+            AND DATEDIFF(visaExp, DATE(UTC_TIMESTAMP() + INTERVAL 4 HOUR)) <= 60
           ORDER BY visaExp ASC
         `,
         { type: QueryTypes.SELECT }
@@ -223,11 +223,11 @@ export class UAEComplianceService {
             insured_name AS insuredName,
             network_code AS networkCode,
             policy_expiry AS policyExpiry,
-            DATEDIFF(policy_expiry, CURRENT_DATE()) AS daysLeft
+            DATEDIFF(policy_expiry, DATE(UTC_TIMESTAMP() + INTERVAL 4 HOUR)) AS daysLeft
           FROM crm_pro_insurance_records
           WHERE insurance_category = 'Health'
             AND status <> 'Cancelled'
-            AND (network_code IS NULL OR network_code = '' OR DATEDIFF(policy_expiry, CURRENT_DATE()) <= 30)
+            AND (network_code IS NULL OR network_code = '' OR DATEDIFF(policy_expiry, DATE(UTC_TIMESTAMP() + INTERVAL 4 HOUR)) <= 30)
           ORDER BY policy_expiry ASC
         `,
         { type: QueryTypes.SELECT }

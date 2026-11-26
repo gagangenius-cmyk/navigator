@@ -18,6 +18,7 @@ async function assertLeadBranchWritable(auth: { branch?: string | number | null 
   return null;
 }
 import { requireAuth, isAuthError } from '@/lib/apiAuth';
+import { dubaiDay } from '@/lib/dubaiDate';
 
 // Ported from the legacy PHP third-party payment form (lead_extra_payment.php)
 // — only these "particulars" were ever taxed there; everything else (exam
@@ -181,7 +182,7 @@ export async function POST(request: NextRequest) {
       // "the last minute" the way other guards do, so it's scoped to today.
       const recentDuplicate = await sequelize.query<{ id: number }>(
         `SELECT id FROM crm_3party_payment
-         WHERE leadId = :leadId AND amount = :amount AND date = CURDATE()
+         WHERE leadId = :leadId AND amount = :amount AND date = DATE(UTC_TIMESTAMP() + INTERVAL 4 HOUR)
          ORDER BY id DESC LIMIT 1`,
         { replacements: { leadId, amount }, type: QueryTypes.SELECT },
       );
@@ -212,7 +213,7 @@ export async function POST(request: NextRequest) {
       const created = await Crm3partyPayment.create({
         leadId,
         payMethod: data.payMethod || null,
-        date: new Date(),
+        date: dubaiDay(),
         amount,
         currency_id: Number(data.currency_id) || 0,
         Tax: tax,

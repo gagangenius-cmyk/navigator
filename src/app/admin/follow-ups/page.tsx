@@ -14,6 +14,8 @@ import {
 import { useDebounce } from '@/hooks/useDebounce';
 import { useAuth } from '@/contexts/AuthContext';
 import { canViewCompanyWideWork } from '@/lib/roleChecks';
+import { dubaiNow, formatDubaiDate, formatDubaiDateTime } from '@/lib/dubaiDate';
+import RescheduleFollowUpModal, { type RescheduleTarget } from '@/components/followups/RescheduleFollowUpModal';
 
 interface FollowUp {
   id: number;
@@ -81,8 +83,7 @@ export default function FollowUpsPage() {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [actionLoading, setActionLoading] = useState<number | null>(null);
-  const [rescheduleId, setRescheduleId] = useState<number | null>(null);
-  const [rescheduleDate, setRescheduleDate] = useState('');
+  const [rescheduling, setRescheduling] = useState<RescheduleTarget | null>(null);
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [remarksById, setRemarksById] = useState<Record<number, string>>({});
   const [viewId, setViewId] = useState<number | null>(null);
@@ -139,12 +140,10 @@ export default function FollowUpsPage() {
     }).catch(() => {});
   }, [followUps]);
 
-  const handleAction = async (reminderId: number, action: 'complete' | 'cancel', rescheduledAt?: string) => {
+  const handleAction = async (reminderId: number, action: 'complete' | 'cancel') => {
     try {
       setActionLoading(reminderId);
       const body: any = { reminderId, action, notes: remarksById[reminderId]?.trim() || undefined };
-      if (action === 'cancel') body.action = 'cancel';
-      if (rescheduledAt) { body.action = 'reschedule'; body.rescheduledAt = rescheduledAt; }
 
       const res = await fetch('/api/follow-up-reminders', {
         method: 'PUT',
@@ -152,8 +151,6 @@ export default function FollowUpsPage() {
         body: JSON.stringify(body),
       });
       if (!res.ok) throw new Error('Action failed');
-      setRescheduleId(null);
-      setRescheduleDate('');
       setRemarksById((prev) => { const next = { ...prev }; delete next[reminderId]; return next; });
       await fetchFollowUps();
     } catch {
@@ -171,7 +168,7 @@ export default function FollowUpsPage() {
   // reminder permanently invisible to the Pending/Overdue/Upcoming counts.
   const getDisplayStatus = (fu: FollowUp): string => {
     if (fu.status !== 'pending' && fu.status !== 'rescheduled') return fu.status;
-    if (new Date(fu.reminder_date) < new Date()) return 'overdue';
+    if (String(fu.reminder_date).replace('T', ' ') < dubaiNow()) return 'overdue';
     return fu.status;
   };
 
@@ -261,7 +258,7 @@ export default function FollowUpsPage() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <input
               type="text"
-              placeholder="Search by lead, counselor, or message..."
+              placeholder="Search by lead, mobile number, counselor, or message..."
               value={searchTerm}
               onChange={e => { setSearchTerm(e.target.value); setPagination((prev) => ({ ...prev, page: 1 })); }}
               className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
@@ -423,7 +420,7 @@ export default function FollowUpsPage() {
                           <textarea
                             value={remarksById[fu.id] || ''}
                             onChange={(e) => setRemarksById((prev) => ({ ...prev, [fu.id]: e.target.value }))}
-                            placeholder="Remarks (optional)"
+                            placeholder="Lead remark (optional)"
                             rows={2}
                             className="w-full max-w-xs px-2 py-1 border border-gray-300 rounded text-xs focus:ring-2 focus:ring-blue-500"
                           />
@@ -436,39 +433,13 @@ export default function FollowUpsPage() {
                               <CheckCircle className="w-3 h-3" />
                               Complete
                             </button>
-                            {rescheduleId === fu.id ? (
-                              <div className="flex flex-col gap-1">
-                                <input
-                                  type="datetime-local"
-                                  value={rescheduleDate}
-                                  onChange={e => setRescheduleDate(e.target.value)}
-                                  className="px-2 py-1 border border-gray-300 rounded text-xs"
-                                />
-                                <div className="flex gap-1">
-                                  <button
-                                    onClick={() => rescheduleDate && handleAction(fu.id, 'complete', rescheduleDate)}
-                                    disabled={!rescheduleDate || actionLoading === fu.id}
-                                    className="flex-1 px-2 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700 disabled:opacity-50"
-                                  >
-                                    Save
-                                  </button>
-                                  <button
-                                    onClick={() => { setRescheduleId(null); setRescheduleDate(''); }}
-                                    className="flex-1 px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs hover:bg-gray-200"
-                                  >
-                                    Cancel
-                                  </button>
-                                </div>
-                              </div>
-                            ) : (
-                              <button
-                                onClick={() => setRescheduleId(fu.id)}
-                                className="flex items-center gap-1 px-2 py-1 bg-[var(--cmg-blue)] text-white rounded text-xs hover:bg-[var(--cmg-blue-dark)]"
-                              >
-                                <RefreshCw className="w-3 h-3" />
-                                Reschedule
-                              </button>
-                            )}
+                            <button
+                              onClick={() => setRescheduling({ id: fu.id, leadName, phone: fu.phone, reminder_date: fu.reminder_date, message: fu.message, priority: fu.priority })}
+                              className="flex items-center gap-1 px-2 py-1 bg-[var(--cmg-blue)] text-white rounded text-xs hover:bg-[var(--cmg-blue-dark)]"
+                            >
+                              <RefreshCw className="w-3 h-3" />
+                              Reschedule
+                            </button>
                             <button
                               onClick={() => handleAction(fu.id, 'cancel')}
                               disabled={actionLoading === fu.id}
@@ -482,7 +453,7 @@ export default function FollowUpsPage() {
                       )}
                       {!isPending && (
                         <div className="mt-3 text-xs text-gray-400 italic">
-                          <div>{fu.completed_at ? `Done ${new Date(fu.completed_at).toLocaleDateString()}` : fu.status}</div>
+                          <div>{fu.completed_at ? `Done ${formatDubaiDate(fu.completed_at)}` : fu.status}</div>
                           {fu.completion_notes && <div className="mt-0.5 not-italic text-gray-600">{fu.completion_notes}</div>}
                         </div>
                       )}
@@ -507,7 +478,7 @@ export default function FollowUpsPage() {
                       {fu.completed_at && (
                         <div>
                           <div className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Actioned on</div>
-                          <div className="text-gray-800">{new Date(fu.completed_at).toLocaleString()}</div>
+                          <div className="text-gray-800">{formatDubaiDateTime(fu.completed_at)}</div>
                         </div>
                       )}
                     </div>
@@ -540,6 +511,14 @@ export default function FollowUpsPage() {
           </div>
         </div>
       </div>
+
+      {rescheduling && (
+        <RescheduleFollowUpModal
+          followUp={rescheduling}
+          onClose={() => setRescheduling(null)}
+          onSaved={async () => { setRescheduling(null); await fetchFollowUps(); }}
+        />
+      )}
     </div>
   );
 }

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { AlertTriangle, CheckCircle2, RefreshCw } from 'lucide-react';
+import { formatDubaiDateTime } from '@/lib/dubaiDate';
 
 interface DeliveryEntry {
   id: number;
@@ -36,7 +37,7 @@ export default function EmailDeliveryLogPanel() {
     } finally { setLoading(false); }
   };
 
-  useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [filter]);
+  useEffect(() => { load();   }, [filter]);
 
   return (
     <div className="mt-8 rounded-xl border border-gray-200 bg-white shadow-sm">
@@ -85,7 +86,7 @@ export default function EmailDeliveryLogPanel() {
             <tbody className="divide-y divide-gray-100">
               {entries.map((entry) => (
                 <tr key={entry.id}>
-                  <td className="whitespace-nowrap px-4 py-2 text-gray-500">{new Date(entry.createdAt).toLocaleString()}</td>
+                  <td className="whitespace-nowrap px-4 py-2 text-gray-500">{formatDubaiDateTime(entry.createdAt)}</td>
                   <td className="px-4 py-2">{entry.recipient}</td>
                   <td className="px-4 py-2">{entry.subject}</td>
                   <td className="px-4 py-2">

@@ -181,10 +181,12 @@ async function computeDashboardData(
   `, { replacements: apptReplacements, type: QueryTypes.SELECT });
 
   // ── Month-over-month trend (this month vs last month, same scope as above) ─
-  const monthNow = new Date();
-  const thisMonthStart = new Date(monthNow.getFullYear(), monthNow.getMonth(), 1).toISOString().split('T')[0];
-  const lastMonthStart = new Date(monthNow.getFullYear(), monthNow.getMonth() - 1, 1).toISOString().split('T')[0];
-  const lastMonthEnd = new Date(monthNow.getFullYear(), monthNow.getMonth(), 0).toISOString().split('T')[0];
+  // Month boundaries of the UAE calendar.
+  const [uaeYear, uaeMonth] = dubaiToday().split('-').map(Number);
+  const monthDay = (monthIndex: number, day: number) => new Date(Date.UTC(uaeYear, monthIndex, day)).toISOString().slice(0, 10);
+  const thisMonthStart = monthDay(uaeMonth - 1, 1);
+  const lastMonthStart = monthDay(uaeMonth - 2, 1);
+  const lastMonthEnd = monthDay(uaeMonth - 1, 0);
 
   const [leadTrendStats] = await sequelize.query<any>(`
     SELECT

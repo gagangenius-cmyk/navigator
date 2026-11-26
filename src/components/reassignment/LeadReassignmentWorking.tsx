@@ -7,6 +7,7 @@ import {
   AlertTriangle, RefreshCw, Eye, Edit, Trash2, Plus, Save,
   Search, Filter, Download, Mail, Phone, MapPin
 } from 'lucide-react';
+import { formatDubaiDate } from '@/lib/dubaiDate';
 
 interface Lead {
   id: number;
@@ -438,7 +439,7 @@ export default function LeadReassignmentWorking() {
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {new Date(reassignment.createdAt).toLocaleDateString()}
+                    {formatDubaiDate(reassignment.createdAt)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     <div className="flex space-x-2">

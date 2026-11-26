@@ -46,7 +46,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       // latest one. Kept separate from `notes` (the original task/call
       // description set at creation) so logging an outcome never erases it.
       const statusLabel = (body.status !== undefined ? body.status : record.status).replace('_', ' ');
-      const entry = `[${new Date().toLocaleString()}] ${statusLabel} — ${body.remark.trim()}`;
+      const entry = `[${new Date().toLocaleString('en-US', { timeZone: 'Asia/Dubai' })}] ${statusLabel} — ${body.remark.trim()}`;
       record.outcome_remark = record.outcome_remark ? `${record.outcome_remark}\n${entry}` : entry;
     }
     if (body.assignedTo !== undefined) {

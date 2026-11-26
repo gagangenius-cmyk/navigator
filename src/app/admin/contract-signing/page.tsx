@@ -65,6 +65,7 @@ import {
   RefreshCw,
   MoreHorizontal
 } from 'lucide-react'
+import { formatDubaiDate } from '@/lib/dubaiDate';
 
 interface ContractSigning {
   id: string
@@ -319,7 +320,7 @@ export default function ContractSigningPage() {
                         <p><strong>Service Type:</strong> {selectedContract.serviceType}</p>
                         <p><strong>Service Fee:</strong> {formatCurrency(selectedContract.serviceFee, selectedContract.currency)}</p>
                         <p><strong>Language:</strong> {selectedContract.language}</p>
-                        <p><strong>Created:</strong> {new Date(selectedContract.createdAt).toLocaleDateString()}</p>
+                        <p><strong>Created:</strong> {formatDubaiDate(selectedContract.createdAt)}</p>
                         {selectedContract.signedAt && (
                           <p><strong>Signed:</strong> {new Date(selectedContract.signedAt).toLocaleDateString()}</p>
                         )}
@@ -629,7 +630,7 @@ export default function ContractSigningPage() {
                       <p><strong>Total Signatories:</strong> {contract.signatories.length}</p>
                       <p><strong>Signed:</strong> {contract.signatories.filter(s => s.status === 'signed').length}</p>
                       <p><strong>Pending:</strong> {contract.signatories.filter(s => s.status === 'pending').length}</p>
-                      <p><strong>Created:</strong> {new Date(contract.createdAt).toLocaleDateString()}</p>
+                      <p><strong>Created:</strong> {formatDubaiDate(contract.createdAt)}</p>
                     </div>
                   </div>
                   

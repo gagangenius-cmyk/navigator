@@ -171,7 +171,7 @@ async function buildPayslipPdf(input: PayslipInput): Promise<Buffer> {
   y -= 44 + 30;
 
   detailPair('BANK NAME', input.bankName || 'Not set', 'IBAN', input.maskedIban || 'Not set');
-  detailPair('YTD EARNINGS', money(currencyCode, input.ytdEarnings), 'GENERATED ON', new Date().toLocaleDateString('en-GB'));
+  detailPair('YTD EARNINGS', money(currencyCode, input.ytdEarnings), 'GENERATED ON', new Date().toLocaleDateString('en-GB', { timeZone: 'Asia/Dubai' }));
 
   y -= 36;
   page.drawLine({ start: { x: margin, y }, end: { x: margin + 180, y }, thickness: 0.75, color: gray });

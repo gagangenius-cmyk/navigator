@@ -3541,7 +3541,7 @@ export class HRService {
     await sequelize.query(
       `
         UPDATE crm_employee
-        SET status = 0, is_deleted = 1, dol = COALESCE(dol, CURRENT_DATE())
+        SET status = 0, is_deleted = 1, dol = COALESCE(dol, DATE(UTC_TIMESTAMP() + INTERVAL 4 HOUR))
         WHERE id = :id
       `,
       { replacements: { id } }
@@ -3586,7 +3586,7 @@ export class HRService {
           SUM(CASE WHEN status IN ('Absent', 'Half-Day') THEN 1 ELSE 0 END) AS shortfallRecords,
           SUM(COALESCE(overtime_hours, 0)) AS overtimeHours
         FROM crm_hr_attendance_records
-        WHERE date >= DATE_FORMAT(CURRENT_DATE(), '%Y-%m-01')
+        WHERE date >= DATE_FORMAT(DATE(UTC_TIMESTAMP() + INTERVAL 4 HOUR), '%Y-%m-01')
       `,
       { type: QueryTypes.SELECT }
     );
@@ -3685,7 +3685,7 @@ export class HRService {
           SELECT employee_id, MIN(leave_id) AS leave_id
           FROM crm_hr_leave_requests
           WHERE status = 'Approved'
-            AND CURRENT_DATE() BETWEEN start_date AND end_date
+            AND DATE(UTC_TIMESTAMP() + INTERVAL 4 HOUR) BETWEEN start_date AND end_date
           GROUP BY employee_id
         ) active_leave ON CAST(active_leave.employee_id AS CHAR) COLLATE utf8mb4_general_ci = CAST(crm_employee.id AS CHAR) COLLATE utf8mb4_general_ci
         WHERE COALESCE(crm_employee.is_deleted, 0) = 0
@@ -3703,7 +3703,7 @@ export class HRService {
         INSERT INTO crm_hr_headcount_snapshots (
           snapshot_id, snapshot_date, snapshot_month, total, active, inactive, on_leave
         ) VALUES (
-          UUID(), CURRENT_DATE(), DATE_FORMAT(CURRENT_DATE(), '%Y-%m-01'), :total, :active, :inactive, :onLeave
+          UUID(), DATE(UTC_TIMESTAMP() + INTERVAL 4 HOUR), DATE_FORMAT(DATE(UTC_TIMESTAMP() + INTERVAL 4 HOUR), '%Y-%m-01'), :total, :active, :inactive, :onLeave
         )
         ON DUPLICATE KEY UPDATE
           snapshot_date = VALUES(snapshot_date),
@@ -3731,7 +3731,7 @@ export class HRService {
       `
         SELECT total, active, inactive, on_leave
         FROM crm_hr_headcount_snapshots
-        WHERE snapshot_month = DATE_FORMAT(DATE_SUB(CURRENT_DATE(), INTERVAL 1 MONTH), '%Y-%m-01')
+        WHERE snapshot_month = DATE_FORMAT(DATE_SUB(DATE(UTC_TIMESTAMP() + INTERVAL 4 HOUR), INTERVAL 1 MONTH), '%Y-%m-01')
         LIMIT 1
       `,
       { type: QueryTypes.SELECT }
@@ -3781,7 +3781,7 @@ export class HRService {
           SUM(CASE WHEN status IN ('Absent', 'Half-Day') THEN 1 ELSE 0 END) AS shortfallRecords,
           SUM(COALESCE(overtime_hours, 0)) AS overtimeHours
         FROM crm_hr_attendance_records
-        WHERE date >= DATE_FORMAT(CURRENT_DATE(), '%Y-%m-01')
+        WHERE date >= DATE_FORMAT(DATE(UTC_TIMESTAMP() + INTERVAL 4 HOUR), '%Y-%m-01')
       `,
       { type: QueryTypes.SELECT }
     );
@@ -3794,25 +3794,25 @@ export class HRService {
           (
             SELECT COUNT(*) FROM (
               SELECT employee_id, last_working_day AS lwd FROM crm_hr_eosb_settlements
-              WHERE last_working_day >= DATE_FORMAT(CURRENT_DATE(), '%Y-%m-01')
-                AND last_working_day < DATE_ADD(DATE_FORMAT(CURRENT_DATE(), '%Y-%m-01'), INTERVAL 1 MONTH)
+              WHERE last_working_day >= DATE_FORMAT(DATE(UTC_TIMESTAMP() + INTERVAL 4 HOUR), '%Y-%m-01')
+                AND last_working_day < DATE_ADD(DATE_FORMAT(DATE(UTC_TIMESTAMP() + INTERVAL 4 HOUR), '%Y-%m-01'), INTERVAL 1 MONTH)
               UNION
               SELECT employee_id, COALESCE(approved_lwd, requested_lwd) AS lwd FROM crm_hr_exit_requests
               WHERE status IN ('Approved', 'Completed')
-                AND COALESCE(approved_lwd, requested_lwd) >= DATE_FORMAT(CURRENT_DATE(), '%Y-%m-01')
-                AND COALESCE(approved_lwd, requested_lwd) < DATE_ADD(DATE_FORMAT(CURRENT_DATE(), '%Y-%m-01'), INTERVAL 1 MONTH)
+                AND COALESCE(approved_lwd, requested_lwd) >= DATE_FORMAT(DATE(UTC_TIMESTAMP() + INTERVAL 4 HOUR), '%Y-%m-01')
+                AND COALESCE(approved_lwd, requested_lwd) < DATE_ADD(DATE_FORMAT(DATE(UTC_TIMESTAMP() + INTERVAL 4 HOUR), '%Y-%m-01'), INTERVAL 1 MONTH)
             ) thisMonthExits
           ) AS exitsThisMonth,
           (
             SELECT COUNT(*) FROM (
               SELECT employee_id, last_working_day AS lwd FROM crm_hr_eosb_settlements
-              WHERE last_working_day >= DATE_FORMAT(DATE_SUB(CURRENT_DATE(), INTERVAL 1 MONTH), '%Y-%m-01')
-                AND last_working_day < DATE_FORMAT(CURRENT_DATE(), '%Y-%m-01')
+              WHERE last_working_day >= DATE_FORMAT(DATE_SUB(DATE(UTC_TIMESTAMP() + INTERVAL 4 HOUR), INTERVAL 1 MONTH), '%Y-%m-01')
+                AND last_working_day < DATE_FORMAT(DATE(UTC_TIMESTAMP() + INTERVAL 4 HOUR), '%Y-%m-01')
               UNION
               SELECT employee_id, COALESCE(approved_lwd, requested_lwd) AS lwd FROM crm_hr_exit_requests
               WHERE status IN ('Approved', 'Completed')
-                AND COALESCE(approved_lwd, requested_lwd) >= DATE_FORMAT(DATE_SUB(CURRENT_DATE(), INTERVAL 1 MONTH), '%Y-%m-01')
-                AND COALESCE(approved_lwd, requested_lwd) < DATE_FORMAT(CURRENT_DATE(), '%Y-%m-01')
+                AND COALESCE(approved_lwd, requested_lwd) >= DATE_FORMAT(DATE_SUB(DATE(UTC_TIMESTAMP() + INTERVAL 4 HOUR), INTERVAL 1 MONTH), '%Y-%m-01')
+                AND COALESCE(approved_lwd, requested_lwd) < DATE_FORMAT(DATE(UTC_TIMESTAMP() + INTERVAL 4 HOUR), '%Y-%m-01')
             ) lastMonthExits
           ) AS exitsLastMonth
         FROM crm_employee
@@ -3823,18 +3823,18 @@ export class HRService {
     const [hiring] = await sequelize.query<HiringRow>(
       `
         SELECT
-          SUM(CASE WHEN doj >= DATE_FORMAT(CURRENT_DATE(), '%Y-%m-01') THEN 1 ELSE 0 END) AS joinedThisMonth,
+          SUM(CASE WHEN doj >= DATE_FORMAT(DATE(UTC_TIMESTAMP() + INTERVAL 4 HOUR), '%Y-%m-01') THEN 1 ELSE 0 END) AS joinedThisMonth,
           SUM(CASE
-            WHEN doj >= DATE_FORMAT(DATE_SUB(CURRENT_DATE(), INTERVAL 1 MONTH), '%Y-%m-01')
-             AND doj < DATE_FORMAT(CURRENT_DATE(), '%Y-%m-01')
+            WHEN doj >= DATE_FORMAT(DATE_SUB(DATE(UTC_TIMESTAMP() + INTERVAL 4 HOUR), INTERVAL 1 MONTH), '%Y-%m-01')
+             AND doj < DATE_FORMAT(DATE(UTC_TIMESTAMP() + INTERVAL 4 HOUR), '%Y-%m-01')
             THEN 1 ELSE 0 END
           ) AS joinedPreviousMonth,
           SUM(CASE
-            WHEN doj >= DATE_FORMAT(DATE_SUB(CURRENT_DATE(), INTERVAL 1 MONTH), '%Y-%m-01')
-             AND doj < DATE_FORMAT(CURRENT_DATE(), '%Y-%m-01')
+            WHEN doj >= DATE_FORMAT(DATE_SUB(DATE(UTC_TIMESTAMP() + INTERVAL 4 HOUR), INTERVAL 1 MONTH), '%Y-%m-01')
+             AND doj < DATE_FORMAT(DATE(UTC_TIMESTAMP() + INTERVAL 4 HOUR), '%Y-%m-01')
             THEN 1 ELSE 0 END
           ) AS joinedLastMonth,
-          SUM(CASE WHEN YEAR(doj) = YEAR(CURRENT_DATE()) THEN 1 ELSE 0 END) AS joinedThisYear
+          SUM(CASE WHEN YEAR(doj) = YEAR(DATE(UTC_TIMESTAMP() + INTERVAL 4 HOUR)) THEN 1 ELSE 0 END) AS joinedThisYear
         FROM crm_employee
       `,
       { type: QueryTypes.SELECT }
@@ -3940,7 +3940,7 @@ export class HRService {
         partTime: numberValue(department.partTime),
       })),
       payrollStatus: {
-        month: new Date().toLocaleString('en-US', { month: 'long', year: 'numeric' }),
+        month: new Date().toLocaleString('en-US', { month: 'long', year: 'numeric', timeZone: 'Asia/Dubai' }),
         status: payrollCoverage >= 90 ? 'Ready' : payrollCoverage >= 60 ? 'Review' : 'Pending',
         coveragePercent: payrollCoverage,
         attendanceRecords: numberValue(payroll?.attendanceRecords),

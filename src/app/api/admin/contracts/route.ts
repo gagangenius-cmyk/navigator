@@ -11,6 +11,7 @@ import { renderAgreementForBranch } from '@/lib/renderAgreementForBranch';
 import { createOpportunityForContract } from '@/lib/createOpportunityForContract';
 import { logAudit } from '@/lib/auditLog';
 import { notifyRole } from '@/lib/notify';
+import { dubaiDay } from '@/lib/dubaiDate';
 
 let dbReady = false;
 const ensureDB = async () => { if (!dbReady) { await connectDB(); dbReady = true; } };
@@ -135,7 +136,7 @@ export async function POST(request: NextRequest) {
       payBalance,
       status: 'active',
       statusDate: now,
-      agreeDate: now,
+      agreeDate: dubaiDay(now) as unknown as Date,
       feeAgreeDate: now,
       counselorId,
       createdBy,
@@ -173,7 +174,7 @@ export async function POST(request: NextRequest) {
 
     const agreementContent = renderAgreementForBranch(branchCurrency.branchAbbrv, {
       agreementNumber,
-      agreementDate: now.toISOString().slice(0, 10),
+      agreementDate: dubaiDay(now),
       clientName,
       clientEmail: leadRow.email || '',
       clientPhone: leadRow.mobile || leadRow.phone || '',

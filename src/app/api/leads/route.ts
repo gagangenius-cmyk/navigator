@@ -1,6 +1,5 @@
 import { CrmcFollowUpReminders } from '@/models/CrmcFollowUpReminders'
-import { parseCrmDateTime, splitFollowUp } from '@/lib/dubaiDate'
-import { dubaiToday } from '@/lib/dubaiDate';
+import { parseCrmDateTime, splitFollowUp, dubaiTime, dubaiDay, dubaiToday } from '@/lib/dubaiDate';
 import { NextRequest, NextResponse } from 'next/server'
 import { sequelize, connectDB } from '@/lib/sequelize'
 import { resolveLeadAssignment } from '@/lib/assignmentRuleEngine'
@@ -11,7 +10,7 @@ import { isCeo, isFoeOrBranchManagerOrCeo, isBranchManagerOrCeo, isCounsellor } 
 import { checkForDuplicate, findExistingLead, recordDuplicateLeadAttempt, normalizePhone, checkForFuzzyDuplicate, getContractSummary } from '@/lib/duplicateLeadCheck'
 import { resolveLeadReferenceId, resolveLeadReferences } from '@/lib/leadReferenceResolver'
 import { resolveBranchReference } from '@/lib/branchResolver'
-import { recordLeadAssignment, logLeadRemark, LEAD_WORK_ACTIONS } from '@/lib/leadRemarks'
+import { recordLeadAssignment, logLeadRemark, addLeadRemark, LEAD_WORK_ACTIONS } from '@/lib/leadRemarks'
 import { ensureClientActualNameColumn } from '@/lib/ensureClientActualNameColumn'
 import { ensureMetaCampaignNameColumn } from '@/lib/ensureMetaCampaignNameColumn'
 import { buildDefaultLeadData, insertLeadRecord } from '@/lib/leadDefaults'
@@ -686,7 +685,7 @@ export async function POST(request: NextRequest) {
               gender: 'Male',
               id_number: '',
               id_expiry: new Date(),
-              id_issue_date: new Date(),
+              id_issue_date: dubaiDay(),
               country_interest: rowCountry,
               sub_country_interest: 0,
               service_interest: '',
@@ -701,12 +700,12 @@ export async function POST(request: NextRequest) {
               lead_quality: 'Warm',
               enquiry: 'General Inquiry',
               convet: 'New',
-              regdate: new Date(),
+              regdate: dubaiDay(),
               regtime: new Date(),
               last_updated: dubaiToday(),
-              last_updtd_time: new Date().toTimeString().split(' ')[0],
-              followup: new Date(),
-              folowuptime: new Date().toTimeString().split(' ')[0],
+              last_updtd_time: dubaiTime(),
+              followup: dubaiDay(),
+              folowuptime: dubaiTime(),
               stepComplete: 1,
               // Every imported lead is assigned straight to whichever
               // employee is performing the import — not left unassigned.
@@ -723,7 +722,7 @@ export async function POST(request: NextRequest) {
               notf: 0,
               type: 'lead',
               transfered_by: 1,
-              transfer_time: new Date().toTimeString().split(' ')[0],
+              transfer_time: dubaiTime(),
               exist: 0,
               no_of_applicants: 1,
               advanced: 0,
@@ -749,8 +748,8 @@ export async function POST(request: NextRequest) {
               tele_caller_alert: 0,
               tele_caller_remark: '',
               tele_caller_remark_by: 1,
-              tele_date: new Date(),
-              lead_date: new Date(),
+              tele_date: dubaiDay(),
+              lead_date: dubaiDay(),
               duplicate: duplicateCheck.isDuplicate ? 1 : 0,
               duplicate_count: duplicateCheck.duplicateCount,
               ref_remark: '',
@@ -759,7 +758,7 @@ export async function POST(request: NextRequest) {
               nal_count: 0,
               campaign_id: 0,
               old_branch: 0,
-              status_date: new Date()
+              status_date: dubaiDay()
             }
 
             const resolvedLeadData = await resolveLeadReferences(leadData)
@@ -1013,6 +1012,9 @@ export async function POST(request: NextRequest) {
     // columns, so it never appeared in Follow-ups, the calendar, notifications or the
     // dashboard (all read crm_follow_up_reminders). Create the real reminder; its model
     // hook mirrors the earliest open one back onto the lead.
+    // The note typed on Add Lead is the lead's first remark.
+    await addLeadRemark({ leadId: insertId, text: data.notes || data.lead_remark, actorId: currentUser.id })
+
     const explicitFollowUp = splitFollowUp(data.followup || data.prospectFollowUp)
     if (explicitFollowUp.date && explicitFollowUp.time) {
       try {
@@ -1174,7 +1176,7 @@ export async function PUT(request: NextRequest) {
     updateFields.push('last_updated = ?')
     updateFields.push('last_updtd_time = ?')
     updateValues.push(dubaiToday())
-    updateValues.push(new Date().toTimeString().split(' ')[0])
+    updateValues.push(dubaiTime())
 
     // Add the id for the WHERE clause
     updateValues.push(id)

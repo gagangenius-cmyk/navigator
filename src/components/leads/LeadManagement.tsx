@@ -1,6 +1,6 @@
 'use client';
 
-import { localToday } from '@/lib/dubaiDate';
+import { localToday, formatDubaiDateTime } from '@/lib/dubaiDate';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { useSortableData, SortableTh } from '@/components/ui/sortable-th';
 import { useState, useEffect, useMemo, useRef } from 'react';
@@ -26,6 +26,7 @@ import WhatsAppIcon from '@/components/ui/WhatsAppIcon';
 import { priorityChoices } from '@/lib/leadPriorities';
 import { isBranchManagerOrCeo, isCeo, isFoe, isFoeOrBranchManagerOrCeo, isCounsellor, isCeoOrDirectorOfSales } from '@/lib/roleChecks';
 import { getLeadBranchDetails, printReceipt as printReceiptDocument } from '@/lib/receiptTemplate';
+import { activityLabel } from '@/lib/activityLabels';
 
 interface LeadManagementProps {
   onLeadSelect?: (lead: Lead) => void;
@@ -1217,6 +1218,7 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
             scheduledAt,
             subject: leadActionForm.title || 'Lead follow-up',
             message: leadActionForm.notes || leadActionForm.title || 'Lead follow-up',
+            remark: leadActionForm.notes,
             priority: leadActionForm.priority || 'medium'
           })
         });
@@ -3210,8 +3212,8 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
                       ) : leadActivity?.activityLog.map((entry) => (
                         <div key={entry.id} className="border-b border-gray-100 p-3 last:border-0">
                           <div className="flex items-center justify-between gap-2">
-                            <span className="rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700">{(entry.action || '').replace(/_/g, ' ')}</span>
-                            <span className="text-xs text-gray-500">{formatDateTime(entry.created_at)}</span>
+                            <span className="rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700">{activityLabel(entry.action)}</span>
+                            <span className="text-xs text-gray-500">{formatDubaiDateTime(entry.created_at)}</span>
                           </div>
                           <div className="mt-2 text-xs text-gray-700">{entry.remark}</div>
                           {entry.actorName && <div className="mt-1 text-xs text-gray-500">By {entry.actorName}{entry.actor_role ? ` (${entry.actor_role})` : ''}</div>}

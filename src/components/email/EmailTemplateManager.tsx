@@ -8,6 +8,7 @@ import {
   FileText, Users, BarChart3, CheckCircle,
   TrendingUp, Copy, RefreshCw, X, Pause, MoreVertical, Star
 } from 'lucide-react';
+import { formatDubaiDate } from '@/lib/dubaiDate';
 
 interface EmailTemplate {
   id: string;
@@ -427,7 +428,7 @@ export default function EmailTemplateManager() {
                   
                   <div className="text-xs text-gray-500 border-t border-gray-200 pt-3">
                     <div className="flex justify-between">
-                      <span>Created: {new Date(template.metadata.createdAt).toLocaleDateString()}</span>
+                      <span>Created: {formatDubaiDate(template.metadata.createdAt)}</span>
                       <span>Used: {template.metadata.usageCount} times</span>
                     </div>
                     {template.metadata.lastUsed && (

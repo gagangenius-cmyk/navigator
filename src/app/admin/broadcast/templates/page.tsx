@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { TEMPLATE_CATEGORIES } from '@/lib/broadcastPurpose';
+import { formatDubaiDateTime } from '@/lib/dubaiDate';
 
 interface TemplateRow {
   id: number;
@@ -120,7 +121,7 @@ export default function TemplateLibraryPage() {
                         {template.status.replace('_', ' ')}
                       </span>
                     </td>
-                    <td className="py-2 pr-4 text-[var(--cmg-muted)]">{new Date(template.updatedAt).toLocaleString()}</td>
+                    <td className="py-2 pr-4 text-[var(--cmg-muted)]">{formatDubaiDateTime(template.updatedAt)}</td>
                   </tr>
                 ))}
               </tbody>

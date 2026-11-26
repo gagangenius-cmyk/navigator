@@ -73,14 +73,14 @@ export const CHECKED_IN_TODAY_SQL = `(
   EXISTS (
     SELECT 1 FROM crm_employee_attendance attendance
     WHERE attendance.emp_id = e.id
-      AND DATE(attendance.created) = CURDATE()
+      AND DATE(attendance.created + INTERVAL 4 HOUR) = DATE(UTC_TIMESTAMP() + INTERVAL 4 HOUR)
       AND COALESCE(attendance.checkin, 0) = 1
       AND COALESCE(attendance.checkout, 0) = 0
   )
   OR EXISTS (
     SELECT 1 FROM crm_hr_attendance_records hr
     WHERE CAST(e.id AS CHAR) COLLATE utf8mb4_general_ci = hr.employee_id
-      AND hr.date = CURDATE()
+      AND hr.date = DATE(UTC_TIMESTAMP() + INTERVAL 4 HOUR)
       AND hr.check_in IS NOT NULL
       AND hr.check_out IS NULL
   )

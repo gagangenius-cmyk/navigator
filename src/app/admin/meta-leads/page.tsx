@@ -8,6 +8,7 @@ import {
   Facebook, AlertTriangle, TrendingUp, Settings, ArrowRight,
   Activity
 } from 'lucide-react';
+import { formatDubaiDate } from '@/lib/dubaiDate';
 
 interface Stats {
   todayCount: number;
@@ -201,7 +202,7 @@ export default function MetaLeadsDashboard() {
                   </div>
                   <div className="flex shrink-0 flex-col items-end gap-1">
                     <StatusBadge status={lead.delivery_status} />
-                    <span className="text-xs text-gray-400">{new Date(lead.created_at).toLocaleDateString()}</span>
+                    <span className="text-xs text-gray-400">{formatDubaiDate(lead.created_at)}</span>
                   </div>
                 </div>
               ))

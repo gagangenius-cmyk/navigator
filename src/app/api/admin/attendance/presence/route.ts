@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
 
     const rows = await sequelize.query<{ id: number }>(
       `SELECT id FROM crm_employee_attendance
-       WHERE emp_id = :employeeId AND DATE(created) = CURDATE()
+       WHERE emp_id = :employeeId AND DATE(created + INTERVAL 4 HOUR) = DATE(UTC_TIMESTAMP() + INTERVAL 4 HOUR)
        ORDER BY id DESC LIMIT 1`,
       { replacements: { employeeId }, type: QueryTypes.SELECT },
     );

@@ -48,6 +48,7 @@ import {
   Maximize2,
   RotateCw
 } from 'lucide-react'
+import { formatDubaiDate } from '@/lib/dubaiDate';
 
 interface ContractPreview {
   id: string
@@ -296,7 +297,7 @@ export default function ContractPreviewPage() {
                 <div className="text-center mb-8">
                   <h1 className="text-2xl font-bold text-gray-900 mb-2">SERVICE AGREEMENT</h1>
                   <p className="text-gray-600">Contract Number: {selectedContract.contractNumber}</p>
-                  <p className="text-gray-600">Date: {new Date(selectedContract.createdAt).toLocaleDateString()}</p>
+                  <p className="text-gray-600">Date: {formatDubaiDate(selectedContract.createdAt)}</p>
                 </div>
 
                 {/* Parties */}
@@ -511,8 +512,8 @@ export default function ContractPreviewPage() {
                   <div>
                     <h4 className="text-sm font-medium text-gray-900 mb-2">Status Information</h4>
                     <div className="text-sm text-gray-600 space-y-1">
-                      <p><strong>Created:</strong> {new Date(contract.createdAt).toLocaleDateString()}</p>
-                      <p><strong>Updated:</strong> {new Date(contract.updatedAt).toLocaleDateString()}</p>
+                      <p><strong>Created:</strong> {formatDubaiDate(contract.createdAt)}</p>
+                      <p><strong>Updated:</strong> {formatDubaiDate(contract.updatedAt)}</p>
                       {contract.signedAt && (
                         <p><strong>Signed:</strong> {new Date(contract.signedAt).toLocaleDateString()}</p>
                       )}

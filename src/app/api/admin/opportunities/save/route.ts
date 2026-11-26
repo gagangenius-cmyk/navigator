@@ -1,4 +1,4 @@
-import { dubaiToday } from '@/lib/dubaiDate';
+import { dubaiToday, dubaiTime } from '@/lib/dubaiDate';
 import { NextRequest, NextResponse } from 'next/server';
 import { sequelize } from '@/lib/sequelize';
 import { QueryTypes } from 'sequelize';
@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
 
     const updateData: Record<string, unknown> = {
       last_updated: dubaiToday(),
-      last_updtd_time: new Date().toTimeString().split(' ')[0],
+      last_updtd_time: dubaiTime(),
     };
 
     if (stage === 'prospect') {
@@ -359,7 +359,7 @@ async function handleCompleteFlow(leadId: number, data: any, lead: any) {
         replacements: [
           opportunityId,
           dubaiToday(),
-          new Date().toTimeString().split(' ')[0],
+          dubaiTime(),
           leadId,
         ],
         transaction: t,

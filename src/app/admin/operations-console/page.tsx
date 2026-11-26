@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { ArrowLeftRight, Ban, RotateCcw, Search, ShieldCheck } from 'lucide-react';
 import EmployeePicker, { type EmployeeResult } from '@/components/admin/EmployeePicker';
+import { formatDubaiDateTime } from '@/lib/dubaiDate';
 
 interface LeadSearchResult {
   id: string | number;
@@ -319,7 +320,7 @@ function AccessControlPanel() {
                 <span className="font-medium text-slate-900">{entry.employeeName}</span>
                 <span className="ml-1 text-slate-500">{entry.action === 'frozen' ? 'access frozen' : 'access restored'} by {entry.actorName}</span>
               </span>
-              <span className="text-xs text-slate-400">{new Date(entry.createdAt).toLocaleString()}</span>
+              <span className="text-xs text-slate-400">{formatDubaiDateTime(entry.createdAt)}</span>
             </div>
           ))}
         </div>

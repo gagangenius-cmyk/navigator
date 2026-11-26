@@ -1,5 +1,6 @@
 import { Op } from 'sequelize';
 import { CrmBroadcastRecipients } from '@/models';
+import { dubaiToday } from '@/lib/dubaiDate';
 
 // Per-channel daily send quota (docs/broadcast-architecture.md Phase 6).
 // Deliberately computed from crm_broadcast_recipients' own send timestamps
@@ -31,7 +32,7 @@ export async function checkDailyQuota(channel: 'email' | 'whatsapp' | 'sms'): Pr
   if (limit === null) return { withinQuota: true, limit: null, sentToday: 0 };
 
   const midnightLocal = new Date();
-  midnightLocal.setHours(0, 0, 0, 0);
+  midnightLocal.setTime(Date.parse(`${dubaiToday()}T00:00:00+04:00`));
 
   const sentToday = await CrmBroadcastRecipients.count({
     where: { channel, status: { [Op.in]: ['sent', 'delivered', 'read', 'replied'] }, sentAt: { [Op.gte]: midnightLocal } },

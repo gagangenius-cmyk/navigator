@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useSortableData } from '@/components/ui/sortable-th';
 import { RecordCard, RecordList, SortButtonRow } from '@/components/shared/ResponsiveRecordList';
 import { RefreshCw, ChevronLeft, ChevronRight, Send } from 'lucide-react';
+import { formatDubaiDateTime } from '@/lib/dubaiDate';
 
 interface DeliveryRow {
   id: number;
@@ -159,7 +160,7 @@ export default function MetaLogsPage() {
               titleBadges={<StatusBadge status={row.status} />}
               stats={[
                 { label: 'Retries', value: row.retry_count },
-                { label: 'Received', value: new Date(row.created_at).toLocaleString() },
+                { label: 'Received', value: formatDubaiDateTime(row.created_at) },
               ]}
               extra={row.last_error ? (
                 <span className="text-xs text-red-600" title={row.last_error}>{row.last_error}</span>

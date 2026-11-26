@@ -1,3 +1,4 @@
+import { formatDubaiDateTime } from '@/lib/dubaiDate';
 export const WORKFLOW_STATUS_BADGE: Record<string, string> = {
   'IT Manager Review': 'bg-amber-50 text-amber-700 border-amber-200',
   'Branch Manager Review': 'bg-orange-50 text-orange-700 border-orange-200',
@@ -38,7 +39,5 @@ export const ITSupportPriorityOptions = ['High', 'Medium', 'Low'] as const;
 
 export function formatDateTime(value: string | null | undefined) {
   if (!value) return '—';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '—';
-  return date.toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+  return formatDubaiDateTime(value, { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) || '—';
 }

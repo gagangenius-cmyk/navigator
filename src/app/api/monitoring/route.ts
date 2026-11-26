@@ -24,8 +24,8 @@ async function computeMonitoringData(scopeToBranch: boolean, userBranch: number)
   await ensureDB();
 
   const today = dubaiToday();
-    const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
-    const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
+    const yesterday = dubaiToday(-1);
+    const weekAgo = dubaiToday(-7);
 
     const leadBranchFilter = scopeToBranch ? 'AND l.branch = :branch' : '';
     const bareLeadBranchFilter = scopeToBranch ? 'AND branch = :branch' : '';

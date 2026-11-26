@@ -1,4 +1,4 @@
-import { dubaiToday } from '@/lib/dubaiDate';
+import { dubaiToday, dubaiTime } from '@/lib/dubaiDate';
 import { NextRequest, NextResponse } from 'next/server';
 import { CrmcForumLeads } from '@/models';
 import { requireAuth, isAuthError } from '@/lib/apiAuth';
@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
       dueDate: data.expectedCloseDate ? new Date(data.expectedCloseDate) : lead.dueDate,
       lead_remark: data.notes || lead.lead_remark,
       last_updated: dubaiToday(),
-      last_updtd_time: new Date().toTimeString().split(' ')[0]
+      last_updtd_time: dubaiTime()
     });
 
     return NextResponse.json({

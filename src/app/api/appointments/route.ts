@@ -4,7 +4,8 @@ import { assertLeadAccess } from '@/lib/leadAccess';
 import { Appointments } from '@/models'
 import { sequelize } from '@/lib/sequelize'
 import { QueryTypes } from 'sequelize'
-import { logLeadRemark } from '@/lib/leadRemarks'
+import { logLeadRemark, addLeadRemark } from '@/lib/leadRemarks'
+import { leadPhoneSearch } from '@/lib/phoneSearch'
 import { verifyToken } from '@/lib/auth'
 import { isCeo, isBranchManagerOrCeo, isFoe, canViewCompanyWideWork } from '@/lib/roleChecks'
 import { notifyUser } from '@/lib/notify'
@@ -80,12 +81,14 @@ export async function GET(request: NextRequest) {
     const statusCondition = status ? getAppointmentStatusCondition(status) : ''
 
     if (search) {
+      const phone = leadPhoneSearch(search)
       conditions.push(`(
         CONCAT_WS(' ', l.fname, l.lname) LIKE :search
         OR e.name LIKE :search
         OR assigner.name LIKE :search
+        OR ${phone.sql}
       )`)
-      replacements.search = `%${search}%`
+      Object.assign(replacements, phone.replacements, { search: `%${search}%` })
     }
 
     const baseWhereSql = conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''
@@ -224,6 +227,9 @@ export async function POST(request: NextRequest) {
     const crossBranch = Boolean(data.crossBranch || data.cross_branch)
     const assignedBranchId = crossBranch ? normalizeNumber(data.assignedBranch ?? data.assigned_branch) : null
 
+    const typedNote = String(data.remarks || data.screenshot || '').trim()
+    const bookingRemark = /^https?:\/\//i.test(typedNote) ? '' : typedNote
+
     const appointment = await Appointments.create({
       leadid: leadId,
       date: appointmentDate,
@@ -235,6 +241,7 @@ export async function POST(request: NextRequest) {
       region: normalizeNumber(data.region),
       branch: normalizeNumber(data.branch) || 0,
       screenshot: data.screenshot || '',
+      remarks: bookingRemark || null,
       second_done: Number(data.second_done ?? 0),
       second_meet_date: data.second_meet_date || appointmentDate,
       cross_branch: crossBranch ? 1 : 0,
@@ -255,6 +262,12 @@ export async function POST(request: NextRequest) {
         // Whoever booked it gets the credit (a counselor booking for a colleague / a cross-branch handoff must not
         // be credited to the person the appointment was handed to).
         actorId: Number(currentUser.id) || counselorId,
+        actorRole: currentUser.roleName || currentUser.type,
+      });
+      await addLeadRemark({
+        leadId,
+        text: bookingRemark,
+        actorId: Number(currentUser.id),
         actorRole: currentUser.roleName || currentUser.type,
       });
     }

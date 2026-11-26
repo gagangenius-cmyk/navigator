@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { RefreshCw, CheckCircle2 } from 'lucide-react';
+import { formatDubaiDate } from '@/lib/dubaiDate';
 
 const noticePeriods = [15, 30, 60, 90];
 const reasonOptions = [
@@ -150,7 +151,7 @@ export default function MyResignationPage() {
           </div>
 
           <dl className="mt-6 grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
-            <div><dt className="text-slate-500">Submitted On</dt><dd className="text-slate-900">{new Date(existing!.submitted_at).toLocaleDateString()}</dd></div>
+            <div><dt className="text-slate-500">Submitted On</dt><dd className="text-slate-900">{formatDubaiDate(existing!.submitted_at)}</dd></div>
             <div><dt className="text-slate-500">Last Working Day</dt><dd className="text-slate-900">{existing!.requested_lwd || '—'}</dd></div>
             <div><dt className="text-slate-500">Notice Period</dt><dd className="text-slate-900">{existing!.notice_period_days || 30} days</dd></div>
             <div><dt className="text-slate-500">Branch</dt><dd className="text-slate-900">{existing!.branch_snapshot || '—'}</dd></div>

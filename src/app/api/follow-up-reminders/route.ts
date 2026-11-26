@@ -1,12 +1,13 @@
 // @ts-nocheck
 import { assertLeadAccess } from '@/lib/leadAccess';
-import { parseCrmDateTime, dubaiToday } from '@/lib/dubaiDate';
+import { parseCrmDateTime, dubaiToday, dubaiTime, dubaiNow } from '@/lib/dubaiDate';
+import { leadPhoneSearch } from '@/lib/phoneSearch';
 import { syncLeadFollowup } from '@/lib/leadSchedule';
 import { NextRequest, NextResponse } from 'next/server';
 import { CrmcFollowUpReminders, CrmcNotifications } from '@/models';
 import { Op, QueryTypes } from 'sequelize';
 import { sequelize } from '@/lib/sequelize';
-import { logLeadRemark } from '@/lib/leadRemarks';
+import { logLeadRemark, addLeadRemark } from '@/lib/leadRemarks';
 import { verifyToken } from '@/lib/auth';
 import { isCeo, isBranchManagerOrCeo, canViewCompanyWideWork } from '@/lib/roleChecks';
 
@@ -96,12 +97,14 @@ export async function GET(request: NextRequest) {
     }
 
     if (search) {
+      const phone = leadPhoneSearch(search);
       conditions.push(`(
         CONCAT_WS(' ', l.fname, l.lname) LIKE :search
         OR e.name LIKE :search
         OR r.message LIKE :search
+        OR ${phone.sql}
       )`);
-      replacements.search = `%${search}%`;
+      Object.assign(replacements, phone.replacements, { search: `%${search}%` });
     }
 
     const whereSql = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
@@ -110,7 +113,7 @@ export async function GET(request: NextRequest) {
     // current filters, not just the current page — pagination is applied
     // afterward, in JS, to the same result set.
     const reminders = await sequelize.query(`
-      SELECT r.*, l.fname, l.lname, l.email, l.phone, l.status AS leadStatus, l.priority AS leadPriority,
+      SELECT r.*, l.fname, l.lname, l.email, COALESCE(NULLIF(l.mobile, ''), l.phone) AS phone, l.status AS leadStatus, l.priority AS leadPriority,
              e.name AS employeeName, e.email AS employeeEmail, e.branch AS branchId, b.branch AS branchName
       FROM crm_follow_up_reminders r
       LEFT JOIN crm_forum_leads l ON r.lead_id = l.id
@@ -124,13 +127,14 @@ export async function GET(request: NextRequest) {
     // query-param handling above for why) - treated the same as 'pending'
     // for overdue/upcoming/pending counting throughout this summary.
     const isOpen = (r: { status: string }) => r.status === 'pending' || r.status === 'rescheduled';
-    const now = new Date();
-    const overdueReminders = (reminders as any[]).filter(r => isOpen(r) && new Date(r.reminder_date) < now);
+    // reminder_date is a UAE wall-clock string, so compare it with the UAE wall clock as strings.
+    const now = dubaiNow();
+    const overdueReminders = (reminders as any[]).filter(r => isOpen(r) && String(r.reminder_date) < now);
 
     // Get upcoming reminders (next 7 days)
-    const nextWeek = new Date(now.getTime() + (7 * 24 * 60 * 60 * 1000));
+    const nextWeek = dubaiNow(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000));
     const upcomingReminders = (reminders as any[]).filter(r => {
-      const date = new Date(r.reminder_date);
+      const date = String(r.reminder_date);
       return isOpen(r) && date >= now && date <= nextWeek;
     });
 
@@ -138,7 +142,7 @@ export async function GET(request: NextRequest) {
     // under pending / overdue / upcoming exactly like the summary cards above count it.
     const matchesStatus = (r: { status: string; reminder_date: string }) => {
       if (!status) return true;
-      const date = new Date(r.reminder_date);
+      const date = String(r.reminder_date);
       if (status === 'pending') return isOpen(r);
       if (status === 'overdue') return isOpen(r) && date < now;
       if (status === 'upcoming') return isOpen(r) && date >= now && date <= nextWeek;
@@ -177,7 +181,7 @@ async function touchLeadUpdated(leadId: number | null | undefined) {
   if (!id) return;
   try {
     await sequelize.query('UPDATE crm_forum_leads SET last_updated = ?, last_updtd_time = ? WHERE id = ?', {
-      replacements: [dubaiToday(), new Date().toTimeString().split(' ')[0], id],
+      replacements: [dubaiToday(), dubaiTime(), id],
       type: QueryTypes.UPDATE,
     });
   } catch (error) {
@@ -261,7 +265,7 @@ export async function POST(request: NextRequest) {
       user_id: parseInt(assignedUserId),
       type: 'followup',
       title: `Follow-up Reminder: ${subject || reminderType || 'Lead follow-up'}`,
-      message: `You have a follow-up scheduled for ${followUpDate.toLocaleDateString()}`,
+      message: `You have a follow-up scheduled for ${followUpDate.toLocaleDateString('en-GB', { timeZone: 'UTC' })}`,
       priority: priority || 'medium',
       link: leadId ? `/admin/leads/${parseInt(leadId)}/edit` : null,
       related_id: leadId ? parseInt(leadId) : null,
@@ -274,11 +278,19 @@ export async function POST(request: NextRequest) {
     await logLeadRemark({
       leadId: parseInt(leadId),
       action: 'followup_added',
-      remark: `Follow-up added for ${followUpDate.toLocaleDateString()}: ${reminderMessage}`,
+      remark: `Follow-up added for ${followUpDate.toLocaleDateString('en-GB', { timeZone: 'UTC' })}: ${reminderMessage}`,
       newValue: followUpDate.toISOString().split('T')[0],
       // The person who actually set the follow-up gets the credit in their report/Today's Activity (a manager
       // scheduling one for a counselor is the actor, not the counselor).
       actorId: Number(currentUser.id) || parseInt(assignedUserId),
+      actorRole: currentUser.roleName || currentUser.type,
+    });
+    // What the counselor typed on the follow-up is also a lead remark. `remark` (sent by the web popup, blank when
+    // nothing was typed) wins over `message`, which can be an auto-filled title.
+    await addLeadRemark({
+      leadId: parseInt(leadId),
+      text: body.remark !== undefined ? body.remark : (message || notes),
+      actorId: Number(currentUser.id),
       actorRole: currentUser.roleName || currentUser.type,
     });
 
@@ -307,7 +319,8 @@ export async function PUT(request: NextRequest) {
     await ensureFollowUpCompletionNotesColumn();
 
     const body = await request.json();
-    const { reminderId, action, completedAt, notes, rescheduledAt } = body;
+    const { reminderId, action, completedAt, rescheduledAt, nextNote } = body;
+    const notes = typeof body.notes === 'string' ? body.notes.trim() : '';
 
     if (!reminderId || !action) {
       return NextResponse.json(
@@ -318,8 +331,8 @@ export async function PUT(request: NextRequest) {
 
     // A follow-up can only be completed/rescheduled/cancelled by the
     // counselor it belongs to, or Branch Manager/CEO for their scope.
-    const [existing] = await sequelize.query<{ user_id: number; branch: number | null; lead_id: number | null }>(`
-      SELECT r.user_id, r.lead_id, e.branch FROM crm_follow_up_reminders r
+    const [existing] = await sequelize.query<{ user_id: number; branch: number | null; lead_id: number | null; status: string | null; message: string | null; priority: string | null }>(`
+      SELECT r.user_id, r.lead_id, r.status, r.message, r.priority, e.branch FROM crm_follow_up_reminders r
       LEFT JOIN crm_employee e ON e.id = r.user_id
       WHERE r.id = :reminderId LIMIT 1
     `, { replacements: { reminderId: parseInt(reminderId) }, type: QueryTypes.SELECT });
@@ -339,6 +352,63 @@ export async function PUT(request: NextRequest) {
       }
     }
 
+    // Reschedule = close the previous follow-up with a lead remark about what happened, and open a new one.
+    if (action === 'reschedule') {
+      if (!notes) {
+        return NextResponse.json({ error: 'Add a lead remark about the previous follow-up before rescheduling' }, { status: 400 });
+      }
+      const nextAt = parseCrmDateTime(rescheduledAt || '');
+      if (Number.isNaN(nextAt.getTime())) {
+        return NextResponse.json({ error: 'rescheduledAt must be a valid date' }, { status: 400 });
+      }
+      if (nextAt.toISOString().slice(0, 19).replace('T', ' ') <= dubaiNow()) {
+        return NextResponse.json({ error: 'The new follow-up must be in the future (UAE time)' }, { status: 400 });
+      }
+      if (!['pending', 'rescheduled'].includes(existing.status || 'pending')) {
+        return NextResponse.json({ error: 'This follow-up is already closed' }, { status: 409 });
+      }
+
+      const reminder = await sequelize.transaction(async (transaction) => {
+        const [, closed] = await sequelize.query(
+          `UPDATE crm_follow_up_reminders
+           SET status = 'completed', completed_at = UTC_TIMESTAMP(), completion_notes = :notes, updated_at = UTC_TIMESTAMP()
+           WHERE id = :id AND COALESCE(status, 'pending') IN ('pending', 'rescheduled')`,
+          { replacements: { id: parseInt(reminderId), notes }, type: QueryTypes.UPDATE, transaction },
+        );
+        // A double click: the first request already closed it and opened the new one.
+        if (!closed) return null;
+        return CrmcFollowUpReminders.create({
+          lead_id: Number(existing.lead_id),
+          user_id: Number(existing.user_id),
+          reminder_date: nextAt,
+          message: String(nextNote || '').trim() || existing.message || 'Lead follow-up',
+          priority: body.priority || existing.priority || 'medium',
+          status: 'pending',
+          created_at: new Date(),
+          updated_at: new Date(),
+        }, { transaction });
+      });
+      if (!reminder) {
+        return NextResponse.json({ error: 'This follow-up is already closed' }, { status: 409 });
+      }
+      await syncLeadFollowup(existing.lead_id);
+
+      if (existing.lead_id) {
+        const actor = { actorId: Number(currentUser.id), actorRole: currentUser.roleName || currentUser.type };
+        await touchLeadUpdated(existing.lead_id);
+        await logLeadRemark({
+          leadId: Number(existing.lead_id),
+          action: 'followup_rescheduled',
+          remark: `Follow-up rescheduled to ${String(rescheduledAt).replace('T', ' ')}`,
+          newValue: String(rescheduledAt).slice(0, 10),
+          ...actor,
+        });
+        await addLeadRemark({ leadId: Number(existing.lead_id), text: notes, ...actor });
+        await addLeadRemark({ leadId: Number(existing.lead_id), text: nextNote, ...actor });
+      }
+      return NextResponse.json({ success: true, reminder });
+    }
+
     let updateData: any = {};
 
     switch (action) {
@@ -346,14 +416,6 @@ export async function PUT(request: NextRequest) {
         updateData = {
           status: 'completed',
           completed_at: completedAt ? new Date(completedAt) : new Date(),
-          completion_notes: notes || undefined,
-          updated_at: new Date()
-        };
-        break;
-      case 'reschedule':
-        updateData = {
-          status: 'rescheduled',
-          reminder_date: parseCrmDateTime(rescheduledAt),
           completion_notes: notes || undefined,
           updated_at: new Date()
         };
@@ -372,10 +434,6 @@ export async function PUT(request: NextRequest) {
         );
     }
 
-    if (action === 'reschedule' && Number.isNaN(parseCrmDateTime(rescheduledAt).getTime())) {
-      return NextResponse.json({ error: 'rescheduledAt must be a valid date' }, { status: 400 });
-    }
-
     const reminder = await CrmcFollowUpReminders.update(updateData, {
       where: { id: parseInt(reminderId) }
     });
@@ -387,13 +445,14 @@ export async function PUT(request: NextRequest) {
       await touchLeadUpdated(existing.lead_id);
       await logLeadRemark({
         leadId: Number(existing.lead_id),
-        action: action === 'complete' ? 'followup_completed' : action === 'reschedule' ? 'followup_rescheduled' : 'followup_cancelled',
-        remark: action === 'complete'
-          ? `Follow-up completed${notes ? `: ${notes}` : ''}`
-          : action === 'reschedule'
-            ? `Follow-up rescheduled to ${String(rescheduledAt)}${notes ? `: ${notes}` : ''}`
-            : `Follow-up cancelled${notes ? `: ${notes}` : ''}`,
-        newValue: action === 'reschedule' ? String(rescheduledAt).slice(0, 10) : null,
+        action: action === 'complete' ? 'followup_completed' : 'followup_cancelled',
+        remark: action === 'complete' ? 'Follow-up completed' : 'Follow-up cancelled',
+        actorId: Number(currentUser.id),
+        actorRole: currentUser.roleName || currentUser.type,
+      });
+      await addLeadRemark({
+        leadId: Number(existing.lead_id),
+        text: notes,
         actorId: Number(currentUser.id),
         actorRole: currentUser.roleName || currentUser.type,
       });

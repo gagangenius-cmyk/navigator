@@ -3,7 +3,7 @@ import { Appointments } from '@/models'
 import { verifyToken } from '@/lib/auth'
 import { isCeo, isBranchManagerOrCeo, isFoeOrBranchManagerOrCeo, isFoe } from '@/lib/roleChecks'
 import { ensureAppointmentRemarksColumn } from '@/lib/ensureAppointmentRemarksColumn'
-import { logLeadRemark, type LeadRemarkAction } from '@/lib/leadRemarks'
+import { logLeadRemark, addLeadRemark, type LeadRemarkAction } from '@/lib/leadRemarks'
 
 const getCurrentUser = (request: NextRequest) => {
   const token = request.cookies.get('auth-token')?.value
@@ -153,6 +153,8 @@ export async function PUT(
       notDone: Number((appointment as any).not_done || 0),
       booked: Number((appointment as any).booked || 0),
       meetingStatus: String((appointment as any).meeting_status || ''),
+      remarks: String((appointment as any).remarks || '').trim(),
+      foeRemark: String((appointment as any).foe_remark || '').trim(),
     }
 
     await appointment.update(normalizeAppointmentPayload(data))
@@ -188,6 +190,16 @@ export async function PUT(
           remark,
           previousValue: before.date || null,
           newValue: after.date || null,
+          actorId: Number(currentUser.id),
+          actorRole: currentUser.roleName || currentUser.type,
+        })
+      }
+      // A remark written on the appointment (or the verifier's remark) is a lead remark.
+      for (const [value, previous] of [[data.remarks, before.remarks], [data.foe_remark, before.foeRemark]]) {
+        if (typeof value !== 'string' || value.trim() === previous) continue
+        await addLeadRemark({
+          leadId: leadIdForLog,
+          text: value,
           actorId: Number(currentUser.id),
           actorRole: currentUser.roleName || currentUser.type,
         })

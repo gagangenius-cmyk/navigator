@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
     // directly, so a lead with several contracts surfaces each one's own
     // balance/dueDate/agreement separately instead of a single collapsed
     // per-lead figure.
-    const conds: string[] = ['cl.payBalance > 0', '(cl.dueDate IS NULL OR cl.dueDate <= CURDATE())'];
+    const conds: string[] = ['cl.payBalance > 0', '(cl.dueDate IS NULL OR cl.dueDate <= DATE(UTC_TIMESTAMP() + INTERVAL 4 HOUR))'];
     const rep: Record<string, unknown> = {};
 
     if (search) {

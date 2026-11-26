@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { EmailTemplateEditor, type EmailTemplateSaveResult } from '@/components/broadcast/EmailTemplateEditor';
 import { estimateSmsSegments } from '@/lib/broadcastTemplateRender';
 import { TEMPLATE_CATEGORIES } from '@/lib/broadcastPurpose';
+import { formatDubaiDateTime } from '@/lib/dubaiDate';
 
 type Channel = 'email' | 'whatsapp' | 'sms';
 
@@ -287,7 +288,7 @@ export default function TemplateEditorPage() {
                   <tr key={version.id} className="border-b border-[var(--cmg-border)]/50 last:border-0">
                     <td className="py-2 pr-4">v{version.versionNumber}</td>
                     <td className="py-2 pr-4">{version.isPublished ? 'Published' : 'Draft'}</td>
-                    <td className="py-2 pr-4 text-[var(--cmg-muted)]">{new Date(version.createdAt).toLocaleString()}</td>
+                    <td className="py-2 pr-4 text-[var(--cmg-muted)]">{formatDubaiDateTime(version.createdAt)}</td>
                     <td className="py-2 pr-4">
                       {!version.isPublished && (
                         <Button size="sm" variant="outline" disabled={saving} onClick={() => publishVersion(version.id)}>

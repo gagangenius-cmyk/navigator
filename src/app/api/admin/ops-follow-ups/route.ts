@@ -1,6 +1,8 @@
 import { syncLeadFollowup } from '@/lib/leadSchedule';
 import { NextRequest, NextResponse } from 'next/server';
 import { sequelize, connectDB } from '@/lib/sequelize';
+import { addLeadRemark } from '@/lib/leadRemarks';
+import { SQL_DUBAI_NOW } from '@/lib/dubaiDate';
 import { QueryTypes } from 'sequelize';
 import { verifyToken } from '@/lib/auth';
 import { canViewAllBranches, isBranchManagerOrCeo } from '@/lib/roleChecks';
@@ -58,9 +60,9 @@ export async function GET(request: NextRequest) {
 
     // Status filter
     if (status === 'overdue') {
-      conditions.push("r.status IN ('pending', 'rescheduled') AND r.reminder_date < NOW()");
+      conditions.push(`r.status IN ('pending', 'rescheduled') AND r.reminder_date < ${SQL_DUBAI_NOW}`);
     } else if (status === 'upcoming') {
-      conditions.push("r.status IN ('pending', 'rescheduled') AND r.reminder_date >= NOW()");
+      conditions.push(`r.status IN ('pending', 'rescheduled') AND r.reminder_date >= ${SQL_DUBAI_NOW}`);
     } else if (status) {
       conditions.push('r.status = :status');
       replacements.status = status;
@@ -104,7 +106,7 @@ export async function GET(request: NextRequest) {
       LEFT JOIN crm_service s ON l.service_interest = s.id
       ${whereSql}
       ORDER BY
-        CASE WHEN r.status IN ('pending', 'rescheduled') AND r.reminder_date < NOW() THEN 0 ELSE 1 END,
+        CASE WHEN r.status IN ('pending', 'rescheduled') AND r.reminder_date < ${SQL_DUBAI_NOW} THEN 0 ELSE 1 END,
         r.reminder_date ASC
       LIMIT 200
     `, { replacements, type: QueryTypes.SELECT });
@@ -192,6 +194,9 @@ export async function PUT(request: NextRequest) {
     );
     // Raw SQL bypasses the model hook, so mirror onto the lead explicitly.
     await syncLeadFollowup(target.lead_id);
+    if (target.lead_id) {
+      await addLeadRemark({ leadId: Number(target.lead_id), text: notes, actorId: Number(currentUser.id) });
+    }
 
     return NextResponse.json({ success: true, message: `Follow-up ${action}d` });
   } catch (error) {

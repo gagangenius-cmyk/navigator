@@ -158,7 +158,7 @@ export async function GET(request: NextRequest) {
         `SELECT
           (SELECT COUNT(*) FROM crm_employee WHERE status = 1) AS activeCounselors,
           (SELECT COUNT(*) FROM crm_forum_leads) AS totalLeads,
-          (SELECT COUNT(*) FROM crm_forum_leads WHERE DATE(created) = CURDATE()) AS leadsToday,
+          (SELECT COUNT(*) FROM crm_forum_leads WHERE DATE(created + INTERVAL 4 HOUR) = DATE(UTC_TIMESTAMP() + INTERVAL 4 HOUR)) AS leadsToday,
           (SELECT COUNT(*) FROM crm_counsilor_allocations WHERE status = 1) AS activeRules`,
         { type: QueryTypes.SELECT }
       );

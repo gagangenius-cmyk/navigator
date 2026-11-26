@@ -1,4 +1,4 @@
-import { dubaiToday } from '@/lib/dubaiDate';
+import { dubaiToday, dubaiTime } from '@/lib/dubaiDate';
 import { NextRequest, NextResponse } from 'next/server';
 import { QueryTypes } from 'sequelize';
 import { sequelize } from '@/lib/sequelize';
@@ -205,7 +205,7 @@ export async function POST(request: NextRequest) {
           body.toEmployeeId,
           body.toEmployeeId,
           dubaiToday(),
-          new Date().toTimeString().split(' ')[0],
+          dubaiTime(),
           body.newStatus,
           body.leadId
         ]
@@ -366,7 +366,7 @@ export async function PUT(request: NextRequest) {
             reassign.toEmployeeId,
             reassign.toEmployeeId,
             dubaiToday(),
-            new Date().toTimeString().split(' ')[0],
+            dubaiTime(),
             reassign.newStatus,
             reassign.leadId
           ]

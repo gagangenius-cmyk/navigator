@@ -1,10 +1,10 @@
-import { dubaiToday } from '@/lib/dubaiDate';
+import { dubaiToday, dubaiDay, dubaiTime } from '@/lib/dubaiDate';
 import { NextRequest, NextResponse } from 'next/server';
 import { QueryTypes } from 'sequelize';
 import { sequelize, connectDB } from '@/lib/sequelize';
 import { requireAuth, isAuthError } from '@/lib/apiAuth';
 import { isFoeOrBranchManagerOrCeo, isBranchManagerOrCeo, isCeo, isCeoOrDirectorOfSales } from '@/lib/roleChecks';
-import { logLeadRemark } from '@/lib/leadRemarks';
+import { logLeadRemark, addLeadRemark } from '@/lib/leadRemarks';
 import { notifyLeadAssigned } from '@/lib/notify';
 import { enqueueTransferNotice } from '@/lib/leadTransferNotices';
 import { resolveLeadReferenceId } from '@/lib/leadReferenceResolver';
@@ -523,7 +523,7 @@ export async function PUT(
         : null;
       if (newAssignTo !== oldAssignTo) {
         updateFields.push('transfer_date = ?', 'transfer_time = ?', 'transfered = ?', 'transfered_by = ?');
-        updateValues.push(new Date(), new Date().toTimeString().split(' ')[0], 1, auth.id);
+        updateValues.push(dubaiDay(), dubaiTime(), 1, auth.id);
         assignmentChange = { oldAssignTo, newAssignTo };
       }
     }
@@ -557,7 +557,7 @@ export async function PUT(
       && (followUpReminder.date !== existingFollowupDate || followUpReminder.time !== existingFollowupTime);
 
     updateFields.push('last_updated = ?', 'last_updtd_time = ?');
-    updateValues.push(dubaiToday(), new Date().toTimeString().split(' ')[0], id);
+    updateValues.push(dubaiToday(), dubaiTime(), id);
 
     await sequelize.query(`
       UPDATE crm_forum_leads
@@ -576,27 +576,11 @@ export async function PUT(
     );
     const actorLabel = `${actorRow?.name || `Employee #${auth.id}`} (${auth.roleName || auth.type})`;
 
+    // A remark typed on the status popup or the Edit Lead "Notes" field is a lead remark like any other.
     if (notesChanged) {
-      const now = new Date();
-      await sequelize.query(
-        `INSERT INTO crm_forum_leads_remarks (\`lead\`, \`date\`, remark, emp, created, \`status\`)
-         VALUES (?, ?, ?, ?, ?, ?)`,
-        {
-          replacements: [id, now.toISOString().split('T')[0], incomingNotes, auth.id, now.toTimeString().split(' ')[0], 1],
-          type: QueryTypes.INSERT
-        }
-      );
-    }
-
-    // A remark saved on its own (status popup with the status unchanged, Edit
-    // Lead Notes) never reached crm_remarks, so it was missing from Today
-    // Activity. When the status also changed, the status_changed entry below
-    // already carries the remark text.
-    if (notesChanged && !statusChanged) {
-      await logLeadRemark({
+      await addLeadRemark({
         leadId: Number(id),
-        action: 'remark_added',
-        remark: incomingNotes as string,
+        text: incomingNotes,
         actorId: auth.id,
         actorRole: auth.roleName || auth.type,
       });
@@ -677,14 +661,12 @@ export async function PUT(
     }
 
     if (statusChanged) {
-      // incomingNotes is whatever remark the caller sent alongside the status
-      // change (the Leads page's status popup requires one) - include it here
-      // so it's the crm_remarks/activity-log entry itself, not just a generic
-      // "Status changed from X to Y" line with the actual explanation lost.
+      // The remark sent with the status change has its own "Lead Remark" entry (addLeadRemark above); it is only
+      // repeated here when it is the lead's existing remark re-sent, which records no new entry.
       await logLeadRemark({
         leadId: Number(id),
         action: 'status_changed',
-        remark: `Status changed from ${existingStatus || 'New'} to ${incomingStatus} by ${actorLabel}${incomingNotes ? `: ${incomingNotes}` : ''}`,
+        remark: `Status changed from ${existingStatus || 'New'} to ${incomingStatus} by ${actorLabel}${incomingNotes && !notesChanged ? `: ${incomingNotes}` : ''}`,
         previousValue: existingStatus || 'New',
         newValue: incomingStatus || null,
         actorId: auth.id,

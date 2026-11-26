@@ -1,4 +1,4 @@
-import { dubaiToday } from '@/lib/dubaiDate';
+import { dubaiToday, dubaiTime, dubaiDay } from '@/lib/dubaiDate';
 import { NextRequest, NextResponse } from 'next/server';
 import { type CreationAttributes } from 'sequelize';
 import { CrmcForumLeads } from '@/models/CrmcForumLeads';
@@ -123,7 +123,7 @@ export async function POST(request: NextRequest) {
     // a Qatar/Kuwait enquiry onto the Dubai team.
     const branch = await resolveBranchReference(branchInput, residentCountry, 'Dubai') || { id: 1, region: 1 };
     const now = new Date();
-    const time = now.toTimeString().split(' ')[0];
+    const time = dubaiTime(now);
 
     let countryInterestId: number | null = null;
     let serviceInterestId: number | null = null;
@@ -177,20 +177,20 @@ export async function POST(request: NextRequest) {
       gender: '',
       id_number: '',
       id_expiry: now,
-      id_issue_date: now,
+      id_issue_date: dubaiDay(now),
       country_interest: countryInterestId,
       sub_country_interest: 0,
       service_interest: serviceInterestId,
       market_source: marketSourceId,
       sub_market_source: 0,
       appointment: null,
-      followup: now,
+      followup: dubaiDay(now),
       folowuptime: time,
       followupstat: 1,
       enquiry: immigrationType || 'Website popup lead enquiry',
       convet: 'New',
       priority: 'Medium',
-      regdate: now,
+      regdate: dubaiDay(now),
       regtime: time,
       last_updated: dubaiToday(),
       last_updtd_time: time,
@@ -217,7 +217,7 @@ export async function POST(request: NextRequest) {
       // Always unassigned (assignTo: null above) — 'untouched' so it's
       // findable separately from a 'New' lead someone already owns.
       status: 'untouched',
-      status_date: now,
+      status_date: dubaiDay(now),
       notf: 0,
       type: 'lead',
       password: null,
@@ -274,8 +274,8 @@ export async function POST(request: NextRequest) {
       tele_caller_alert: 0,
       tele_caller_remark: '',
       tele_caller_remark_by: 1,
-      tele_date: now,
-      lead_date: now,
+      tele_date: dubaiDay(now),
+      lead_date: dubaiDay(now),
       duplicate: duplicateCheck.isDuplicate ? 1 : 0,
       duplicate_count: duplicateCheck.duplicateCount,
       ref_remark: '',

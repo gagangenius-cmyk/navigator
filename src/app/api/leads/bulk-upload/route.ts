@@ -1,5 +1,5 @@
 import { syncLeadFollowup } from '@/lib/leadSchedule';
-import { dubaiToday } from '@/lib/dubaiDate';
+import { dubaiToday, dubaiTime, dubaiDay } from '@/lib/dubaiDate';
 import { NextRequest, NextResponse } from 'next/server';
 import { jsonToSheetBuffer, readWorkbookFromBase64, sheetToJson, parseExcelDateCode } from '@/lib/excelCompat';
 import { QueryTypes } from 'sequelize';
@@ -248,7 +248,7 @@ export async function POST(request: NextRequest) {
           gender: 'Male',
           id_number: '',
           id_expiry: new Date('2099-12-31'),
-          id_issue_date: now,
+          id_issue_date: dubaiDay(now),
           country_interest: null as number | null,
           sub_country_interest: 0,
           service_interest: null as number | null,
@@ -266,9 +266,9 @@ export async function POST(request: NextRequest) {
           regdate: regDate,
           regtime: now,
           last_updated: dubaiToday(),
-          last_updtd_time: now.toTimeString().split(' ')[0],
-          followup: now,
-          folowuptime: now.toTimeString().split(' ')[0],
+          last_updtd_time: dubaiTime(now),
+          followup: dubaiDay(now),
+          folowuptime: dubaiTime(now),
           stepComplete: 1,
           assignTo: assignToId,
           case_officer: assignToId,
@@ -283,7 +283,7 @@ export async function POST(request: NextRequest) {
           notf: 0,
           type: 'lead',
           transfered_by: currentUser.id,
-          transfer_time: now.toTimeString().split(' ')[0],
+          transfer_time: dubaiTime(now),
           exist: 0,
           no_of_applicants: 1,
           advanced: 0,
@@ -309,8 +309,8 @@ export async function POST(request: NextRequest) {
           tele_caller_alert: 0,
           tele_caller_remark: '',
           tele_caller_remark_by: currentUser.id,
-          tele_date: now,
-          lead_date: now,
+          tele_date: dubaiDay(now),
+          lead_date: dubaiDay(now),
           duplicate: duplicateCheck.isDuplicate ? 1 : 0,
           duplicate_count: duplicateCheck.duplicateCount,
           ref_remark: '',
@@ -319,7 +319,7 @@ export async function POST(request: NextRequest) {
           nal_count: 0,
           campaign_id: campaignId,
           old_branch: 0,
-          status_date: now,
+          status_date: dubaiDay(now),
           education,
           profession,
           lead_import_by: currentUser.id,

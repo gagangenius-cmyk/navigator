@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { uniqueReceiptNumber } from '@/lib/receiptNumber';
-import { dubaiToday } from '@/lib/dubaiDate';
+import { dubaiToday, dubaiTime } from '@/lib/dubaiDate';
 import { assertLeadAccess } from '@/lib/leadAccess';
 import { NextRequest, NextResponse } from 'next/server';
 import { Op } from 'sequelize';
@@ -336,7 +336,7 @@ export async function POST(request: NextRequest) {
         paymentData.dueDate ? new Date(paymentData.dueDate) : null,
         paymentData.remark || null,
         dubaiToday(),
-        new Date().toTimeString().split(' ')[0],
+        dubaiTime(),
         newPayBalance <= 0 ? 'fully_paid' : 'partially_paid',
         new Date(),
         lead.id,
