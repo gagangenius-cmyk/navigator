@@ -1,3 +1,4 @@
+import { EARLY_LEAVE, formatEarlyLeaveTime, isEarlyLeaveTime } from '@/lib/earlyLeave';
 import { dubaiToday } from '@/lib/dubaiDate';
 import { QueryTypes } from 'sequelize';
 import { sequelize } from '@/lib/sequelize';
@@ -137,6 +138,7 @@ type HRLeaveInput = {
   employee_id: string;
   manager_id?: string | null;
   leave_type: HRLeaveType;
+  early_leave_time?: string | null;
   start_date: string;
   end_date: string;
   reason?: string | null;
@@ -1222,6 +1224,7 @@ export class HRService {
     await this.addColumnIfMissing('crm_hr_leave_requests', 'manager_reviewed_at', 'DATETIME NULL AFTER manager_status');
     await this.addColumnIfMissing('crm_hr_leave_requests', 'manager_comment', 'TEXT NULL AFTER manager_reviewed_at');
     await this.addColumnIfMissing('crm_hr_leave_requests', 'hr_status', "ENUM('Pending', 'Confirmed', 'Overridden') NOT NULL DEFAULT 'Pending' AFTER manager_comment");
+    await this.addColumnIfMissing('crm_hr_leave_requests', 'early_leave_time', 'TIME NULL AFTER end_date');
     await sequelize.query(`
       ALTER TABLE crm_hr_leave_requests MODIFY COLUMN leave_type ENUM(
         'Annual Leave', 'Sick Leave', 'Maternity Leave', 'Paternity Leave', 'Hajj Leave',
@@ -2634,6 +2637,7 @@ export class HRService {
           l.leave_type,
           l.start_date,
           l.end_date,
+          l.early_leave_time,
           l.days_requested,
           l.status,
           l.workflow_status,
@@ -2798,11 +2802,22 @@ export class HRService {
     return this.getLeaveBalances(employeeId, year);
   }
 
+  // Early Leave needs the time the employee left and covers one day; other types never carry a time.
+  private static resolveEarlyLeaveTime(leaveType: string, startDate: string, endDate: string, time?: string | null) {
+    if (leaveType !== EARLY_LEAVE) return null;
+    if (!time) throw new Error('Time left is required for Early Leave');
+    if (!isEarlyLeaveTime(time)) throw new Error('Time left must be a valid time (HH:MM)');
+    if (startDate !== endDate) throw new Error('Early Leave is for a single day');
+    return time;
+  }
+
   static async applyLeave(input: HRLeaveInput) {
     await this.ensureLeaveManagementTables();
     if (!leaveTypeNames.includes(input.leave_type)) {
       throw new Error('Invalid leave type');
     }
+
+    const earlyLeaveTime = this.resolveEarlyLeaveTime(input.leave_type, input.start_date, input.end_date, input.early_leave_time);
 
     // Duplicate-submission guard: the client already disables the submit
     // button while a request is in flight, but that's per-tab/per-page-load
@@ -2861,10 +2876,10 @@ export class HRService {
       `
         INSERT INTO crm_hr_leave_requests (
           leave_id, employee_id, manager_id, leave_type, start_date, end_date,
-          days_requested, status, workflow_status, reason, medical_certificate_required, document_url
+          days_requested, status, workflow_status, reason, medical_certificate_required, document_url, early_leave_time
         ) VALUES (
           :leaveId, :employeeId, :managerId, :leaveType, :startDate, :endDate,
-          :daysRequested, 'Pending', 'Manager Review', :reason, :medicalCertificateRequired, :documentUrl
+          :daysRequested, 'Pending', 'Manager Review', :reason, :medicalCertificateRequired, :documentUrl, :earlyLeaveTime
         )
       `,
       {
@@ -2879,6 +2894,7 @@ export class HRService {
           reason: input.reason || null,
           medicalCertificateRequired,
           documentUrl: input.document_url || null,
+          earlyLeaveTime,
         },
       }
     );
@@ -2896,7 +2912,7 @@ export class HRService {
       userIds: [managerId, ...teamLeaders.map((t) => t.id)],
       link: '/admin/hr/leave-management',
       title: 'Leave request pending manager review',
-      message: `${recipients.employee?.name || `Employee ${input.employee_id}`} applied for ${input.leave_type} from ${input.start_date} to ${input.end_date}.`,
+      message: `${recipients.employee?.name || `Employee ${input.employee_id}`} applied for ${input.leave_type} ${earlyLeaveTime ? `on ${input.start_date}, left at ${formatEarlyLeaveTime(earlyLeaveTime)}` : `from ${input.start_date} to ${input.end_date}`}.`,
       priority: medicalCertificateRequired ? 'high' : 'medium',
     });
 
@@ -2914,6 +2930,7 @@ export class HRService {
     end_date?: string;
     reason?: string | null;
     document_url?: string | null;
+    early_leave_time?: string | null;
   }) {
     await this.ensureLeaveManagementTables();
     const [existing] = await sequelize.query<{
@@ -2922,8 +2939,9 @@ export class HRService {
       start_date: string;
       end_date: string;
       status: HRLeaveStatus;
+      early_leave_time: string | null;
     }>(
-      `SELECT employee_id, leave_type, start_date, end_date, status FROM crm_hr_leave_requests WHERE leave_id = :leaveId LIMIT 1`,
+      `SELECT employee_id, leave_type, start_date, end_date, status, early_leave_time FROM crm_hr_leave_requests WHERE leave_id = :leaveId LIMIT 1`,
       { replacements: { leaveId: input.leave_id }, type: QueryTypes.SELECT }
     );
 
@@ -2943,6 +2961,8 @@ export class HRService {
       throw new Error('Invalid leave type');
     }
 
+    const earlyLeaveTime = this.resolveEarlyLeaveTime(leaveType, startDate, endDate, input.early_leave_time || existing.early_leave_time);
+
     const daysRequested = await this.calculateWorkingDays(startDate, endDate, input.employee_id);
     if (!daysRequested) {
       throw new Error('end_date must be on or after start_date');
@@ -2960,6 +2980,7 @@ export class HRService {
           leave_type = :leaveType,
           start_date = :startDate,
           end_date = :endDate,
+          early_leave_time = :earlyLeaveTime,
           days_requested = :daysRequested,
           reason = COALESCE(:reason, reason),
           medical_certificate_required = :medicalCertificateRequired,
@@ -2972,6 +2993,7 @@ export class HRService {
           leaveType,
           startDate,
           endDate,
+          earlyLeaveTime,
           daysRequested,
           // undefined (field omitted) -> null -> COALESCE keeps the existing
           // value; an explicit "" clears it, same as a real edit would intend.
@@ -3051,9 +3073,10 @@ export class HRService {
       start_date: string;
       end_date: string;
       manager_status: HRManagerLeaveStatus;
+      early_leave_time: string | null;
     }>(
       `
-        SELECT employee_id, manager_id, leave_type, start_date, end_date, manager_status
+        SELECT employee_id, manager_id, leave_type, start_date, end_date, manager_status, early_leave_time
         FROM crm_hr_leave_requests
         WHERE leave_id = :leaveId
         LIMIT 1
@@ -3099,6 +3122,7 @@ export class HRService {
         endDate: leave.end_date,
         approvedBy: input.reviewed_by || null,
         leaveType: leave.leave_type,
+        earlyLeaveTime: leave.early_leave_time,
       });
     }
 
@@ -3127,8 +3151,28 @@ export class HRService {
     endDate: string;
     approvedBy?: string | null;
     leaveType: HRLeaveType;
+    earlyLeaveTime?: string | null;
   }) {
     await this.ensureAttendanceRecordTable();
+    // The employee worked part of an Early Leave day: keep their status and clock-in/out and only
+    // annotate the record. With no record yet there is nothing to annotate; the time stays on the request.
+    if (input.leaveType === EARLY_LEAVE) {
+      const left = formatEarlyLeaveTime(input.earlyLeaveTime);
+      await sequelize.query(
+        `UPDATE crm_hr_attendance_records
+         SET notes = CONCAT_WS(' | ', NULLIF(notes, ''), :notes), approved_by = :approvedBy
+         WHERE employee_id = :employeeId AND date = :date`,
+        {
+          replacements: {
+            employeeId: input.employeeId,
+            date: input.startDate,
+            approvedBy: input.approvedBy || null,
+            notes: `Early Leave approved${left ? `, left at ${left}` : ''} (leave request ${input.leaveId})`,
+          },
+        }
+      );
+      return;
+    }
     for (const date of eachDate(input.startDate, input.endDate)) {
       const [existing] = await sequelize.query<{ attendance_id: string }>(
         `

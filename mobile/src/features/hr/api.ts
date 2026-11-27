@@ -81,6 +81,7 @@ export interface LeaveRequest {
   start_date: string;
   end_date: string;
   days_requested: number;
+  early_leave_time?: string | null;
   status: string;
   reason: string | null;
   applied_at: string;
@@ -107,6 +108,7 @@ export interface ApplyLeaveInput {
   leave_type: string;
   start_date: string;
   end_date: string;
+  early_leave_time?: string;
   reason?: string;
 }
 

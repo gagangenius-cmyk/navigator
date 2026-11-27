@@ -26,6 +26,7 @@ HrLeaveRequest.init({
   start_date: { type: DataTypes.DATEONLY, allowNull: false },
   end_date: { type: DataTypes.DATEONLY, allowNull: false },
   days_requested: { type: DataTypes.DECIMAL(6, 2), allowNull: false },
+  early_leave_time: { type: DataTypes.TIME, allowNull: true },
   status: { type: DataTypes.ENUM('Pending', 'Approved', 'Rejected', 'Cancelled'), defaultValue: 'Pending' },
   workflow_status: { type: DataTypes.ENUM('Manager Review', 'HR Confirmation', 'Completed', 'Cancelled'), defaultValue: 'Manager Review' },
   reason: { type: DataTypes.TEXT, allowNull: true },

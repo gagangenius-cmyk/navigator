@@ -5,6 +5,7 @@ import { RefreshCw, CalendarDays } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { uploadFileToBlob } from '@/lib/uploadToBlob';
+import { EARLY_LEAVE, formatEarlyLeaveTime } from '@/lib/earlyLeave';
 
 interface LeaveBalance {
   leave_type: string;
@@ -20,6 +21,7 @@ interface LeaveRequest {
   start_date: string;
   end_date: string;
   days_requested: number;
+  early_leave_time: string | null;
   status: string;
   reason: string | null;
   applied_at: string;
@@ -52,8 +54,12 @@ export default function MyLeavePage() {
     leave_type: '',
     start_date: '',
     end_date: '',
+    early_leave_time: '',
     reason: '',
   });
+  const isEarlyLeave = form.leave_type === EARLY_LEAVE;
+  // Early Leave is one day, so its end date always follows the start date.
+  const endDate = isEarlyLeave ? form.start_date : form.end_date;
   const [documentFile, setDocumentFile] = useState<File | null>(null);
   const [isUploadingDocument, setIsUploadingDocument] = useState(false);
   const [editingLeaveId, setEditingLeaveId] = useState<string | null>(null);
@@ -67,7 +73,7 @@ export default function MyLeavePage() {
       .then((res) => (res.ok ? res.json() : null))
       .then((json) => { if (json?.data) setEmployees(json.data.map((e: { id: number; name: string }) => ({ id: e.id, name: e.name }))); })
       .catch(() => {});
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [user?.id, canApplyForOthers]);
 
   const load = async () => {
@@ -98,19 +104,23 @@ export default function MyLeavePage() {
   const [daysRequested, setDaysRequested] = useState(0);
 
   useEffect(() => {
-    if (!form.start_date || !form.end_date) { setDaysRequested(0); return; }
+    if (!form.start_date || !endDate) { setDaysRequested(0); return; }
     let cancelled = false;
     const employeeParam = canApplyForOthers && selectedEmployeeId ? `&employee_id=${selectedEmployeeId}` : '';
-    fetch(`/api/hr/self/leave/preview?start_date=${form.start_date}&end_date=${form.end_date}${employeeParam}`)
+    fetch(`/api/hr/self/leave/preview?start_date=${form.start_date}&end_date=${endDate}${employeeParam}`)
       .then((res) => res.json())
       .then((json) => { if (!cancelled) setDaysRequested(json.daysRequested || 0); })
       .catch(() => { if (!cancelled) setDaysRequested(0); });
     return () => { cancelled = true; };
-  }, [form.start_date, form.end_date, selectedEmployeeId, canApplyForOthers]);
+  }, [form.start_date, endDate, selectedEmployeeId, canApplyForOthers]);
 
   const handleSubmit = async () => {
-    if (!form.start_date || !form.end_date) {
-      setMessage({ type: 'error', text: 'Start date and end date are required' });
+    if (!form.start_date || !endDate) {
+      setMessage({ type: 'error', text: isEarlyLeave ? 'Date is required' : 'Start date and end date are required' });
+      return;
+    }
+    if (isEarlyLeave && !form.early_leave_time) {
+      setMessage({ type: 'error', text: 'Enter the time you left' });
       return;
     }
     setIsSubmitting(true);
@@ -135,6 +145,8 @@ export default function MyLeavePage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...form,
+          end_date: endDate,
+          early_leave_time: isEarlyLeave ? form.early_leave_time : '',
           ...(isEditing ? { leave_id: editingLeaveId } : {}),
           ...(documentUrl ? { document_url: documentUrl } : {}),
           ...(canApplyForOthers && selectedEmployeeId ? { employee_id: String(selectedEmployeeId) } : {}),
@@ -143,7 +155,7 @@ export default function MyLeavePage() {
       const json = await res.json();
       if (res.ok) {
         setMessage({ type: 'success', text: isEditing ? 'Leave application updated.' : 'Leave application submitted.' });
-        setForm({ leave_type: leaveTypes[0], start_date: '', end_date: '', reason: '' });
+        setForm({ leave_type: leaveTypes[0], start_date: '', end_date: '', early_leave_time: '', reason: '' });
         setDocumentFile(null);
         setEditingLeaveId(null);
         await load();
@@ -163,6 +175,7 @@ export default function MyLeavePage() {
       leave_type: request.leave_type,
       start_date: request.start_date,
       end_date: request.end_date,
+      early_leave_time: request.early_leave_time?.slice(0, 5) || '',
       reason: request.reason || '',
     });
     setDocumentFile(null);
@@ -171,7 +184,7 @@ export default function MyLeavePage() {
 
   const cancelEditing = () => {
     setEditingLeaveId(null);
-    setForm({ leave_type: leaveTypes[0] || '', start_date: '', end_date: '', reason: '' });
+    setForm({ leave_type: leaveTypes[0] || '', start_date: '', end_date: '', early_leave_time: '', reason: '' });
     setDocumentFile(null);
   };
 
@@ -250,7 +263,7 @@ export default function MyLeavePage() {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-slate-700">Start Date</label>
+                <label className="block text-sm font-medium text-slate-700">{isEarlyLeave ? 'Date' : 'Start Date'}</label>
                 <input
                   type="date"
                   value={form.start_date}
@@ -258,6 +271,17 @@ export default function MyLeavePage() {
                   className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
                 />
               </div>
+              {isEarlyLeave ? (
+                <div>
+                  <label className="block text-sm font-medium text-slate-700">Time Left <span className="text-red-500">*</span></label>
+                  <input
+                    type="time"
+                    value={form.early_leave_time}
+                    onChange={(e) => setForm((f) => ({ ...f, early_leave_time: e.target.value }))}
+                    className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
+                  />
+                </div>
+              ) : (
               <div>
                 <label className="block text-sm font-medium text-slate-700">End Date</label>
                 <input
@@ -267,8 +291,9 @@ export default function MyLeavePage() {
                   className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
                 />
               </div>
+              )}
             </div>
-            {daysRequested > 0 && (
+            {!isEarlyLeave && daysRequested > 0 && (
               <p className="text-xs text-slate-500">{daysRequested} day(s) requested</p>
             )}
             {form.leave_type === 'Sick Leave' && (
@@ -329,7 +354,11 @@ export default function MyLeavePage() {
                   <span className="text-sm font-medium text-slate-900">{request.leave_type}</span>
                   <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${statusClass(request.status)}`}>{request.status}</span>
                 </div>
-                <p className="mt-1 text-xs text-slate-500">{request.start_date} – {request.end_date} ({request.days_requested} days)</p>
+                <p className="mt-1 text-xs text-slate-500">
+                  {request.leave_type === EARLY_LEAVE && request.early_leave_time
+                    ? `${request.start_date} · left at ${formatEarlyLeaveTime(request.early_leave_time)}`
+                    : `${request.start_date} – ${request.end_date} (${request.days_requested} days)`}
+                </p>
                 {request.reason && <p className="mt-1 text-xs text-slate-500">{request.reason}</p>}
                 {request.status === 'Pending' && (
                   <button

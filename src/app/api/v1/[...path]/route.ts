@@ -344,6 +344,7 @@ async function handlePost({ request, user, path }: HandlerContext) {
       reason: readString(body, 'reason') || null,
       manager_id: readString(body, 'manager_id') || null,
       document_url: readString(body, 'attachment_url') || readString(body, 'document_url') || null,
+      early_leave_time: readString(body, 'early_leave_time') || null,
     });
     return ok(created, { status: 201 });
   }

@@ -11,12 +11,12 @@ interface DateTimeFieldProps {
   label: string;
   value: Date | null;
   onChange: (date: Date) => void;
-  mode?: 'date' | 'datetime';
+  mode?: 'date' | 'datetime' | 'time';
   minimumDate?: Date;
   error?: string | null;
 }
 
-/** Native date (or date + time) picker behind a tappable field, styled like Input. */
+/** Native date, time (or date + time) picker behind a tappable field, styled like Input. */
 export function DateTimeField({ label, value, onChange, mode = 'datetime', minimumDate, error }: DateTimeFieldProps) {
   const { colors, radius, spacing } = useTheme();
   const [iosOpen, setIosOpen] = useState(false);
@@ -24,12 +24,20 @@ export function DateTimeField({ label, value, onChange, mode = 'datetime', minim
   const shown = value
     ? mode === 'date'
       ? value.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
-      : formatDateTime(value)
+      : mode === 'time'
+        ? value.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+        : formatDateTime(value)
     : 'Select';
 
   const pick = () => {
     const current = value ?? new Date();
-    if (Platform.OS === 'android') {
+    if (Platform.OS === 'android' && mode === 'time') {
+      DateTimePickerAndroid.open({
+        value: current,
+        mode: 'time',
+        onValueChange: (_event: DateTimePickerChangeEvent, time: Date) => onChange(time),
+      });
+    } else if (Platform.OS === 'android') {
       // Android shows date then time as two native dialogs.
       DateTimePickerAndroid.open({
         value: current,
@@ -91,7 +99,7 @@ export function DateTimeField({ label, value, onChange, mode = 'datetime', minim
       {Platform.OS === 'ios' && iosOpen ? (
         <DateTimePicker
           value={value ?? new Date()}
-          mode={mode === 'date' ? 'date' : 'datetime'}
+          mode={mode}
           display="inline"
           minimumDate={minimumDate}
           onValueChange={(_event: DateTimePickerChangeEvent, date: Date) => onChange(date)}

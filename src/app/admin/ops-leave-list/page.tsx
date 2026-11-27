@@ -18,6 +18,7 @@ import {
   Eye,
   Ban,
 } from 'lucide-react';
+import { formatEarlyLeaveTime } from '@/lib/earlyLeave';
 
 interface LeaveRequest {
   leave_id: string;
@@ -28,6 +29,7 @@ interface LeaveRequest {
   leave_type: string;
   start_date: string;
   end_date: string;
+  early_leave_time: string | null;
   days_requested: string | number;
   status: 'Pending' | 'Approved' | 'Rejected' | 'Cancelled';
   workflow_status: string;
@@ -233,7 +235,11 @@ const OpsLeaveList: React.FC = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
                 <div>
                   <p className="text-sm text-gray-500 mb-1">Leave Period</p>
-                  <p className="font-medium">{new Date(req.start_date).toLocaleDateString()} - {new Date(req.end_date).toLocaleDateString()}</p>
+                  <p className="font-medium">
+                    {req.early_leave_time
+                      ? `${new Date(req.start_date).toLocaleDateString()}, left at ${formatEarlyLeaveTime(req.early_leave_time)}`
+                      : `${new Date(req.start_date).toLocaleDateString()} - ${new Date(req.end_date).toLocaleDateString()}`}
+                  </p>
                 </div>
                 <div>
                   <p className="text-sm text-gray-500 mb-1">Reason</p>

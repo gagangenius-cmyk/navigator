@@ -62,6 +62,7 @@ export async function POST(request: NextRequest) {
       end_date: endDate,
       reason: body.reason ? String(body.reason).trim() : null,
       document_url: body.document_url ? String(body.document_url).trim() : null,
+      early_leave_time: body.early_leave_time ? String(body.early_leave_time).trim() : null,
     });
 
     return NextResponse.json(created, { status: 201 });
@@ -102,6 +103,7 @@ export async function PATCH(request: NextRequest) {
       end_date: body.end_date ? String(body.end_date).trim() : undefined,
       reason: body.reason !== undefined ? String(body.reason).trim() : undefined,
       document_url: body.document_url ? String(body.document_url).trim() : undefined,
+      early_leave_time: body.early_leave_time ? String(body.early_leave_time).trim() : undefined,
     });
 
     return NextResponse.json(updated);

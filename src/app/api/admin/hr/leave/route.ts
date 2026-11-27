@@ -83,6 +83,7 @@ export async function POST(request: NextRequest) {
       end_date: endDate,
       reason: readString(body, 'reason') || null,
       document_url: readString(body, 'document_url') || null,
+      early_leave_time: readString(body, 'early_leave_time') || null,
     });
 
     return NextResponse.json(created, { status: 201 });

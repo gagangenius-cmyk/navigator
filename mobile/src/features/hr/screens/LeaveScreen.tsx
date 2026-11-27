@@ -11,6 +11,8 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { formatDate, toIsoDate } from '@/utils/format';
 import { applyLeave, fetchLeave, previewLeaveDays } from '../api';
 
+const toHourMinute = (d: Date) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+
 function ApplySheet({ visible, onClose, leaveTypes }: { visible: boolean; onClose: () => void; leaveTypes: string[] }) {
   const client = useQueryClient();
   const { spacing } = useTheme();
@@ -18,7 +20,10 @@ function ApplySheet({ visible, onClose, leaveTypes }: { visible: boolean; onClos
   const [start, setStart] = useState<Date | null>(null);
   const [pickedEnd, setEnd] = useState<Date | null>(null);
   // The end can never precede the start: derive it rather than syncing state in an effect.
-  const end = start && pickedEnd && pickedEnd < start ? start : pickedEnd;
+  const isEarlyLeave = type === 'Early Leave';
+  const [leftAt, setLeftAt] = useState<Date | null>(null);
+  // Early Leave is a single day, so its end is the start.
+  const end = isEarlyLeave ? start : start && pickedEnd && pickedEnd < start ? start : pickedEnd;
   const [reason, setReason] = useState('');
   const [error, setError] = useState<string | null>(null);
 
@@ -30,7 +35,14 @@ function ApplySheet({ visible, onClose, leaveTypes }: { visible: boolean; onClos
   });
 
   const submit = useMutation({
-    mutationFn: () => applyLeave({ leave_type: type!, start_date: toIsoDate(start!), end_date: toIsoDate(end!), reason }),
+    mutationFn: () =>
+      applyLeave({
+        leave_type: type!,
+        start_date: toIsoDate(start!),
+        end_date: toIsoDate(end!),
+        early_leave_time: isEarlyLeave ? toHourMinute(leftAt!) : undefined,
+        reason,
+      }),
     onSuccess: () => {
       void client.invalidateQueries({ queryKey: queryKeys.leave });
       toast.success('Leave request submitted');
@@ -43,6 +55,7 @@ function ApplySheet({ visible, onClose, leaveTypes }: { visible: boolean; onClos
     setType(null);
     setStart(null);
     setEnd(null);
+    setLeftAt(null);
     setReason('');
     setError(null);
     onClose();
@@ -50,7 +63,8 @@ function ApplySheet({ visible, onClose, leaveTypes }: { visible: boolean; onClos
 
   const send = () => {
     if (!type) return setError('Choose a leave type.');
-    if (!start || !end) return setError('Pick the start and end dates.');
+    if (!start || !end) return setError(isEarlyLeave ? 'Pick the date.' : 'Pick the start and end dates.');
+    if (isEarlyLeave && !leftAt) return setError('Pick the time you left.');
     setError(null);
     submit.mutate();
   };
@@ -59,9 +73,13 @@ function ApplySheet({ visible, onClose, leaveTypes }: { visible: boolean; onClos
     <Sheet visible={visible} onClose={close} title="Apply for leave" dismissable={!submit.isPending}>
       <View style={{ gap: spacing.md }}>
         <ChipGroup label="Leave type" options={toOptions(leaveTypes)} value={type} onSelect={setType} />
-        <DateTimeField label="From" mode="date" value={start} onChange={setStart} minimumDate={new Date()} />
-        <DateTimeField label="To" mode="date" value={end} onChange={setEnd} minimumDate={start ?? new Date()} />
-        {days.data !== undefined ? (
+        <DateTimeField label={isEarlyLeave ? 'Date' : 'From'} mode="date" value={start} onChange={setStart} minimumDate={isEarlyLeave ? undefined : new Date()} />
+        {isEarlyLeave ? (
+          <DateTimeField label="Time left" mode="time" value={leftAt} onChange={setLeftAt} />
+        ) : (
+          <DateTimeField label="To" mode="date" value={end} onChange={setEnd} minimumDate={start ?? new Date()} />
+        )}
+        {!isEarlyLeave && days.data !== undefined ? (
           <Text tone="muted">
             {days.data} working day{days.data === 1 ? '' : 's'}
           </Text>
@@ -136,7 +154,9 @@ export function LeaveScreen() {
                   <Badge label={r.status} tone={approvalTone(r.status)} />
                 </View>
                 <Text variant="caption" tone="muted">
-                  {formatDate(r.start_date)} – {formatDate(r.end_date)} · {r.days_requested} day{r.days_requested === 1 ? '' : 's'}
+                  {r.early_leave_time
+                    ? `${formatDate(r.start_date)} · left at ${r.early_leave_time.slice(0, 5)}`
+                    : `${formatDate(r.start_date)} – ${formatDate(r.end_date)} · ${r.days_requested} day${r.days_requested === 1 ? '' : 's'}`}
                 </Text>
                 {r.reason ? <Text variant="caption">{r.reason}</Text> : null}
               </View>

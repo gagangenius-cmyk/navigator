@@ -1,5 +1,6 @@
 'use client';
 
+import { EARLY_LEAVE, formatEarlyLeaveTime } from '@/lib/earlyLeave';
 import { localToday } from '@/lib/dubaiDate';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Drawer } from '@/components/ui/drawer';
@@ -107,6 +108,7 @@ type LeaveRecord = {
   leave_type: LeaveType;
   start_date: string;
   end_date: string;
+  early_leave_time?: string | null;
   days_requested: number | string;
   status: 'Pending' | 'Approved' | 'Rejected' | 'Cancelled';
   workflow_status?: 'Manager Review' | 'HR Confirmation' | 'Completed' | 'Cancelled';
@@ -514,6 +516,7 @@ export default function HRModuleSuite({ activeModule = 'employee-data-sheet' }: 
     leave_type: 'Annual Leave' as LeaveType,
     start_date: localToday(),
     end_date: localToday(),
+    early_leave_time: '',
     reason: '',
     document_url: '',
   });
@@ -1616,7 +1619,9 @@ export default function HRModuleSuite({ activeModule = 'employee-data-sheet' }: 
         rows={leaves.map((leave) => [
           leave.employee_name || `Employee ${leave.employee_id}`,
           leave.leave_type,
-          `${formatDate(leave.start_date)} - ${formatDate(leave.end_date)}`,
+          leave.early_leave_time
+            ? `${formatDate(leave.start_date)}, left at ${formatEarlyLeaveTime(leave.early_leave_time)}`
+            : `${formatDate(leave.start_date)} - ${formatDate(leave.end_date)}`,
           String(leave.days_requested),
           <div key={`${leave.leave_id}-flow`} className="space-y-1">
             {statusBadge(leave.workflow_status || 'Manager Review')}
@@ -1716,6 +1721,8 @@ export default function HRModuleSuite({ activeModule = 'employee-data-sheet' }: 
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               ...leaveForm,
+              end_date: leaveForm.leave_type === EARLY_LEAVE ? leaveForm.start_date : leaveForm.end_date,
+              early_leave_time: leaveForm.leave_type === EARLY_LEAVE ? leaveForm.early_leave_time : null,
               reason: leaveForm.reason || null,
               document_url: leaveForm.document_url || null,
             }),
@@ -1725,6 +1732,7 @@ export default function HRModuleSuite({ activeModule = 'employee-data-sheet' }: 
             await refreshLeaveData(leaveForm.employee_id);
             setLeaveForm((previous) => ({
               ...previous,
+              early_leave_time: '',
               reason: '',
               document_url: '',
             }));
@@ -1776,13 +1784,20 @@ export default function HRModuleSuite({ activeModule = 'employee-data-sheet' }: 
           </SearchableSelect>
         </label>
         <label className="block">
-          <span className="text-sm font-medium text-slate-700">Start Date</span>
+          <span className="text-sm font-medium text-slate-700">{leaveForm.leave_type === EARLY_LEAVE ? 'Date' : 'Start Date'}</span>
           <input type="date" value={leaveForm.start_date} onChange={(event) => setLeaveForm({ ...leaveForm, start_date: event.target.value })} className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" required />
         </label>
-        <label className="block">
-          <span className="text-sm font-medium text-slate-700">End Date</span>
-          <input type="date" value={leaveForm.end_date} onChange={(event) => setLeaveForm({ ...leaveForm, end_date: event.target.value })} className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" required />
-        </label>
+        {leaveForm.leave_type === EARLY_LEAVE ? (
+          <label className="block">
+            <span className="text-sm font-medium text-slate-700">Time Left</span>
+            <input type="time" value={leaveForm.early_leave_time} onChange={(event) => setLeaveForm({ ...leaveForm, early_leave_time: event.target.value })} className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" required />
+          </label>
+        ) : (
+          <label className="block">
+            <span className="text-sm font-medium text-slate-700">End Date</span>
+            <input type="date" value={leaveForm.end_date} onChange={(event) => setLeaveForm({ ...leaveForm, end_date: event.target.value })} className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" required />
+          </label>
+        )}
         <label className="block">
           <span className="text-sm font-medium text-slate-700">Document URL</span>
           <input value={leaveForm.document_url} onChange={(event) => setLeaveForm({ ...leaveForm, document_url: event.target.value })} className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" placeholder="Medical certificate or proof link" />
