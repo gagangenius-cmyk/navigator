@@ -434,7 +434,7 @@ export default function FollowUpsPage() {
                               Complete
                             </button>
                             <button
-                              onClick={() => setRescheduling({ id: fu.id, leadName, phone: fu.phone, reminder_date: fu.reminder_date, message: fu.message, priority: fu.priority })}
+                              onClick={() => setRescheduling({ id: fu.id, leadId: fu.lead_id, leadStatus: fu.leadStatus, leadName, phone: fu.phone, reminder_date: fu.reminder_date, message: fu.message, priority: fu.priority })}
                               className="flex items-center gap-1 px-2 py-1 bg-[var(--cmg-blue)] text-white rounded text-xs hover:bg-[var(--cmg-blue-dark)]"
                             >
                               <RefreshCw className="w-3 h-3" />

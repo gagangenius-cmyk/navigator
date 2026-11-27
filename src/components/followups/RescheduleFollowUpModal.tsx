@@ -3,9 +3,12 @@
 import { useState } from 'react';
 import { RefreshCw, X } from 'lucide-react';
 import { dubaiNow, dubaiToday } from '@/lib/dubaiDate';
+import { useLeadStatuses } from '@/hooks/useLeadStatuses';
 
 export interface RescheduleTarget {
   id: number;
+  leadId?: number;
+  leadStatus?: string;
   leadName: string;
   phone?: string;
   reminder_date: string;
@@ -24,6 +27,11 @@ export default function RescheduleFollowUpModal({ followUp, onClose, onSaved }: 
   const [time, setTime] = useState('');
   const [priority, setPriority] = useState(followUp.priority || 'medium');
   const [nextNote, setNextNote] = useState('');
+  const currentStatus = followUp.leadStatus || 'New';
+  const [leadStatus, setLeadStatus] = useState(currentStatus);
+  const { statuses } = useLeadStatuses();
+  // Older leads can hold a status that is not in the admin list - keep it selectable so it is not silently replaced.
+  const statusOptions = Array.from(new Set([currentStatus, 'New', ...statuses.map((s) => s.name)]));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -37,7 +45,19 @@ export default function RescheduleFollowUpModal({ followUp, onClose, onSaved }: 
     if (`${date} ${time}:00` <= dubaiNow()) return setError('The new follow-up must be in the future (UAE time).');
     setSaving(true);
     setError('');
+    let statusSaved = false;
     try {
+      // Status goes first, through the normal lead update (permissions, approval gate, history): if it is refused,
+      // nothing else changes.
+      if (followUp.leadId && leadStatus !== currentStatus) {
+        const statusRes = await fetch(`/api/leads/${followUp.leadId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: leadStatus }),
+        });
+        if (!statusRes.ok) throw new Error((await statusRes.json().catch(() => ({}))).error || 'Failed to change lead status');
+        statusSaved = true;
+      }
       const res = await fetch('/api/follow-up-reminders', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -51,10 +71,11 @@ export default function RescheduleFollowUpModal({ followUp, onClose, onSaved }: 
         }),
       });
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Failed to reschedule');
-      window.toast.success('Follow-up rescheduled and lead remark saved');
+      window.toast.success(statusSaved ? 'Follow-up rescheduled, lead remark and status saved' : 'Follow-up rescheduled and lead remark saved');
       await onSaved();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to reschedule');
+      const message = err instanceof Error ? err.message : 'Failed to reschedule';
+      setError(statusSaved ? `Lead status was changed, but the follow-up was not rescheduled: ${message}` : message);
       setSaving(false);
     }
   };
@@ -85,6 +106,15 @@ export default function RescheduleFollowUpModal({ followUp, onClose, onSaved }: 
             <label className={label} htmlFor="rs-remark">Lead remark about the previous follow-up *</label>
             <textarea id="rs-remark" autoFocus required rows={3} value={remark} onChange={(e) => setRemark(e.target.value)} placeholder="What happened? e.g. Client did not pick up, asked to call next week" className={field} />
           </div>
+
+          {followUp.leadId ? (
+            <div>
+              <label className={label} htmlFor="rs-lead-status">Lead status</label>
+              <select id="rs-lead-status" value={leadStatus} onChange={(e) => setLeadStatus(e.target.value)} className={field}>
+                {statusOptions.map((name) => <option key={name} value={name}>{name}</option>)}
+              </select>
+            </div>
+          ) : null}
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
