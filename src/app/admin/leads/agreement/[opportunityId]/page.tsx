@@ -56,6 +56,7 @@ export default function AgreementPage() {
           totalAmount: String(d.totalRetainerFee || '0'),
           initialPayment: String(d.initialPayment || '0'),
           secondPayment: String(d.secondPayment || '0'),
+          installments: d.installments,
           clientId: String(d.leadId || d.opportunityId || ''),
           includedDeliverables: d.agreementTitle || d.title || '',
           expressExclusions: '',

@@ -2,6 +2,7 @@
 
 import { appointmentStatus, formatAppointmentTime, toneClasses } from '@/lib/appointmentDisplay';
 import { dubaiToday } from '@/lib/dubaiDate';
+import CollectionsOverview from '@/components/dashboard/CollectionsOverview';
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { X, Send, MessageSquare, Phone, MapPin, Loader2 } from 'lucide-react';
@@ -632,6 +633,10 @@ export default function AdminDashboard() {
       </motion.header>
 
       <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+
+        <div className="mb-8">
+          <CollectionsOverview />
+        </div>
 
         {/* Lead + Appointment Dashboard */}
        

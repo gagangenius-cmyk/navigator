@@ -3,6 +3,7 @@ import { QueryTypes } from 'sequelize';
 import { sequelize, connectDB } from '@/lib/sequelize';
 import { requireAuth, isAuthError } from '@/lib/apiAuth';
 import { isUaeBranchText } from '@/lib/branchCurrency';
+import { isCeo } from '@/lib/roleChecks';
 
 let dbReady = false;
 const ensureDB = async () => { if (!dbReady) { await connectDB(); dbReady = true; } };
@@ -29,8 +30,10 @@ function defaultMonthRange() {
 }
 
 export async function GET(request: NextRequest) {
-  const auth = requireAuth(request, ['finance.view', 'finance.manage']);
+  const auth = requireAuth(request);
   if (isAuthError(auth)) return auth;
+  // Profit & Loss is confidential to the CEO, whatever permissions a role holds.
+  if (!isCeo(auth)) return NextResponse.json({ error: 'Profit & Loss is available to the CEO only' }, { status: 403 });
 
   try {
     await ensureDB();

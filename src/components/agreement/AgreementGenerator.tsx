@@ -23,6 +23,7 @@ interface AgreementData {
   totalRetainerFee: string;
   initialPayment: string;
   secondPayment: string;
+  installments?: { dueDate: string; amount: number }[];
   // Not editable — resolves the branch's real legal name/licence/currency/
   // governing law via branchAgreementProfiles.ts, and picks the Gulf vs
   // India template. Kept out of the edit form on purpose: a free-text
@@ -41,6 +42,8 @@ const empty: AgreementData = {
   totalRetainerFee: '', initialPayment: '', secondPayment: '',
   branchAbbrv: '', clientId: '', gstin: '',
 };
+
+type TextField = Exclude<keyof AgreementData, 'installments'>;
 
 type LookupState = 'idle' | 'loading' | 'found' | 'notfound' | 'error';
 
@@ -86,6 +89,7 @@ export default function AgreementGenerator() {
         totalRetainerFee: json.data.totalRetainerFee || '',
         initialPayment: json.data.initialPayment || '',
         secondPayment: json.data.secondPayment || '',
+        installments: json.data.installments || [],
         branchAbbrv: json.data.branchAbbrv || '',
         clientId: String(json.data.leadId || json.data.opportunityId || ''),
         gstin: json.data.branchLicenseNumber || '',
@@ -131,6 +135,7 @@ export default function AgreementGenerator() {
       totalAmount: data.totalRetainerFee,
       initialPayment: data.initialPayment,
       secondPayment: data.secondPayment,
+      installments: data.installments,
       clientId: data.clientId,
     }));
   }, [data, lookupState]);
@@ -139,11 +144,11 @@ export default function AgreementGenerator() {
     iframeRef.current?.contentWindow?.print();
   };
 
-  const set = (field: keyof AgreementData) =>
+  const set = (field: TextField) =>
     (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
       setData(prev => ({ ...prev, [field]: e.target.value }));
 
-  const Field = ({ label, field, type = 'text' }: { label: string; field: keyof AgreementData; type?: string }) => (
+  const Field = ({ label, field, type = 'text' }: { label: string; field: TextField; type?: string }) => (
     <div>
       <label className="block text-xs font-medium text-gray-600 mb-0.5">{label}</label>
       <input type={type} value={data[field]} onChange={set(field)}

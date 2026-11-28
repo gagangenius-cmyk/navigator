@@ -273,6 +273,7 @@ export default function ClientsManagement() {
       paymentMethod: qp.method,
       transactionId: qp.txnId,
       currency: client.currencyCode || currencyCode,
+      installments: receipt.installmentPlan,
       totalAmount: qp.balance?.payTotal,
       previouslyPaid: qp.balance?.paidYet,
       paidAmount: qp.amount,

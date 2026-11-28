@@ -238,6 +238,7 @@ export default function InvoicesPaymentsPage() {
       remainingBalance: p.remainingBalance,
       remark: p.remark,
       includeVat: p.includeVat,
+      installments: (p as any).installmentPlan,
     });
   };
 

@@ -5,6 +5,7 @@ import { requireAuth, isAuthError } from '@/lib/apiAuth';
 import { canViewAllBranches, isBranchManagerOrCeo } from '@/lib/roleChecks';
 import { logDataAccess } from '@/lib/dataAccessAudit';
 import { captureError } from '@/lib/errorTracking';
+import { loadPlans } from '@/lib/installmentsServer';
 import { ensurePayHistoryAdminFeeColumns } from '@/lib/ensurePayHistoryAdminFeeColumns';
 
 // crm_opportunity_payments has no branchId column (only branchName). A payment's branch is the one
@@ -214,7 +215,10 @@ async function getPayments(search: string, status: string, dateFrom: string, dat
     );
     vatIncludedByReceiptNumber = Object.fromEntries(vatRows.map((row) => [row.counselor_receipt, Number(row.vat_included ?? 1) === 1]));
   }
+  const plans = await loadPlans(Array.from(new Set(payments.map((p) => Number(p.opportunityId)).filter(Boolean))));
+
   const paymentsWithRemark = payments.map((p) => ({
+    installmentPlan: plans.get(Number(p.opportunityId))?.installments || [],
     ...p,
     remark: remarkByReceiptNumber[p.receiptNumber || p.paymentNumber] || null,
     includeVat: vatIncludedByReceiptNumber[p.receiptNumber || p.paymentNumber] ?? true,

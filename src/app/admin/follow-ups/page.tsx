@@ -83,9 +83,8 @@ export default function FollowUpsPage() {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [actionLoading, setActionLoading] = useState<number | null>(null);
-  const [rescheduling, setRescheduling] = useState<RescheduleTarget | null>(null);
+  const [popup, setPopup] = useState<{ mode: 'reschedule' | 'complete'; followUp: RescheduleTarget } | null>(null);
   const [expandedId, setExpandedId] = useState<number | null>(null);
-  const [remarksById, setRemarksById] = useState<Record<number, string>>({});
   const [viewId, setViewId] = useState<number | null>(null);
   const [pagination, setPagination] = useState({ page: 1, limit: 20, total: 0, pages: 0 });
   const debouncedSearchTerm = useDebounce(searchTerm, 350);
@@ -140,10 +139,10 @@ export default function FollowUpsPage() {
     }).catch(() => {});
   }, [followUps]);
 
-  const handleAction = async (reminderId: number, action: 'complete' | 'cancel') => {
+  const handleCancel = async (reminderId: number) => {
     try {
       setActionLoading(reminderId);
-      const body: any = { reminderId, action, notes: remarksById[reminderId]?.trim() || undefined };
+      const body = { reminderId, action: 'cancel' };
 
       const res = await fetch('/api/follow-up-reminders', {
         method: 'PUT',
@@ -151,7 +150,6 @@ export default function FollowUpsPage() {
         body: JSON.stringify(body),
       });
       if (!res.ok) throw new Error('Action failed');
-      setRemarksById((prev) => { const next = { ...prev }; delete next[reminderId]; return next; });
       await fetchFollowUps();
     } catch {
       window.toast.error('Failed to update follow-up. Please try again.');
@@ -364,6 +362,7 @@ export default function FollowUpsPage() {
             const isPending = fu.status === 'pending' || fu.status === 'rescheduled';
             const dueDate = new Date(fu.reminder_date);
             const isOverdue = displayStatus === 'overdue';
+            const openPopup = (mode: 'reschedule' | 'complete') => setPopup({ mode, followUp: { id: fu.id, leadId: fu.lead_id, leadStatus: fu.leadStatus, leadName, phone: fu.phone, reminder_date: fu.reminder_date, message: fu.message, priority: fu.priority } });
 
             return (
               <div key={fu.id}>
@@ -417,16 +416,9 @@ export default function FollowUpsPage() {
 
                       {isPending && (
                         <div className="mt-3 flex flex-wrap items-start gap-2">
-                          <textarea
-                            value={remarksById[fu.id] || ''}
-                            onChange={(e) => setRemarksById((prev) => ({ ...prev, [fu.id]: e.target.value }))}
-                            placeholder="Lead remark (optional)"
-                            rows={2}
-                            className="w-full max-w-xs px-2 py-1 border border-gray-300 rounded text-xs focus:ring-2 focus:ring-blue-500"
-                          />
                           <div className="flex flex-wrap gap-1.5">
                             <button
-                              onClick={() => handleAction(fu.id, 'complete')}
+                              onClick={() => openPopup('complete')}
                               disabled={actionLoading === fu.id}
                               className="flex items-center gap-1 px-2 py-1 bg-green-600 text-white rounded text-xs hover:bg-green-700 disabled:opacity-50"
                             >
@@ -434,14 +426,14 @@ export default function FollowUpsPage() {
                               Complete
                             </button>
                             <button
-                              onClick={() => setRescheduling({ id: fu.id, leadId: fu.lead_id, leadStatus: fu.leadStatus, leadName, phone: fu.phone, reminder_date: fu.reminder_date, message: fu.message, priority: fu.priority })}
+                              onClick={() => openPopup('reschedule')}
                               className="flex items-center gap-1 px-2 py-1 bg-[var(--cmg-blue)] text-white rounded text-xs hover:bg-[var(--cmg-blue-dark)]"
                             >
                               <RefreshCw className="w-3 h-3" />
                               Reschedule
                             </button>
                             <button
-                              onClick={() => handleAction(fu.id, 'cancel')}
+                              onClick={() => handleCancel(fu.id)}
                               disabled={actionLoading === fu.id}
                               className="flex items-center gap-1 px-2 py-1 bg-gray-100 text-gray-600 rounded text-xs hover:bg-gray-200 disabled:opacity-50"
                             >
@@ -512,11 +504,12 @@ export default function FollowUpsPage() {
         </div>
       </div>
 
-      {rescheduling && (
+      {popup && (
         <RescheduleFollowUpModal
-          followUp={rescheduling}
-          onClose={() => setRescheduling(null)}
-          onSaved={async () => { setRescheduling(null); await fetchFollowUps(); }}
+          mode={popup.mode}
+          followUp={popup.followUp}
+          onClose={() => setPopup(null)}
+          onSaved={async () => { setPopup(null); await fetchFollowUps(); }}
         />
       )}
     </div>

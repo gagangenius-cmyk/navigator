@@ -4,10 +4,12 @@ import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { isBranchManagerOrCeo, isCeo, isFoe } from '@/lib/roleChecks';
-import { DollarSign, RefreshCw, AlertCircle, CreditCard, Search, ChevronLeft, ChevronRight } from 'lucide-react';
+import { DollarSign, RefreshCw, AlertCircle, CreditCard, Calendar, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useSortableData } from '@/components/ui/sortable-th';
 import { RecordCard, RecordList, SortButtonRow } from '@/components/shared/ResponsiveRecordList';
 import { useDebounce } from '@/hooks/useDebounce';
+import InstallmentSchedulePanel from '@/components/Payments/InstallmentSchedulePanel';
+import { formatDueDate, type AllocatedInstallment } from '@/lib/installments';
 
 interface BalanceRow {
   opportunityId: number;
@@ -30,6 +32,7 @@ interface BalanceRow {
   serviceName: string | null;
   agreementNumber: string | null;
   currencyCode: string;
+  nextInstallment: AllocatedInstallment | null;
 }
 
 export default function BalancePaymentsPage() {
@@ -38,6 +41,7 @@ export default function BalancePaymentsPage() {
   const [rows, setRows] = useState<BalanceRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [scheduleFor, setScheduleFor] = useState<BalanceRow | null>(null);
   const [search, setSearch] = useState('');
   const [pagination, setPagination] = useState({ page: 1, limit: 20, total: 0, totalPages: 0 });
   const debouncedSearch = useDebounce(search, 350);
@@ -84,7 +88,7 @@ export default function BalancePaymentsPage() {
       total: (row) => row.payTotal,
       paid: (row) => row.paidYet,
       balance: (row) => row.payBalance,
-      dueDate: (row) => row.dueDate,
+      dueDate: (row) => row.nextInstallment?.dueDate || row.dueDate,
     },
   );
 
@@ -161,9 +165,12 @@ export default function BalancePaymentsPage() {
                   { label: 'Total', value: fmt(row.payTotal, row.currencyCode) },
                   { label: 'Paid', value: <span className="text-green-700">{fmt(row.paidYet, row.currencyCode)}</span> },
                   { label: 'Balance', value: <span className="font-bold text-red-600">{fmt(row.payBalance, row.currencyCode)}</span> },
-                  { label: 'Due Date', value: row.dueDate ? new Date(row.dueDate).toLocaleDateString() : '—' },
+                  { label: 'Due Date', value: row.nextInstallment
+                    ? `${formatDueDate(row.nextInstallment.dueDate)} · ${fmt(row.nextInstallment.remaining, row.currencyCode)}`
+                    : row.dueDate ? new Date(row.dueDate).toLocaleDateString('en-GB', { timeZone: 'Asia/Dubai' }) : '—' },
                 ]}
                 actions={[
+                  { key: 'schedule', icon: Calendar, label: 'Instalments', onClick: () => setScheduleFor(row), colorClass: 'bg-gray-100 text-gray-700 hover:bg-gray-200' },
                   { key: 'pay', icon: CreditCard, label: 'Make Payment', onClick: () => router.push(`/admin/balance-payments/pay?leadId=${row.leadId}&opportunityId=${row.opportunityId}`), colorClass: 'bg-blue-50 text-blue-700 hover:bg-blue-100' },
                 ]}
               />
@@ -192,6 +199,18 @@ export default function BalancePaymentsPage() {
           </div>
         </div>
       </div>
+
+      {scheduleFor && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div role="dialog" aria-modal="true" aria-label="Instalment plan" className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-lg bg-white p-5 shadow-xl">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <h2 className="text-lg font-semibold text-gray-900">Instalment plan · {scheduleFor.fname} {scheduleFor.lname}</h2>
+              <button type="button" onClick={() => { setScheduleFor(null); fetchRows(); }} className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm hover:bg-gray-50">Close</button>
+            </div>
+            <InstallmentSchedulePanel opportunityId={scheduleFor.opportunityId} />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

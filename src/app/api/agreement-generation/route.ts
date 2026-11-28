@@ -6,6 +6,7 @@ import { requireAuth, isAuthError } from '@/lib/apiAuth';
 import { isBranchManagerOrCeo, isCeo } from '@/lib/roleChecks';
 import { formatDocumentNumber } from '@/lib/documentNumbering';
 import { ensureClientActualNameColumn } from '@/lib/ensureClientActualNameColumn';
+import { loadPlan } from '@/lib/installmentsServer';
 
 export async function POST(request: NextRequest) {
   const auth = requireAuth(request, ['agreements.create']);
@@ -103,7 +104,8 @@ export async function POST(request: NextRequest) {
     // pre-discount package/estimated value, which only applies as a fallback
     // when the caller never went through a quotation (no discount to apply).
     const agreementTotalAmount = Number(agreementData?.totalAmount ?? opportunity.estimatedValue ?? 0);
-    const agreementContent = generateAgreementContent(opportunity, { ...agreementData, endDate: agreementEndDate, totalAmount: agreementTotalAmount }, agreementNumber);
+    const installments = (await loadPlan(Number(opportunityId))).installments;
+    const agreementContent = generateAgreementContent(opportunity, { ...agreementData, endDate: agreementEndDate, totalAmount: agreementTotalAmount, installments }, agreementNumber);
 
     // Create agreement record in database
     const [agreementResult] = await sequelize.query(`
@@ -277,6 +279,7 @@ function generateAgreementContent(opportunity: any, agreementData: any, agreemen
     totalAmount: Number(agreementData?.totalAmount ?? opportunity.estimatedValue ?? 0).toLocaleString(),
     initialPayment: Number(agreementData?.initialPayment || agreementData?.firstPayment || 0).toLocaleString(),
     secondPayment: Number(agreementData?.secondPayment || 0).toLocaleString(),
+    installments: agreementData?.installments,
     clientId: String(opportunity.leadId || opportunity.id || ''),
     includedDeliverables: agreementData?.includedDeliverables || agreementData?.title || agreementData?.agreementTitle || '',
     expressExclusions: agreementData?.expressExclusions || '',

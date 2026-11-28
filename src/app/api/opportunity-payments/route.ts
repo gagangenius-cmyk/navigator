@@ -5,6 +5,7 @@ import { sequelize } from '@/lib/sequelize';
 import { requireAuth, isAuthError } from '@/lib/apiAuth';
 import { isBranchManagerOrCeo, isCeo } from '@/lib/roleChecks';
 import { ensurePayHistoryAdminFeeColumns } from '@/lib/ensurePayHistoryAdminFeeColumns';
+import { loadPlans } from '@/lib/installmentsServer';
 
 export async function GET(request: NextRequest) {
   const auth = requireAuth(request);
@@ -272,8 +273,11 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    const plans = await loadPlans(opportunityIds.map(Number));
+
     const paymentsWithAgreement = plainPayments.map((p) => ({
       ...p,
+      installmentPlan: plans.get(Number(p.opportunityId))?.installments || [],
       agreementNumber: agreementByOpportunity[p.opportunityId] || null,
       branchName: p.branchName || branchByOpportunity[p.opportunityId]?.branchName || null,
       branchAddress: p.branchAddress || branchByOpportunity[p.opportunityId]?.branchAddress || null,

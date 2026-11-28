@@ -7,6 +7,7 @@ import { notifyMetaLeadQuality } from '@/lib/meta/lead-quality-feedback';
 import { recordLeadAssignment, logLeadRemark, addLeadRemark } from '@/lib/leadRemarks';
 import { assertLeadAccess } from '@/lib/leadAccess';
 import { logAudit } from '@/lib/auditLog';
+import { balanceAfterEdit } from '@/lib/contractBalance';
 
 const ALLOWED_FIELDS = new Set([
   'status', 'priority', 'lead_quality', 'assignTo', 'branch', 'region',
@@ -71,11 +72,12 @@ export async function PUT(
       payTotal: number | string | null;
       discount: number | string | null;
       paidYet: number | string | null;
+      payBalance: number | string | null;
       assignTo: number | string | null;
       status: string | null;
       lead_remark: string | null;
     }>(
-      'SELECT payTotal, discount, paidYet, assignTo, status, lead_remark FROM crm_forum_leads WHERE id = ? LIMIT 1',
+      'SELECT payTotal, discount, paidYet, payBalance, assignTo, status, lead_remark FROM crm_forum_leads WHERE id = ? LIMIT 1',
       { replacements: [id], type: QueryTypes.SELECT },
     );
     if (!existing) return NextResponse.json({ error: 'Lead not found' }, { status: 404 });
@@ -97,7 +99,10 @@ export async function PUT(
       updates.payTotal = Math.max(total, 0);
       updates.discount = Math.max(discount, 0);
       updates.paidYet = Math.max(paidYet, 0);
-      updates.payBalance = Math.max(total - discount - paidYet, 0);
+      updates.payBalance = balanceAfterEdit(
+        { total: Number(existing.payTotal || 0), discount: Number(existing.discount || 0), paid: Number(existing.paidYet || 0), balance: Number(existing.payBalance || 0) },
+        { total, discount, paid: paidYet },
+      );
     }
 
     const setClauses = Object.keys(updates).map(k => `\`${k}\` = ?`).join(', ');

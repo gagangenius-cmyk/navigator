@@ -92,11 +92,10 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     }
 
     const payTotal = Number(contract.pay_total);
-    const discount = Number(contract.discount);
     const paidSoFar = Number(contract.paid_yet);
     // Overpayment was silently absorbed (pay_balance is clamped to 0 while paid_yet keeps
     // growing past the total), so reject anything beyond what is still owed.
-    const outstanding = Math.max(payTotal - discount - paidSoFar, 0);
+    const outstanding = Math.max(Number(contract.pay_balance), 0);
     if (amount - outstanding > 0.005) {
       await transaction.rollback();
       return NextResponse.json(
@@ -105,7 +104,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       );
     }
     const newPaidYet = paidSoFar + amount;
-    const newPayBalance = Math.max(payTotal - discount - newPaidYet, 0);
+    const newPayBalance = Math.max(outstanding - amount, 0);
 
     const exchangeRate = await resolveBranchExchangeRate(contract.branch_id);
     const createdBy = Number(user.id);

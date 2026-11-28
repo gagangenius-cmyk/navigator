@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { QueryTypes } from 'sequelize';
 import { sequelize, connectDB } from '@/lib/sequelize';
 import { verifyToken } from '@/lib/auth';
+import { loadPlan } from '@/lib/installmentsServer';
 
 let dbReady = false;
 async function ensureDB() {
@@ -171,6 +172,11 @@ export async function GET(request: NextRequest) {
     secondPaymentDue = payments[0].dueDate ? String(payments[0].dueDate).split('T')[0] : '';
   }
 
+  const installments = row.opportunityId
+    ? (await loadPlan(Number(row.opportunityId))).installments.map((i) => ({ dueDate: i.dueDate, amount: i.amount }))
+    : [];
+  if (installments.length) secondPaymentDue = installments[0].dueDate;
+
   const totalFee = String(Number(row.totalAmount || 0));
   const agreementDate = row.startDate
     ? String(row.startDate).split('T')[0]
@@ -202,6 +208,7 @@ export async function GET(request: NextRequest) {
       initialPayment,
       secondPayment,
       secondPaymentDue,
+      installments,
       // Annexure A (same data, counsellor can refine)
       annexServiceProgram:   row.serviceName,
       annexDestinationCountry: row.countryName,

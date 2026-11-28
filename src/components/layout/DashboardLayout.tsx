@@ -234,7 +234,7 @@ const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
         { name: 'Sales Report', href: '/admin/accounts/sales-report', icon: BarChart3, permissions: ['finance.view', 'finance.manage', 'sales.view'] },
         { name: 'Chart of Accounts', href: '/admin/accounts/chart-of-accounts', icon: FileText, permissions: ['finance.view', 'finance.manage'] },
         { name: 'Expenses', href: '/admin/accounts/expenses', icon: DollarSign, permissions: ['finance.view', 'finance.manage'] },
-        { name: 'P&L Report', href: '/admin/accounts/pnl', icon: TrendingUp, permissions: ['finance.view', 'finance.manage'] },
+        { name: 'P&L Report', href: '/admin/accounts/pnl', icon: TrendingUp, ceoOnly: true },
         { name: 'Payments', href: '/admin/payments', icon: DollarSign, permissions: ['finance.view', 'finance.manage', 'payments.view'] },
         { name: 'Invoices', href: '/admin/invoices', icon: FileText, permissions: ['finance.view', 'finance.manage', 'invoices.view'] },
       ]

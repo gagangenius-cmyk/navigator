@@ -15,10 +15,10 @@ import { useAuth } from '@/contexts/AuthContext';
 interface FinanceSummary {
   totalOpportunities: number; wonOpportunities: number;
   totalRevenue: number; collected: number; balance: number;
-  totalExpenses: number; netProfit: number; collectionRate: number;
+  totalExpenses: number; netProfit: number | null; collectionRate: number;
 }
 
-interface MonthlyTrend { month: string; collected: number; expenses: number; profit: number; }
+interface MonthlyTrend { month: string; collected: number; expenses: number; profit: number | null; }
 
 interface Opportunity {
   id: number; name: string; client: string; counselor: string; branch: string;
@@ -318,7 +318,9 @@ export default function DMCFinanceModule() {
         <KpiCard label="Total Expenses" value={fmtMoney(summary.totalExpenses)} icon={TrendingDown} />
       </div>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <KpiCard label="Net Profit" value={fmtMoney(summary.netProfit)} icon={BarChart3} trend={summary.netProfit >= 0 ? 'up' : 'down'} />
+        {summary.netProfit !== null && (
+          <KpiCard label="Net Profit" value={fmtMoney(summary.netProfit)} icon={BarChart3} trend={summary.netProfit >= 0 ? 'up' : 'down'} />
+        )}
         <KpiCard label="Won Cases" value={String(summary.wonOpportunities)} sub={`of ${summary.totalOpportunities} total`} icon={FileText} />
         <KpiCard label="Branches Active" value={String(branchPerformance.filter(b => b.opportunities > 0).length)} icon={BarChart3} />
         <KpiCard label="Active Counselors" value={String(counselorPerformance.length)} icon={Users} />
@@ -368,7 +370,7 @@ export default function DMCFinanceModule() {
                       <Legend wrapperStyle={{ fontSize: 11 }} />
                       <Bar dataKey="collected" name="Collected" fill="#1F3B63" radius={[3,3,0,0]} />
                       <Bar dataKey="expenses" name="Expenses" fill="#ef4444" radius={[3,3,0,0]} />
-                      <Bar dataKey="profit" name="Net Profit" fill="#2563eb" radius={[3,3,0,0]} />
+                      {summary.netProfit !== null && <Bar dataKey="profit" name="Net Profit" fill="#2563eb" radius={[3,3,0,0]} />}
                     </BarChart>
                   </ResponsiveContainer>
                 )}

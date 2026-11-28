@@ -18,6 +18,7 @@ import {
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { useAuth } from '@/contexts/AuthContext';
 import DailyLeadWork from '@/components/dashboard/DailyLeadWork';
+import CollectionsOverview from '@/components/dashboard/CollectionsOverview';
 
 interface DashboardStats {
   totalLeads: number;
@@ -243,6 +244,8 @@ export default function CounselorDashboard() {
       </div>
 
       {/* What the counselor did on their leads, per day, and which status the leads moved into */}
+      <CollectionsOverview />
+
       <DailyLeadWork />
 
       <div className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-3">

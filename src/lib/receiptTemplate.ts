@@ -15,6 +15,7 @@
 // to one specific branch's identity.
 
 import { escapeHtml } from '@/lib/escapeHtml';
+import { formatDueDate, type AllocatedInstallment } from './installments';
 import { getBranchAgreementProfile, type BranchBankDetails } from './branchAgreementProfiles';
 
 export interface ReceiptBranchSource {
@@ -405,6 +406,8 @@ export interface ReceiptFields {
   // (branch-driven tax treatment); false prints a plain Payment Receipt with
   // no VAT/GST wording and no VAT on the admin fee.
   includeVat?: boolean | number | null;
+  // Saved instalment plan for the remaining balance, with its paid status at print time.
+  installments?: AllocatedInstallment[] | null;
 }
 
 // Shared by every screen that prints a payment receipt so they all render
@@ -463,6 +466,12 @@ export function buildReceiptHtml(r: ReceiptFields): string {
     : 'UAE Account';
   const docTitle = showVat ? 'TAX INVOICE' : 'PAYMENT RECEIPT';
   const totalLabel = `Total Amount Received${showVat ? ` inclusive ${cfg.taxLabel} ${cfg.vatRate}%` : ''}`;
+  const schedule = r.installments?.length ? `
+<table class="info schedule">
+  <tr><td class="head" colspan="4">Payment Schedule</td></tr>
+  <tr><td class="head">Instalment</td><td class="head">Due Date</td><td class="head num">Amount</td><td class="head">Status</td></tr>
+  ${r.installments.map((i) => `<tr><td>${Number(i.number)}</td><td>${escapeHtml(formatDueDate(i.dueDate))}</td><td class="num">${fmt(Number(i.amount))}</td><td>${i.status === 'paid' ? 'Paid' : i.status === 'partial' ? `Part paid, ${fmt(Number(i.remaining))} due` : i.status === 'overdue' ? 'Overdue' : 'Due'}</td></tr>`).join('')}
+</table>` : '';
 
   return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"/>
 <title>Official Payment Receipt</title>
@@ -481,6 +490,10 @@ export function buildReceiptHtml(r: ReceiptFields): string {
   table.info td.amount{width:40%;text-align:right;font-weight:700}
   table.info tr.fileno td{background:#5CE1E6}
   table.info tr.total td{font-weight:700;border-top:2px solid #1a1a1a}
+  table.schedule{margin-top:12px}
+  table.schedule td{padding:4px 12px;font-size:9.2pt}
+  table.schedule td.head{font-weight:700}
+  table.schedule td.num{text-align:right}
   .below{display:flex;justify-content:space-between;align-items:flex-start;margin-top:18px;gap:24px}
   .below .field{font-size:9.8pt;margin-bottom:8px}
   .stamp{width:150px;height:150px;flex:none;transform:rotate(-8deg);opacity:.88;-webkit-print-color-adjust:exact;print-color-adjust:exact}
@@ -520,7 +533,7 @@ export function buildReceiptHtml(r: ReceiptFields): string {
   <tr class="total"><td class="label">${totalLabel}</td><td class="amount">${fmt(receiptTotal)}</td></tr>
   ${hasPreviouslyPaid ? `<tr class="total"><td class="label">Balance Remaining</td><td class="amount">${fmt(balance)}</td></tr>` : ''}
 </table>
-
+${schedule}
 <div class="below">
   <div>
     <div class="field"><strong>Payment Method:</strong> ${escapeHtml(titleCase(r.paymentMethod || 'Cash'))}${/transfer/i.test(r.paymentMethod || '') ? ` to ${accountLabel}` : ''}</div>

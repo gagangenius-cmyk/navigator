@@ -20,6 +20,8 @@ import { ensureFeePremiumColumns } from '@/lib/ensureFeePremiumColumns';
 import { ensureClientActualNameColumn } from '@/lib/ensureClientActualNameColumn';
 import crypto from 'crypto';
 import { dubaiTime, dubaiDay } from '@/lib/dubaiDate';
+import { validatePlan, type Installment } from '@/lib/installments';
+import { ensureInstallmentColumns, replacePlan } from '@/lib/installmentsServer';
 
 const LEAD_FLOW_ATTRIBUTES = [
   'id',
@@ -404,6 +406,16 @@ export async function POST(request: NextRequest) {
     }
     const remainingBalance = Math.max(totalAmount - paidAmount, 0);
     const paymentStatus = normalizePaymentStatus(paymentData.status, paidAmount, totalAmount);
+    const installments: Installment[] = paymentData.paymentStructure === 'installment' && remainingBalance > 0 && Array.isArray(paymentData.installments)
+      ? paymentData.installments
+      : [];
+    if (installments.length) {
+      const planError = validatePlan(installments, remainingBalance);
+      if (planError) {
+        await transaction.rollback();
+        return NextResponse.json({ error: planError }, { status: 422 });
+      }
+    }
     const isClient = remainingBalance <= 0 && paidAmount > 0;
     const followUpDate = normalizeOptionalDate(
       followUpData.scheduledAt ?? followUpData.reminderDate ?? followUpData.followup ?? body.followup
@@ -668,6 +680,10 @@ export async function POST(request: NextRequest) {
 
     const invoiceId = nextInvoiceId;
 
+    if (installments.length) {
+      await replacePlan({ opportunityId, rows: installments, baselinePaid: paidAmount, userId: createdBy }, transaction);
+    }
+
     // Step 5: Create agreement record
     let agreementNumber = `AGR-${Date.now()}-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
     const clientPortalId = `CMG-${String(lead.id).padStart(6, '0')}-${String(opportunityId).padStart(6, '0')}`;
@@ -692,6 +708,7 @@ export async function POST(request: NextRequest) {
       totalAmount: totalAmount.toLocaleString(),
       initialPayment: paidAmount.toLocaleString(),
       secondPayment: Math.max(totalAmount - paidAmount, 0).toLocaleString(),
+      installments,
       includedDeliverables: agreementData.includedDeliverables || agreementData.agreementTitle || agreementData.title || '',
       expressExclusions: agreementData.expressExclusions || '',
       specialTerms: agreementData.specialTerms || agreementData.specialConditions || agreementData.terms || agreementData.termsAndConditions || '',

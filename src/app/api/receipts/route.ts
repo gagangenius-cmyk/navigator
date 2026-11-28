@@ -13,6 +13,7 @@ import { notifyCeo, notifyRole } from '@/lib/notify';
 import { getAdminFeeAmount } from '@/lib/receiptTemplate';
 import { ensurePayHistoryAdminFeeColumns } from '@/lib/ensurePayHistoryAdminFeeColumns';
 import { ensureClientActualNameColumn } from '@/lib/ensureClientActualNameColumn';
+import { ensureInstallmentColumns, loadPlan, syncNextDueDate } from '@/lib/installmentsServer';
 
 let payHistoryProofColumnReady: Promise<void> | null = null;
 const ensurePayHistoryProofColumn = async () => {
@@ -349,13 +350,13 @@ export async function POST(request: NextRequest) {
     // This route used to touch only the lead, so after every balance payment the contract kept
     // showing the old paid/outstanding amounts (AED 5,000 paid / 10,750 due after a second payment
     // that left 7,750). Apply the same payment to the opportunity's contract in this transaction.
-    // (MySQL evaluates SET left to right, so pay_balance below already sees the new paid_yet.)
+    // The balance is reduced by the payment, not recomputed from the total (see lib/contractBalance.ts).
     if (opportunityId) {
       await sequelize.query(
         `UPDATE crm_contracts
-         SET paid_yet = paid_yet + ?, pay_balance = GREATEST(pay_total - discount - paid_yet, 0), updated_at = NOW()
+         SET paid_yet = paid_yet + ?, pay_balance = GREATEST(pay_balance - ?, 0), updated_at = NOW()
          WHERE opportunity_id = ? AND is_deleted = 0`,
-        { replacements: [Number(paymentData.paidAmount || paymentData.amount || 0), opportunityId], transaction },
+        { replacements: [paidAmount, paidAmount, opportunityId], transaction },
       );
     }
 
@@ -505,6 +506,17 @@ export async function POST(request: NextRequest) {
 
     await transaction.commit();
 
+    // The payment is already committed: a plan lookup problem must not fail the request.
+    let installmentPlan = [];
+    if (opportunityId) {
+      try {
+        await syncNextDueDate(Number(opportunityId));
+        installmentPlan = (await loadPlan(Number(opportunityId))).installments;
+      } catch (planError) {
+        console.error('Could not refresh the instalment plan:', planError);
+      }
+    }
+
     // Let Accounts know a new payment is waiting on their queue — without
     // this, verification only happens if someone thinks to check the
     // Payment Verification page on their own.
@@ -555,6 +567,7 @@ export async function POST(request: NextRequest) {
           // Always 'pending' at this point — this payment was just inserted
           // in this same transaction, before any accountant has reviewed it.
           accountantStatus: 'pending',
+          installmentPlan,
           adminFeeIncluded,
           adminFeeAmount,
           includeVat: vatIncluded,

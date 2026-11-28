@@ -287,9 +287,9 @@ export async function POST(request: NextRequest) {
           // The contract is the ledger the dashboards and reports read; the lead/opportunity above are not.
           await sequelize.query(
             `UPDATE crm_contracts
-             SET discount = ?, pay_balance = GREATEST(pay_total - discount - paid_yet, 0), updated_at = NOW()
+             SET pay_balance = GREATEST(pay_balance + discount - ?, 0), discount = ?, updated_at = NOW()
              WHERE opportunity_id = ? AND is_deleted = 0`,
-            { replacements: [discountAmount, body.opportunityId], transaction }
+            { replacements: [discountAmount, discountAmount, body.opportunityId], transaction }
           );
         }
       }

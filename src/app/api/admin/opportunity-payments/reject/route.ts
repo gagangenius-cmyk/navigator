@@ -52,14 +52,15 @@ export async function POST(request: NextRequest) {
     }
 
     const note = `Rejected by CEO: ${String(reason).trim()}`;
-    await sequelize.transaction(async (t) => {
-      await sequelize.query(
+    const claimed = await sequelize.transaction(async (t) => {
+      const [, claim] = await sequelize.query(
         `UPDATE crm_opportunity_payments
          SET accountantStatus = 'rejected', accountantRemarks = :note, accountantId = :uid,
              accountantVerifiedAt = NOW(), updatedAt = NOW()
-         WHERE id = :paymentId`,
+         WHERE id = :paymentId AND COALESCE(accountantStatus, 'pending') <> 'rejected'`,
         { replacements: { note, uid: auth.id || null, paymentId }, type: QueryTypes.UPDATE, transaction: t }
       );
+      if (Number((claim as { affectedRows?: number })?.affectedRows ?? claim ?? 0) < 1) return false;
 
       // The paid amount was added to the contract/lead when recorded; put it
       // back, exactly as an Accounts rejection does.
@@ -67,7 +68,7 @@ export async function POST(request: NextRequest) {
         await sequelize.query(
           `UPDATE crm_contracts
            SET paid_yet = GREATEST(paid_yet - :amount, 0),
-               pay_balance = GREATEST(pay_total - discount - paid_yet, 0), updated_at = NOW()
+               pay_balance = pay_balance + :amount, updated_at = NOW()
            WHERE opportunity_id = :opportunityId AND is_deleted = 0`,
           { replacements: { amount: Number(payment.paidAmount), opportunityId: payment.opportunityId }, type: QueryTypes.UPDATE, transaction: t }
         );
@@ -117,7 +118,9 @@ export async function POST(request: NextRequest) {
           { replacements: { leadId: payment.leadId }, type: QueryTypes.UPDATE, transaction: t }
         );
       }
+      return true;
     });
+    if (!claimed) return NextResponse.json({ error: 'This payment is already rejected.' }, { status: 409 });
 
     await logAudit({
       entityType: 'opportunity_payment',

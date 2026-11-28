@@ -123,7 +123,7 @@ export async function PUT(request: NextRequest) {
         await sequelize.query(
           `UPDATE crm_contracts
            SET paid_yet = GREATEST(paid_yet - :amount, 0),
-               pay_balance = GREATEST(pay_total - discount - paid_yet, 0), updated_at = NOW()
+               pay_balance = pay_balance + :amount, updated_at = NOW()
            WHERE opportunity_id = :opportunityId AND is_deleted = 0`,
           { replacements: { amount: Number(payment.paidAmount), opportunityId: payment.opportunityId }, type: QueryTypes.UPDATE, transaction: t }
         );

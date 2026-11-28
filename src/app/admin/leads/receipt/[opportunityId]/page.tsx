@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, Loader2, Printer, AlertCircle } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { getLeadBranchDetails, buildReceiptHtml } from '@/lib/receiptTemplate';
+import type { AllocatedInstallment } from '@/lib/installments';
 import { formatDubaiDate } from '@/lib/dubaiDate';
 
 interface PaymentRecord {
@@ -12,6 +13,7 @@ interface PaymentRecord {
   opportunityId: number;
   paymentNumber: string;
   receiptNumber: string | null;
+  installmentPlan?: AllocatedInstallment[];
   paymentDate: string;
   clientName: string | null;
   clientEmail: string | null;
@@ -122,6 +124,7 @@ export default function ReceiptPage() {
       adminFeeIncluded: selected.adminFeeIncluded,
       adminFeeAmount: selected.adminFeeAmount,
       includeVat: selected.includeVat,
+      installments: selected.installmentPlan,
     });
   }, [selected]);
 

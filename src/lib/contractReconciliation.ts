@@ -40,7 +40,9 @@ export async function findContractDrift(): Promise<ContractDrift[]> {
      WHERE c.is_deleted = 0
      GROUP BY c.id, c.contract_number, c.lead_id, c.branch_id, c.pay_total, c.discount, c.paid_yet, c.pay_balance
      HAVING ABS(c.paid_yet - COALESCE(SUM(r.paid_amount), 0)) > :tolerance
-        OR ABS(c.pay_balance - (c.pay_total - c.discount - c.paid_yet)) > :tolerance`,
+        -- The total may or may not already include the discount (lib/contractBalance.ts).
+        OR (ABS(c.pay_balance - (c.pay_total - c.discount - c.paid_yet)) > :tolerance
+            AND ABS(c.pay_balance - (c.pay_total - c.paid_yet)) > :tolerance)`,
     { replacements: { tolerance: DRIFT_TOLERANCE }, type: QueryTypes.SELECT }
   );
 

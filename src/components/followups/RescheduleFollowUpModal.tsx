@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { RefreshCw, X } from 'lucide-react';
+import { CheckCircle, RefreshCw, X } from 'lucide-react';
 import { dubaiNow, dubaiToday } from '@/lib/dubaiDate';
 import { useLeadStatuses } from '@/hooks/useLeadStatuses';
 
@@ -16,9 +16,12 @@ export interface RescheduleTarget {
   priority: string;
 }
 
-// Rescheduling closes the previous follow-up with a lead remark about what happened and opens a new one.
-export default function RescheduleFollowUpModal({ followUp, onClose, onSaved }: {
+// One popup for both ways of closing a follow-up. The lead remark is the follow-up's remark:
+//  - complete:   closes it with that remark
+//  - reschedule: closes it with that remark and opens a new one carrying the same remark
+export default function RescheduleFollowUpModal({ followUp, mode = 'reschedule', onClose, onSaved }: {
   followUp: RescheduleTarget;
+  mode?: 'reschedule' | 'complete';
   onClose: () => void;
   onSaved: () => void | Promise<void>;
 }) {
@@ -26,7 +29,6 @@ export default function RescheduleFollowUpModal({ followUp, onClose, onSaved }: 
   const [date, setDate] = useState('');
   const [time, setTime] = useState('');
   const [priority, setPriority] = useState(followUp.priority || 'medium');
-  const [nextNote, setNextNote] = useState('');
   const currentStatus = followUp.leadStatus || 'New';
   const [leadStatus, setLeadStatus] = useState(currentStatus);
   const { statuses } = useLeadStatuses();
@@ -38,11 +40,15 @@ export default function RescheduleFollowUpModal({ followUp, onClose, onSaved }: 
   // Stored follow-up times are already UAE wall clock - show them as stored.
   const previous = String(followUp.reminder_date).replace('T', ' ').slice(0, 16);
 
+  const completing = mode === 'complete';
+
   const save = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!remark.trim()) return setError('Add a lead remark about the previous follow-up.');
-    if (!date || !time) return setError('Select the new follow-up date and time.');
-    if (`${date} ${time}:00` <= dubaiNow()) return setError('The new follow-up must be in the future (UAE time).');
+    if (!remark.trim()) return setError('Add a lead remark about this follow-up.');
+    if (!completing) {
+      if (!date || !time) return setError('Select the new follow-up date and time.');
+      if (`${date} ${time}:00` <= dubaiNow()) return setError('The new follow-up must be in the future (UAE time).');
+    }
     setSaving(true);
     setError('');
     let statusSaved = false;
@@ -61,21 +67,17 @@ export default function RescheduleFollowUpModal({ followUp, onClose, onSaved }: 
       const res = await fetch('/api/follow-up-reminders', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          reminderId: followUp.id,
-          action: 'reschedule',
-          notes: remark.trim(),
-          rescheduledAt: `${date}T${time}:00`,
-          priority,
-          nextNote: nextNote.trim() || undefined,
-        }),
+        body: JSON.stringify(completing
+          ? { reminderId: followUp.id, action: 'complete', notes: remark.trim() }
+          : { reminderId: followUp.id, action: 'reschedule', notes: remark.trim(), rescheduledAt: `${date}T${time}:00`, priority }),
       });
-      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Failed to reschedule');
-      window.toast.success(statusSaved ? 'Follow-up rescheduled, lead remark and status saved' : 'Follow-up rescheduled and lead remark saved');
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `Failed to ${mode} the follow-up`);
+      const done = completing ? 'Follow-up completed' : 'Follow-up rescheduled';
+      window.toast.success(statusSaved ? `${done}, lead remark and status saved` : `${done} and lead remark saved`);
       await onSaved();
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to reschedule';
-      setError(statusSaved ? `Lead status was changed, but the follow-up was not rescheduled: ${message}` : message);
+      const message = err instanceof Error ? err.message : `Failed to ${mode} the follow-up`;
+      setError(statusSaved ? `Lead status was changed, but the follow-up was not ${completing ? 'completed' : 'rescheduled'}: ${message}` : message);
       setSaving(false);
     }
   };
@@ -88,7 +90,7 @@ export default function RescheduleFollowUpModal({ followUp, onClose, onSaved }: 
       <form onSubmit={save} className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl bg-white shadow-xl">
         <div className="flex items-start justify-between gap-3 border-b border-gray-200 p-4">
           <div>
-            <h2 id="reschedule-title" className="text-lg font-semibold text-gray-900">Reschedule follow-up</h2>
+            <h2 id="reschedule-title" className="text-lg font-semibold text-gray-900">{completing ? 'Complete follow-up' : 'Reschedule follow-up'}</h2>
             <p className="text-sm text-gray-500">{followUp.leadName}{followUp.phone ? ` · ${followUp.phone}` : ''}</p>
           </div>
           <button type="button" onClick={onClose} disabled={saving} aria-label="Close" className="rounded p-1 text-gray-500 hover:bg-gray-100">
@@ -103,7 +105,7 @@ export default function RescheduleFollowUpModal({ followUp, onClose, onSaved }: 
           </div>
 
           <div>
-            <label className={label} htmlFor="rs-remark">Lead remark about the previous follow-up *</label>
+            <label className={label} htmlFor="rs-remark">Lead remark *</label>
             <textarea id="rs-remark" autoFocus required rows={3} value={remark} onChange={(e) => setRemark(e.target.value)} placeholder="What happened? e.g. Client did not pick up, asked to call next week" className={field} />
           </div>
 
@@ -116,6 +118,8 @@ export default function RescheduleFollowUpModal({ followUp, onClose, onSaved }: 
             </div>
           ) : null}
 
+          {!completing && (
+          <>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
               <label className={label} htmlFor="rs-date">New date (UAE) *</label>
@@ -136,19 +140,17 @@ export default function RescheduleFollowUpModal({ followUp, onClose, onSaved }: 
             </select>
           </div>
 
-          <div>
-            <label className={label} htmlFor="rs-note">Note for the new follow-up (optional)</label>
-            <textarea id="rs-note" rows={2} value={nextNote} onChange={(e) => setNextNote(e.target.value)} placeholder="Leave blank to keep the previous message" className={field} />
-          </div>
+          </>
+          )}
 
           {error && <div role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</div>}
         </div>
 
         <div className="flex justify-end gap-2 border-t border-gray-200 p-4">
           <button type="button" onClick={onClose} disabled={saving} className="rounded-lg border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50">Cancel</button>
-          <button type="submit" disabled={saving} className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50">
-            <RefreshCw className={`h-4 w-4 ${saving ? 'animate-spin' : ''}`} />
-            {saving ? 'Saving…' : 'Save & schedule'}
+          <button type="submit" disabled={saving} className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm text-white disabled:opacity-50 ${completing ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-600 hover:bg-blue-700'}`}>
+            {completing ? <CheckCircle className="h-4 w-4" /> : <RefreshCw className={`h-4 w-4 ${saving ? 'animate-spin' : ''}`} />}
+            {saving ? 'Saving…' : completing ? 'Mark as complete' : 'Save & schedule'}
           </button>
         </div>
       </form>

@@ -6,6 +6,7 @@
 // renderers directly, so branch → template-variant selection lives in
 // exactly one place.
 import { getBranchAgreementProfile } from './branchAgreementProfiles';
+import { describePlanForAgreement, type Installment } from './installments';
 import { renderAbuDhabiAgreement } from './AbuDhabiBilingualAgreementTemplate';
 import { renderGulfAgreement } from './bilingualAgreementTemplate';
 import { renderDubaiAgreement } from './DubaiBilingualAgreementTemplate';
@@ -36,6 +37,8 @@ export interface AgreementLeadData {
   totalAmount: string;
   initialPayment: string;
   secondPayment: string;
+  // Saved instalment plan; when present it is printed as the subsequent payment(s).
+  installments?: Installment[];
   clientId?: string;
   includedDeliverables?: string;
   expressExclusions?: string;
@@ -55,7 +58,10 @@ export interface AgreementLeadData {
   signaturePlace?: string;
 }
 
-export function renderAgreementForBranch(branchAbbrv: string | null | undefined, data: AgreementLeadData): string {
+export function renderAgreementForBranch(branchAbbrv: string | null | undefined, input: AgreementLeadData): string {
+  const data = input.installments?.length
+    ? { ...input, secondPayment: describePlanForAgreement(input.installments) }
+    : input;
   const profile = getBranchAgreementProfile(branchAbbrv);
   const key = String(branchAbbrv || '').trim().toLowerCase();
 

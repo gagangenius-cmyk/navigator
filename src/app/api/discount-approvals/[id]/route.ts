@@ -174,7 +174,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
             { replacements: [existingForAuth.originalAmount, existingForAuth.originalAmount, existingForAuth.opportunityId], transaction: t },
           );
           await sequelize.query(
-            `UPDATE crm_contracts SET discount = 0, pay_balance = GREATEST(pay_total - paid_yet, 0), updated_at = NOW()
+            `UPDATE crm_contracts SET pay_balance = pay_balance + discount, discount = 0, updated_at = NOW()
              WHERE opportunity_id = ? AND is_deleted = 0`,
             { replacements: [existingForAuth.opportunityId], transaction: t },
           );
@@ -335,9 +335,9 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         // Keep the contract ledger (what dashboards/reports read) in step with the discount.
         await sequelize.query(
           `UPDATE crm_contracts
-           SET discount = ?, pay_balance = GREATEST(pay_total - discount - paid_yet, 0), updated_at = NOW()
+           SET pay_balance = GREATEST(pay_balance + discount - ?, 0), discount = ?, updated_at = NOW()
            WHERE opportunity_id = ? AND is_deleted = 0`,
-          { replacements: [existingApproval.discountAmount, existingApproval.opportunityId], transaction: t }
+          { replacements: [existingApproval.discountAmount, existingApproval.discountAmount, existingApproval.opportunityId], transaction: t }
         );
       }
       return true;

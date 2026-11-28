@@ -3,6 +3,7 @@
 import { localToday, formatDubaiDate } from '@/lib/dubaiDate';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { useEffect, useState, Suspense } from 'react';
+import InstallmentSchedulePanel from '@/components/Payments/InstallmentSchedulePanel';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { uploadFileToBlob } from '@/lib/uploadToBlob';
 import { BANK_PAYMENT_OPTIONS, CARD_PAYMENT_OPTIONS } from '@/lib/paymentOptions';
@@ -264,6 +265,18 @@ function AddPaymentContent() {
           </table>
         </div>
       )}
+
+      <div className="mb-6 rounded-lg border border-gray-200 bg-white p-4">
+        <h4 className="mb-3 font-semibold text-gray-900">Instalment plan</h4>
+        <InstallmentSchedulePanel
+          opportunityId={Number(opportunityId)}
+          onLoaded={(rows) => {
+            // Default the amount to what is due next, not the whole balance.
+            const next = rows.find((r) => r.remaining > 0);
+            if (next) setForm((prev) => ({ ...prev, paidAmount: next.remaining, paymentStructure: 'installment' }));
+          }}
+        />
+      </div>
 
       {error && (
         <div className="mb-4 flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">

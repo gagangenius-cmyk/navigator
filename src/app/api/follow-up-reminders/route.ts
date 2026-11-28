@@ -381,7 +381,8 @@ export async function PUT(request: NextRequest) {
           lead_id: Number(existing.lead_id),
           user_id: Number(existing.user_id),
           reminder_date: nextAt,
-          message: String(nextNote || '').trim() || existing.message || 'Lead follow-up',
+          // The lead remark typed while rescheduling is the new follow-up's remark.
+          message: String(nextNote || '').trim() || notes,
           priority: body.priority || existing.priority || 'medium',
           status: 'pending',
           created_at: new Date(),
@@ -404,7 +405,7 @@ export async function PUT(request: NextRequest) {
           ...actor,
         });
         await addLeadRemark({ leadId: Number(existing.lead_id), text: notes, ...actor });
-        await addLeadRemark({ leadId: Number(existing.lead_id), text: nextNote, ...actor });
+        if (String(nextNote || '').trim() !== notes) await addLeadRemark({ leadId: Number(existing.lead_id), text: nextNote, ...actor });
       }
       return NextResponse.json({ success: true, reminder });
     }

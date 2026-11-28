@@ -224,7 +224,8 @@ export async function GET(request: NextRequest) {
         month,
         collected: n(rev?.collected),
         expenses: n(exp?.amount) + n(exp?.vat),
-        profit: n(rev?.collected) - (n(exp?.amount) + n(exp?.vat)),
+        // Profit figures are CEO-only.
+        profit: isCeo(auth) ? n(rev?.collected) - (n(exp?.amount) + n(exp?.vat)) : null,
       };
     });
 
@@ -236,7 +237,7 @@ export async function GET(request: NextRequest) {
         collected: n(s.collected),
         balance: n(s.balance),
         totalExpenses: n(s.total_expenses),
-        netProfit: n(s.collected) - n(s.total_expenses),
+        netProfit: isCeo(auth) ? n(s.collected) - n(s.total_expenses) : null,
         collectionRate: n(s.total_revenue) > 0
           ? parseFloat(((n(s.collected) / n(s.total_revenue)) * 100).toFixed(1))
           : 0,

@@ -4,6 +4,7 @@ import { sequelize } from '@/lib/sequelize';
 import { verifyToken } from '@/lib/auth';
 import { isBranchManagerOrCeo, isFoe, canViewAllBranches } from '@/lib/roleChecks';
 import { resolveBranchCurrency } from '@/lib/branchCurrency';
+import { loadPlans } from '@/lib/installmentsServer';
 
 /**
  * Opportunities with an outstanding balance, scoped by role:
@@ -116,8 +117,11 @@ export async function GET(request: NextRequest) {
       const branchCurrency = await resolveBranchCurrency(branchId);
       if (branchCurrency) currencyByBranch.set(branchId, branchCurrency.currencyCode);
     }));
+    const plans = await loadPlans(rows.map((row) => Number(row.opportunityId)));
     const rowsWithCurrency = rows.map((row) => ({
       ...row,
+      // With a plan, the due date is the next unpaid instalment's.
+      nextInstallment: plans.get(Number(row.opportunityId))?.installments.find((i) => i.remaining > 0) || null,
       currencyCode: (row.branchId && currencyByBranch.get(row.branchId)) || 'AED',
     }));
 
